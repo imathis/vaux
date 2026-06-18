@@ -36,8 +36,11 @@ gets the Gatekeeper quarantine flag, so there's no "damaged" error.
 ## Usage
 
 - Menu bar icon shows state: `mic.fill` live, `mic.slash.fill` (red) muted.
-- Click the icon for the menu: active input device, Mute/Unmute, Settings…, Quit.
-- **Settings (⌘,):** record the global hotkey, set the unmute volume, toggle
+- **Click** the icon to toggle mute; **Shift / Option / Control-click** opens the
+  menu (input device, Mute/Unmute, Settings…, Quit). The global hotkey toggles
+  from anywhere. (Plain right-click is wired up but AppKit doesn't deliver it
+  reliably to status items, so the modifier-clicks are the dependable route.)
+- **Settings:** record the global hotkey, set the unmute volume, toggle
   launch-at-login.
 - The app follows the system default input live — change it in System Settings
   and Hush re-targets automatically.

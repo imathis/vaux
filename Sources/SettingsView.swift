@@ -26,7 +26,6 @@ struct SettingsView: View {
                 }
         }
         .formStyle(.grouped)
-        .frame(width: 360)
-        .scenePadding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

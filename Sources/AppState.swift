@@ -1,19 +1,21 @@
 import CoreAudio
 import Foundation
 import KeyboardShortcuts
-import Observation
 
-/// Single source of truth for the menu bar UI and the mute action.
+/// Single source of truth for the mute action and the menu bar state.
 ///
 /// Resolves the default input device live, mirrors its mute state into
 /// `muted` (for the icon), and re-resolves automatically when the system
 /// input changes. The hotkey and the menu item both route through `toggle()`.
 @MainActor
-@Observable
 final class AppState {
     private(set) var muted = false
     private(set) var deviceName: String?
     private(set) var supportsMute = false
+
+    /// Invoked on the main actor whenever `muted` / `deviceName` /
+    /// `supportsMute` change, so the AppKit status item can refresh.
+    var onStateChange: (() -> Void)?
 
     var hasDevice: Bool { currentDevice != nil }
 
@@ -50,6 +52,7 @@ final class AppState {
             AudioController.setVolume(next ? 0 : unmuteVolume, on: dev)
             muted = next
         }
+        notify()
     }
 
     // MARK: Device tracking
@@ -77,6 +80,7 @@ final class AppState {
             supportsMute = false
             muted = false
             muteListener = nil
+            notify()
             return
         }
 
@@ -84,6 +88,7 @@ final class AppState {
         supportsMute = AudioController.supportsMute(dev)
         muted = currentMutedState(dev)
         startMuteListener(for: dev)
+        notify()
     }
 
     /// Keeps the icon honest when mute/volume is changed elsewhere
@@ -103,6 +108,7 @@ final class AppState {
     private func resyncMutedState() {
         guard let dev = currentDevice else { return }
         muted = currentMutedState(dev)
+        notify()
     }
 
     private func currentMutedState(_ dev: AudioDeviceID) -> Bool {
@@ -111,5 +117,9 @@ final class AppState {
         }
         // No mute property: treat ~0 input volume as muted.
         return (AudioController.volume(on: dev) ?? 1) <= 0.0001
+    }
+
+    private func notify() {
+        onStateChange?()
     }
 }
