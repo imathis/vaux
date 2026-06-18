@@ -1,0 +1,145 @@
+import CoreAudio
+import Foundation
+
+/// Thin wrapper over the Core Audio HAL property API.
+///
+/// Hard rule for Hush: we touch audio **only** through HAL property
+/// reads/writes/listeners. No streams, no I/O procs, no aggregate devices,
+/// no capture. Setting these properties does not trigger TCC, so the app
+/// needs no microphone permission.
+enum AudioController {
+    static let system = AudioObjectID(kAudioObjectSystemObject)
+
+    // MARK: Default input device
+
+    static func defaultInputDevice() -> AudioDeviceID? {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var id = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let err = AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &id)
+        return (err == noErr && id != 0) ? id : nil
+    }
+
+    static func deviceName(_ id: AudioDeviceID) -> String {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var name: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        let err = AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &name)
+        guard err == noErr, let cf = name?.takeRetainedValue() else { return "Unknown input" }
+        return cf as String
+    }
+
+    // MARK: Mute
+
+    private static func muteAddress() -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioObjectPropertyScopeInput,
+            mElement: kAudioObjectPropertyElementMain)
+    }
+
+    static func supportsMute(_ id: AudioDeviceID) -> Bool {
+        var a = muteAddress()
+        return AudioObjectHasProperty(id, &a)
+    }
+
+    static func isMuted(_ id: AudioDeviceID) -> Bool {
+        var a = muteAddress()
+        var v = UInt32(0)
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        let err = AudioObjectGetPropertyData(id, &a, 0, nil, &size, &v)
+        return err == noErr && v == 1
+    }
+
+    @discardableResult
+    static func setMuted(_ muted: Bool, on id: AudioDeviceID) -> Bool {
+        var a = muteAddress()
+        guard AudioObjectHasProperty(id, &a) else { return false }
+        var v: UInt32 = muted ? 1 : 0
+        let err = AudioObjectSetPropertyData(id, &a, 0, nil, UInt32(MemoryLayout<UInt32>.size), &v)
+        return err == noErr
+    }
+
+    // MARK: Input volume (0.0...1.0)
+    //
+    // Used for the unmute level and as the mute fallback on devices that
+    // don't expose `kAudioDevicePropertyMute`. Some devices expose volume
+    // on the Main element; others only per-channel — try Main, then the
+    // first couple of channels.
+
+    private static func volumeAddress(element: UInt32) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioObjectPropertyScopeInput,
+            mElement: element)
+    }
+
+    private static let volumeElements: [UInt32] = [kAudioObjectPropertyElementMain, 1, 2]
+
+    static func volume(on id: AudioDeviceID) -> Float32? {
+        for element in volumeElements {
+            var a = volumeAddress(element: element)
+            guard AudioObjectHasProperty(id, &a) else { continue }
+            var v = Float32(0)
+            var size = UInt32(MemoryLayout<Float32>.size)
+            if AudioObjectGetPropertyData(id, &a, 0, nil, &size, &v) == noErr { return v }
+        }
+        return nil
+    }
+
+    @discardableResult
+    static func setVolume(_ scalar: Float32, on id: AudioDeviceID) -> Bool {
+        let clamped = max(0, min(1, scalar))
+        var didSet = false
+        for element in volumeElements {
+            var a = volumeAddress(element: element)
+            guard AudioObjectHasProperty(id, &a) else { continue }
+            var v = clamped
+            if AudioObjectSetPropertyData(id, &a, 0, nil, UInt32(MemoryLayout<Float32>.size), &v) == noErr {
+                didSet = true
+            }
+            // Prefer the Main element alone when it exists.
+            if element == kAudioObjectPropertyElementMain { return didSet }
+        }
+        return didSet
+    }
+}
+
+/// Registers a HAL property listener and removes it on `invalidate()`/`deinit`.
+/// The handler runs on the supplied queue (main by default).
+final class AudioPropertyListener {
+    private let objectID: AudioObjectID
+    private var address: AudioObjectPropertyAddress
+    private let queue: DispatchQueue
+    private let block: AudioObjectPropertyListenerBlock
+    private var active = false
+
+    init?(objectID: AudioObjectID,
+          selector: AudioObjectPropertySelector,
+          scope: AudioObjectPropertyScope,
+          element: AudioObjectPropertyElement = kAudioObjectPropertyElementMain,
+          queue: DispatchQueue = .main,
+          handler: @escaping @Sendable () -> Void) {
+        self.objectID = objectID
+        self.address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: element)
+        self.queue = queue
+        self.block = { _, _ in handler() }
+        let err = AudioObjectAddPropertyListenerBlock(objectID, &address, queue, block)
+        guard err == noErr else { return nil }
+        active = true
+    }
+
+    func invalidate() {
+        guard active else { return }
+        AudioObjectRemovePropertyListenerBlock(objectID, &address, queue, block)
+        active = false
+    }
+
+    deinit { invalidate() }
+}
