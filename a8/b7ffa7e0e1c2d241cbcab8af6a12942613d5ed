@@ -1,0 +1,37 @@
+Sources/SettingsView.swift
+  s_32fce8dc9e6018::t_daa64d2421728b 29
+README.md
+  s_32fce8dc9e6018::t_5b3356020e0c93 43
+  s_32fce8dc9e6018::t_6170b51504ea18 39-42
+Sources/AppState.swift
+  s_32fce8dc9e6018::t_730c4d11b87997 5,16-19,55,83,91,111,121-123
+Sources/AppDelegate.swift
+  s_32fce8dc9e6018::t_b39a16b0870fa6 11
+  s_32fce8dc9e6018::t_16c56e1a09b032 2-9,14,44,127-128,132-135,137-138,140-141
+  s_32fce8dc9e6018::t_6d7b1f42f064a4 21
+  s_32fce8dc9e6018::t_b21055aa51d45f 53-58,61-64
+  s_32fce8dc9e6018::t_c437b64ced8971 59-60,65,67-68
+  s_32fce8dc9e6018::t_5f1e88ba405f39 66,73-79
+  s_32fce8dc9e6018::t_cdb35864dbbac9 129-131,136
+  s_32fce8dc9e6018::t_b9c1670cff587f 1,10,12-13,15-20,22-43,45-52,69-72,80-126,142-147
+  s_32fce8dc9e6018::t_b31188e2cc8eb6 139
+Sources/main.swift
+  s_32fce8dc9e6018::t_a696c1269a867a 8-15
+  s_32fce8dc9e6018::t_25bd8d77fa2b84 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "a8b7ffa7e0e1c2d241cbcab8af6a12942613d5ed",
+  "prompts": {},
+  "sessions": {
+    "s_32fce8dc9e6018": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea5a83de-e744-4a9a-9022-165ce36ea873",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
