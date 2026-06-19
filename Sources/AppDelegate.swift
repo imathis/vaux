@@ -14,7 +14,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Fixed width reserves room for the active-state oval (drawn behind the
+        // icon while the menu is open) so it isn't clipped to a tight icon slot.
+        // Can't exceed this to overlap neighbors the way the system does — the
+        // oval is clipped to this item's own window.
+        let item = NSStatusBar.system.statusItem(withLength: 18)
         if let button = item.button {
             button.target = self
             button.action = #selector(handleClick(_:))
