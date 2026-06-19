@@ -109,6 +109,98 @@ enum AudioController {
         }
         return didSet
     }
+
+    /// Whether the device exposes a *settable* input volume control. Many USB
+    /// mics and Bluetooth headsets manage their own gain and report false here.
+    static func canSetInputVolume(_ id: AudioDeviceID) -> Bool {
+        for element in volumeElements {
+            var a = volumeAddress(element: element)
+            guard AudioObjectHasProperty(id, &a) else { continue }
+            var settable: DarwinBoolean = false
+            if AudioObjectIsPropertySettable(id, &a, &settable) == noErr, settable.boolValue {
+                return true
+            }
+        }
+        return false
+    }
+
+    // MARK: Device enumeration / default-input selection
+    //
+    // All property reads/writes — listing devices, reading the input channel
+    // count, and setting the system default input — no streams, no IOProcs.
+
+    /// All devices that expose at least one input channel, in HAL order.
+    /// `uid` is the stable identifier (empty string if the device has none).
+    static func inputDevices() -> [(id: AudioDeviceID, uid: String, name: String)] {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var size = UInt32(0)
+        guard AudioObjectGetPropertyDataSize(system, &addr, 0, nil, &size) == noErr else { return [] }
+        let count = Int(size) / MemoryLayout<AudioDeviceID>.size
+        guard count > 0 else { return [] }
+        var ids = [AudioDeviceID](repeating: 0, count: count)
+        guard AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &ids) == noErr else { return [] }
+        return ids.filter { hasInput($0) }.map { (id: $0, uid: deviceUID($0) ?? "", name: deviceName($0)) }
+    }
+
+    /// True if the device has any input channels. Reads the stream
+    /// *configuration* (channel layout) — this does not open a stream.
+    static func hasInput(_ id: AudioDeviceID) -> Bool {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreamConfiguration,
+            mScope: kAudioObjectPropertyScopeInput,
+            mElement: kAudioObjectPropertyElementMain)
+        var size = UInt32(0)
+        guard AudioObjectGetPropertyDataSize(id, &addr, 0, nil, &size) == noErr, size > 0 else { return false }
+        let raw = UnsafeMutableRawPointer.allocate(
+            byteCount: Int(size), alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer { raw.deallocate() }
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, raw) == noErr else { return false }
+        let abl = UnsafeMutableAudioBufferListPointer(raw.assumingMemoryBound(to: AudioBufferList.self))
+        return abl.contains { $0.mNumberChannels > 0 }
+    }
+
+    /// Stable per-device identifier that survives reconnects (unlike the
+    /// ephemeral AudioDeviceID). Used to persist a preferred-input order.
+    static func deviceUID(_ id: AudioDeviceID) -> String? {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceUID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var uid: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &uid) == noErr,
+              let cf = uid?.takeRetainedValue() else { return nil }
+        return cf as String
+    }
+
+    /// Change the system default input device (the Sound-settings input picker).
+    /// A property write on the system object — does not touch output.
+    @discardableResult
+    static func setDefaultInputDevice(_ id: AudioDeviceID) -> Bool {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var dev = id
+        return AudioObjectSetPropertyData(
+            system, &addr, 0, nil, UInt32(MemoryLayout<AudioDeviceID>.size), &dev) == noErr
+    }
+
+    /// Connection transport (built-in, USB, Bluetooth, HDMI, …) used to pick a
+    /// device-type icon, like the system Sound menu.
+    static func transportType(_ id: AudioDeviceID) -> UInt32 {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var type: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &type)
+        return type
+    }
 }
 
 /// Registers a HAL property listener and removes it on `invalidate()`/`deinit`.

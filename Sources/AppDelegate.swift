@@ -1,4 +1,6 @@
 import AppKit
+import CoreAudio
+import KeyboardShortcuts
 import SwiftUI
 
 /// Owns the menu bar status item and the settings window.
@@ -83,38 +85,138 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
-        let header = NSMenuItem(
-            title: appState.deviceName.map { "Input: \($0)" } ?? "No input device",
-            action: nil, keyEquivalent: "")
-        header.isEnabled = false
-        menu.addItem(header)
+        guard let current = AudioController.defaultInputDevice() else {
+            menu.addItem(.sectionHeader(title: "Input"))
+            let none = NSMenuItem(title: "No input device", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            menu.addItem(none)
+            menu.addItem(.separator())
+            addAppItems(to: menu)
+            return menu
+        }
 
-        if appState.deviceName != nil && !appState.supportsMute {
-            let note = NSMenuItem(title: "Mute unsupported — using volume", action: nil, keyEquivalent: "")
+        // Volume — prominent title (like the system "Sound") then a slider.
+        let canSetVolume = AudioController.canSetInputVolume(current)
+        menu.addItem(volumeTitleItem(managed: !canSetVolume))
+        let volumeItem = NSMenuItem()
+        let volumeView = InputVolumeView(supported: canSetVolume, value: AudioController.volume(on: current) ?? 0)
+        volumeView.onChange = { newValue in AudioController.setVolume(newValue, on: current) }
+        volumeItem.view = volumeView
+        menu.addItem(volumeItem)
+
+        menu.addItem(.separator())
+
+        // Mute — setShortcut shows the global hotkey natively (right-aligned)
+        // and coordinates with the global handler so it doesn't double-fire.
+        let toggle = NSMenuItem(title: appState.muted ? "Unmute" : "Mute",
+                                action: #selector(toggleFromMenu), keyEquivalent: "")
+        toggle.target = self
+        toggle.setShortcut(for: .toggleMicMute)
+        menu.addItem(toggle)
+        if !appState.supportsMute {
+            let note = NSMenuItem(title: "Using volume (no mute control on this device)",
+                                  action: nil, keyEquivalent: "")
             note.isEnabled = false
             menu.addItem(note)
         }
 
         menu.addItem(.separator())
 
-        let toggle = NSMenuItem(
-            title: appState.muted ? "Unmute" : "Mute",
-            action: #selector(toggleFromMenu), keyEquivalent: "")
-        toggle.target = self
-        toggle.isEnabled = appState.hasDevice
-        menu.addItem(toggle)
+        // Input devices — selection shown the system way: the current device's
+        // type icon is tinted blue (accent), others grey. No checkmark.
+        menu.addItem(.sectionHeader(title: "Input"))
+        let inputs = AudioController.inputDevices()
+        let preferredID = preferredDeviceID(in: inputs)
+        for device in inputs {
+            let item = NSMenuItem(title: device.name, action: #selector(selectInput(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = NSNumber(value: device.id)
+            item.image = deviceIcon(for: device.id, selected: device.id == current)
+            if device.id == preferredID {
+                item.badge = NSMenuItemBadge(string: "Preferred")
+            }
+            menu.addItem(item)
+        }
 
         menu.addItem(.separator())
+        addAppItems(to: menu)
+        return menu
+    }
 
+    private func addAppItems(to menu: NSMenu) {
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
+        settings.image = NSImage() // override the macOS 27 auto-gear on "Settings…"
         menu.addItem(settings)
 
         let quit = NSMenuItem(title: "Quit Hush", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
+    }
 
-        return menu
+    /// Device-type icon, tinted accent-blue when it's the selected input
+    /// (mirrors how the system Sound menu shows the active device).
+    /// Prominent "Volume" header (matches the system "Sound" weight), with a
+    /// subtle "managed by device" note when the gain isn't adjustable.
+    private func volumeTitleItem(managed: Bool) -> NSMenuItem {
+        let item = NSMenuItem()
+        let title = NSMutableAttributedString(
+            string: "Volume",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
+                .foregroundColor: NSColor.labelColor,
+            ])
+        if managed {
+            title.append(NSAttributedString(
+                string: "   managed by device",
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 11),
+                    .foregroundColor: NSColor.secondaryLabelColor,
+                ]))
+        }
+        item.attributedTitle = title
+        item.isEnabled = false
+        return item
+    }
+
+    /// Device-type glyph inside a filled circle — grey when idle, accent-blue
+    /// with a white glyph when it's the active input (ripped from the system
+    /// Sound menu's selection style).
+    private func deviceIcon(for id: AudioDeviceID, selected: Bool) -> NSImage {
+        let diameter: CGFloat = 20
+        let circleColor: NSColor = selected ? .controlAccentColor : .tertiaryLabelColor
+        let glyphColor: NSColor = selected ? .white : .secondaryLabelColor
+        let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [glyphColor]))
+        let glyph = NSImage(systemSymbolName: symbolName(forTransport: AudioController.transportType(id)),
+                            accessibilityDescription: nil)?
+            .withSymbolConfiguration(config)
+        glyph?.isTemplate = false
+
+        let image = NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
+            circleColor.setFill()
+            NSBezierPath(ovalIn: rect).fill()
+            if let glyph {
+                let size = glyph.size
+                glyph.draw(at: NSPoint(x: (diameter - size.width) / 2, y: (diameter - size.height) / 2),
+                           from: .zero, operation: .sourceOver, fraction: 1)
+            }
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+
+    private func symbolName(forTransport transport: UInt32) -> String {
+        switch transport {
+        case kAudioDeviceTransportTypeBuiltIn: return "laptopcomputer"
+        case kAudioDeviceTransportTypeUSB: return "mic"
+        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE: return "headphones"
+        case kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypeDisplayPort: return "display"
+        case kAudioDeviceTransportTypeAirPlay: return "airplayaudio"
+        case kAudioDeviceTransportTypeAggregate, kAudioDeviceTransportTypeVirtual: return "rectangle.3.group"
+        default: return "mic"
+        }
     }
 
     // MARK: Menu actions
@@ -123,17 +225,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.toggle()
     }
 
+    @objc private func selectInput(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? NSNumber else { return }
+        AudioController.setDefaultInputDevice(AudioDeviceID(id.uint32Value))
+        // AppState's default-input listener refreshes the icon and readout.
+    }
+
+    /// The highest-priority preferred input that's currently connected, if any.
+    private func preferredDeviceID(in inputs: [(id: AudioDeviceID, uid: String, name: String)]) -> AudioDeviceID? {
+        for entry in PreferredInput.order where !entry.uid.isEmpty {
+            if let match = inputs.first(where: { $0.uid == entry.uid }) {
+                return match.id
+            }
+        }
+        return nil
+    }
+
+
     @objc private func openSettings() {
         if settingsWindow == nil {
             let controller = NSHostingController(rootView: SettingsView())
-            // Don't let the hosting controller drive (and collapse) the window
-            // size; we set an explicit content size and let SwiftUI fill it.
-            controller.sizingOptions = []
+            // Size the window to the SwiftUI content (fixed width, intrinsic
+            // height) instead of a fixed/resizable frame.
+            controller.sizingOptions = [.preferredContentSize]
             let window = NSWindow(contentViewController: controller)
             window.title = "Hush Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
-            window.setContentSize(NSSize(width: 400, height: 260))
             window.center()
             settingsWindow = window
         }

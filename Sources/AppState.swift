@@ -30,12 +30,32 @@ final class AppState {
         return Float32(stored ?? AppStorageKey.unmuteVolumeDefault)
     }
 
+    private var muteIntentInitialized = false
+
     init() {
         KeyboardShortcuts.onKeyDown(for: .toggleMicMute) { [weak self] in
             self?.toggle()
         }
+        KeyboardShortcuts.onKeyDown(for: .applyPreferredInput) { [weak self] in
+            self?.applyPreferredInput()
+        }
         startDefaultDeviceListener()
         refreshDevice()
+    }
+
+    /// Switch the system default input to the highest-priority device in the
+    /// preferred order that's currently connected. No-op if none are present.
+    func applyPreferredInput() {
+        let present = AudioController.inputDevices()
+        let current = AudioController.defaultInputDevice()
+        for entry in PreferredInput.order where !entry.uid.isEmpty {
+            guard let match = present.first(where: { $0.uid == entry.uid }) else { continue }
+            if match.id != current {
+                AudioController.setDefaultInputDevice(match.id)
+                // The default-input listener will enforce mute intent onto it.
+            }
+            return
+        }
     }
 
     // MARK: Actions
@@ -73,22 +93,72 @@ final class AppState {
     /// re-point the mute listener at the new device.
     private func refreshDevice() {
         let dev = AudioController.defaultInputDevice()
+        let previous = currentDevice
         currentDevice = dev
 
         guard let dev else {
             deviceName = nil
             supportsMute = false
-            muted = false
             muteListener = nil
+            // Keep `muted` as the standing intent so it re-applies when a
+            // device returns.
             notify()
             return
         }
 
         deviceName = AudioController.deviceName(dev)
         supportsMute = AudioController.supportsMute(dev)
-        muted = currentMutedState(dev)
+
+        if !muteIntentInitialized {
+            // First resolve at launch: adopt the device's current state.
+            muted = currentMutedState(dev)
+            muteIntentInitialized = true
+        } else if dev != previous {
+            // Default input switched (manual pick, system change, or preferred-
+            // input): enforce our mute intent onto the new device so muting
+            // persists across input changes.
+            applyMuteIntent(to: dev)
+        } else {
+            // Same device, refreshed for another reason: reflect actual state.
+            muted = currentMutedState(dev)
+        }
+
         startMuteListener(for: dev)
         notify()
+    }
+
+    /// Re-assert the current mute intent (`muted`) onto a device, then verify.
+    private func applyMuteIntent(to dev: AudioDeviceID) {
+        writeMuteIntent(to: dev)
+        // A just-switched or hot-plugged device may not accept the write
+        // immediately; re-check after a short delay and re-apply once if the
+        // state didn't stick.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.currentDevice == dev else { return }
+                if !self.muteIntentSatisfied(on: dev) {
+                    self.writeMuteIntent(to: dev)
+                    self.notify()
+                }
+            }
+        }
+    }
+
+    private func writeMuteIntent(to dev: AudioDeviceID) {
+        if AudioController.supportsMute(dev) {
+            AudioController.setMuted(muted, on: dev)
+            if !muted { AudioController.setVolume(unmuteVolume, on: dev) }
+        } else {
+            AudioController.setVolume(muted ? 0 : unmuteVolume, on: dev)
+        }
+    }
+
+    private func muteIntentSatisfied(on dev: AudioDeviceID) -> Bool {
+        if AudioController.supportsMute(dev) {
+            return AudioController.isMuted(dev) == muted
+        }
+        let isZero = (AudioController.volume(on: dev) ?? 1) <= 0.0001
+        return isZero == muted
     }
 
     /// Keeps the icon honest when mute/volume is changed elsewhere

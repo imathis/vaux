@@ -6,4 +6,8 @@ extension KeyboardShortcuts.Name {
     /// registers it via the Carbon hotkey API — no Accessibility permission,
     /// no permission dialog.
     static let toggleMicMute = Self("toggleMicMute")
+
+    /// Global hotkey for re-asserting the preferred input device (highest
+    /// priority device that's currently connected).
+    static let applyPreferredInput = Self("applyPreferredInput")
 }
