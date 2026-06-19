@@ -1,0 +1,55 @@
+Sources/MenuPanelController.swift
+  s_32fce8dc9e6018::t_5082e6c53192c1 19
+  s_32fce8dc9e6018::t_540b080ba9c538 1-15,17-18,20-28,37-43,48-49,51-61,74-79,84-85,89-98,100-104,109,112,114-115
+  s_32fce8dc9e6018::t_12ed62e8faf57c 44-47
+  s_32fce8dc9e6018::t_c1630e65ba0e9f 70,73
+  s_32fce8dc9e6018::t_fd5862a5070ca3 113
+  s_32fce8dc9e6018::t_fef71850512e70 99
+  s_32fce8dc9e6018::t_bc66322e7cd58e 16
+  s_32fce8dc9e6018::t_e3d521adc87a50 86-88
+  s_32fce8dc9e6018::t_1faec56676bf94 105,111
+  s_32fce8dc9e6018::t_c99d6b437a84f0 106-108,110
+  s_32fce8dc9e6018::t_fa10267d6476f7 29-36
+  s_32fce8dc9e6018::t_3b64b3a53d46c2 50,62-65,67-69
+  s_32fce8dc9e6018::t_f801611dc90e75 80-83
+  s_32fce8dc9e6018::t_f848f7d9bc14a1 66,71-72
+Sources/AppState.swift
+  s_32fce8dc9e6018::t_36a4c104159e6b 4,12,20,24-26
+  s_32fce8dc9e6018::t_0980637802a4f8 35,37-38,41
+Sources/MenuContentView.swift
+  s_32fce8dc9e6018::t_a2219dd512afeb 50
+  s_32fce8dc9e6018::t_1dc7ce68429753 1-26,39-49,51-76,78,80-83,85-86,88-158,168-199,202-216
+  s_32fce8dc9e6018::t_3f53a39270b855 27-38
+  s_32fce8dc9e6018::t_ae0161ae778142 159-167
+  s_32fce8dc9e6018::t_8ea240a0d61a22 77,79,84,87
+  s_32fce8dc9e6018::t_80f63fb350f8a2 200
+  s_32fce8dc9e6018::t_6106e285c55bac 201
+Sources/AudioController.swift
+  s_32fce8dc9e6018::t_5d6d6ef48c7d5d 204-221
+Sources/AppDelegate.swift
+  s_32fce8dc9e6018::t_3ab56d1d5da3fb 4,8,13,21,24,65,70
+  s_32fce8dc9e6018::t_95041676814d9f 6-7
+  s_32fce8dc9e6018::t_9c1ddfadf4ef32 54-55,57-58,60-61
+Sources/SettingsView.swift
+  s_32fce8dc9e6018::t_67a2f845ef7f27 32,36
+  s_32fce8dc9e6018::t_782667306af1e3 31,35
+  s_32fce8dc9e6018::t_5a4a9f01d9a0a6 75
+  s_32fce8dc9e6018::t_fdeeb7fae16ec6 72-74
+  s_32fce8dc9e6018::t_a35af65dd3a905 70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "3f86d3761932313773eda7fa4de52a42931c77d5",
+  "prompts": {},
+  "sessions": {
+    "s_32fce8dc9e6018": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea5a83de-e744-4a9a-9022-165ce36ea873",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
