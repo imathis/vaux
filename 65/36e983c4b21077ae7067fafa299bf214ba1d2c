@@ -1,0 +1,32 @@
+Sources/AppDelegate.swift
+  s_243944e7542c4d::t_fe37ca71d51c02 19-20
+  s_243944e7542c4d::t_868b88404845dd 17-18
+  s_243944e7542c4d::t_2f3f2f19cf8729 21
+Sources/MenuPanelController.swift
+  s_243944e7542c4d::t_087af836167458 64-66,71-79,85
+  s_243944e7542c4d::t_80079b1b569a72 133
+  s_243944e7542c4d::t_8964b7bae239f6 114-115,125
+  s_243944e7542c4d::t_91a5d0c36d2da8 126-131,134-136,146,148
+  s_243944e7542c4d::t_d8aa6db5fea5e8 17
+  s_243944e7542c4d::t_d9a085978f108f 137-145,147,149-153
+  s_243944e7542c4d::t_231002318f7147 89-91
+  s_243944e7542c4d::t_c3d37f8e4c4f27 94-95
+  s_243944e7542c4d::t_9270c4cb05ce66 121-124
+  s_243944e7542c4d::t_2fab81a43c1e6c 132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "6536e983c4b21077ae7067fafa299bf214ba1d2c",
+  "prompts": {},
+  "sessions": {
+    "s_243944e7542c4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d22fe29f-c908-46c4-a7b9-88103117d3b0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
