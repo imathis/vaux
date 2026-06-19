@@ -1,0 +1,21 @@
+Sources/Hush.entitlements
+  s_32fce8dc9e6018::t_3361e47e99a7a8 1-8
+project.yml
+  s_32fce8dc9e6018::t_c3e7c3b69b2634 39-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "dd3e9353f47fcbed02e70572d0e31ced70655fc7",
+  "prompts": {},
+  "sessions": {
+    "s_32fce8dc9e6018": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea5a83de-e744-4a9a-9022-165ce36ea873",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
