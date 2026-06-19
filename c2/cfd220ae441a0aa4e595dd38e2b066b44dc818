@@ -1,0 +1,40 @@
+Sources/SettingsView.swift
+  s_32fce8dc9e6018::t_01c334c98d1486 34-38
+  s_32fce8dc9e6018::t_2232954e92dacb 70
+  s_32fce8dc9e6018::t_29720278ee49d1 7
+Sources/AppState.swift
+  s_32fce8dc9e6018::t_d1c4450427a4fe 53
+  s_32fce8dc9e6018::t_0c65c961266d81 37-39
+  s_32fce8dc9e6018::t_52125e8cc57962 35-36,40-44,54-59,63-64
+  s_32fce8dc9e6018::t_d47ff16c420ade 119-122,124-126
+  s_32fce8dc9e6018::t_44bee5eb39a9f1 103,108-118,123,127-139
+Sources/AppStorageKey.swift
+  s_32fce8dc9e6018::t_7aa296f5d11d89 8-15
+Sources/AppDelegate.swift
+  s_32fce8dc9e6018::t_10471cc3e53ae9 102
+  s_32fce8dc9e6018::t_5b307d615af8b1 99,101,128-141
+  s_32fce8dc9e6018::t_17f2aecde5c6a4 121
+  s_32fce8dc9e6018::t_ca134df29b7b7b 188-190,203,205,214
+  s_32fce8dc9e6018::t_5e2c134e39f2d3 207-208,211-213
+  s_32fce8dc9e6018::t_ac45a66cb51eeb 89-90,113-114
+  s_32fce8dc9e6018::t_cd9e1ec824dccc 161-163,165-166,168-169,171-180
+  s_32fce8dc9e6018::t_d67caa6b8463c6 187,193-199
+  s_32fce8dc9e6018::t_6ef4bc2d5b0b26 209
+  s_32fce8dc9e6018::t_e0d2b400d0a273 222,226-227,235-242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "c2cfd220ae441a0aa4e595dd38e2b066b44dc818",
+  "prompts": {},
+  "sessions": {
+    "s_32fce8dc9e6018": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea5a83de-e744-4a9a-9022-165ce36ea873",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
