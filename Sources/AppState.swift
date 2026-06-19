@@ -32,6 +32,16 @@ final class AppState {
 
     private var muteIntentInitialized = false
 
+    private var deviceListListener: AudioPropertyListener?
+    private var enforceScheduled = false
+    /// UIDs of the currently-connected input devices, to detect plug/unplug
+    /// (the only event that triggers an automatic input switch).
+    private var lastInputUIDs: Set<String> = []
+
+    private var enforcePreferred: Bool {
+        UserDefaults.standard.bool(forKey: AppStorageKey.enforcePreferred)
+    }
+
     init() {
         KeyboardShortcuts.onKeyDown(for: .toggleMicMute) { [weak self] in
             self?.toggle()
@@ -40,11 +50,18 @@ final class AppState {
             self?.applyPreferredInput()
         }
         startDefaultDeviceListener()
+        lastInputUIDs = Set(AudioController.inputDevices().map(\.uid))
+        startDeviceListListener()
+        NotificationCenter.default.addObserver(
+            forName: .hushEnforcePreferred, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyPreferredInput() }
+        }
         refreshDevice()
     }
 
-    /// Switch the system default input to the highest-priority device in the
-    /// preferred order that's currently connected. No-op if none are present.
+    /// Switch the system default input to the highest-priority connected device
+    /// in the preferred order. No-op if none are present or it's already current.
     func applyPreferredInput() {
         let present = AudioController.inputDevices()
         let current = AudioController.defaultInputDevice()
@@ -83,9 +100,43 @@ final class AppState {
             selector: kAudioHardwarePropertyDefaultInputDevice,
             scope: kAudioObjectPropertyScopeGlobal
         ) { [weak self] in
-            // Listener fires on the main queue (see AudioPropertyListener), so
-            // we're already on the MainActor executor.
+            // Listener fires on the main queue (see AudioPropertyListener).
             MainActor.assumeIsolated { self?.refreshDevice() }
+        }
+    }
+
+    /// Fires when devices are added/removed (plug/unplug).
+    private func startDeviceListListener() {
+        deviceListListener = AudioPropertyListener(
+            objectID: AudioController.system,
+            selector: kAudioHardwarePropertyDevices,
+            scope: kAudioObjectPropertyScopeGlobal
+        ) { [weak self] in
+            MainActor.assumeIsolated { self?.handleDeviceListChanged() }
+        }
+    }
+
+    /// Enforce only when the set of *input* devices changes — i.e. a plug or
+    /// unplug, which is the only thing that makes macOS auto-select an input. A
+    /// manual pick in System Settings doesn't change the device set, so it's
+    /// left untouched.
+    private func handleDeviceListChanged() {
+        let uids = Set(AudioController.inputDevices().map(\.uid))
+        guard uids != lastInputUIDs else { return }
+        lastInputUIDs = uids
+        if enforcePreferred { scheduleEnforce() }
+    }
+
+    /// Coalesce + debounce enforcement so we don't fight macOS mid-connect.
+    private func scheduleEnforce() {
+        guard !enforceScheduled else { return }
+        enforceScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.enforceScheduled = false
+                self.applyPreferredInput()
+            }
         }
     }
 

@@ -86,7 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.autoenablesItems = false
 
         guard let current = AudioController.defaultInputDevice() else {
-            menu.addItem(.sectionHeader(title: "Input"))
+            menu.addItem(headerItem("Input", font: .systemFont(ofSize: 13, weight: .semibold),
+                                color: .secondaryLabelColor))
             let none = NSMenuItem(title: "No input device", action: nil, keyEquivalent: "")
             none.isEnabled = false
             menu.addItem(none)
@@ -95,14 +96,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return menu
         }
 
-        // Volume — prominent title (like the system "Sound") then a slider.
+        // Volume — title (like the system "Sound") then a slider.
         let canSetVolume = AudioController.canSetInputVolume(current)
-        menu.addItem(volumeTitleItem(managed: !canSetVolume))
+        menu.addItem(headerItem("Volume", font: .systemFont(ofSize: 13, weight: .semibold),
+                                color: .labelColor, trailing: canSetVolume ? nil : "managed by device"))
         let volumeItem = NSMenuItem()
         let volumeView = InputVolumeView(supported: canSetVolume, value: AudioController.volume(on: current) ?? 0)
         volumeView.onChange = { newValue in AudioController.setVolume(newValue, on: current) }
         volumeItem.view = volumeView
         menu.addItem(volumeItem)
+
+        menu.addItem(.separator())
+
+        // Input devices — selection shown the system way: the current device's
+        // type icon is tinted blue (accent), others grey. No checkmark.
+        menu.addItem(headerItem("Input", font: .systemFont(ofSize: 13, weight: .semibold),
+                                color: .secondaryLabelColor))
+        let inputs = AudioController.inputDevices()
+        let preferredID = preferredDeviceID(in: inputs)
+        for device in inputs {
+            let item = NSMenuItem(title: device.name, action: #selector(selectInput(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = NSNumber(value: device.id)
+            item.image = deviceIcon(for: device.id, name: device.name, selected: device.id == current)
+            if device.id == preferredID {
+                item.badge = NSMenuItemBadge(string: "Preferred")
+            }
+            menu.addItem(item)
+        }
 
         menu.addItem(.separator())
 
@@ -121,24 +142,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         menu.addItem(.separator())
-
-        // Input devices — selection shown the system way: the current device's
-        // type icon is tinted blue (accent), others grey. No checkmark.
-        menu.addItem(.sectionHeader(title: "Input"))
-        let inputs = AudioController.inputDevices()
-        let preferredID = preferredDeviceID(in: inputs)
-        for device in inputs {
-            let item = NSMenuItem(title: device.name, action: #selector(selectInput(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = NSNumber(value: device.id)
-            item.image = deviceIcon(for: device.id, selected: device.id == current)
-            if device.id == preferredID {
-                item.badge = NSMenuItemBadge(string: "Preferred")
-            }
-            menu.addItem(item)
-        }
-
-        menu.addItem(.separator())
         addAppItems(to: menu)
         return menu
     }
@@ -146,7 +149,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func addAppItems(to menu: NSMenu) {
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
-        settings.image = NSImage() // override the macOS 27 auto-gear on "Settings…"
         menu.addItem(settings)
 
         let quit = NSMenuItem(title: "Quit Hush", action: #selector(quit), keyEquivalent: "q")
@@ -156,50 +158,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Device-type icon, tinted accent-blue when it's the selected input
     /// (mirrors how the system Sound menu shows the active device).
-    /// Prominent "Volume" header (matches the system "Sound" weight), with a
-    /// subtle "managed by device" note when the gain isn't adjustable.
-    private func volumeTitleItem(managed: Bool) -> NSMenuItem {
-        let item = NSMenuItem()
+    /// A header rendered as a custom view (not a disabled item, which macOS
+    /// dims to near-transparent, and not the tiny `.sectionHeader`).
+    private func headerItem(_ text: String, font: NSFont, color: NSColor, trailing: String? = nil) -> NSMenuItem {
         let title = NSMutableAttributedString(
-            string: "Volume",
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
-                .foregroundColor: NSColor.labelColor,
-            ])
-        if managed {
+            string: text, attributes: [.font: font, .foregroundColor: color])
+        if let trailing {
             title.append(NSAttributedString(
-                string: "   managed by device",
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: 11),
-                    .foregroundColor: NSColor.secondaryLabelColor,
-                ]))
+                string: "   \(trailing)",
+                attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]))
         }
-        item.attributedTitle = title
-        item.isEnabled = false
+        let label = NSTextField(labelWithAttributedString: title)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 26))
+        container.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
+            label.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -4),
+        ])
+        let item = NSMenuItem()
+        item.view = container
         return item
     }
 
     /// Device-type glyph inside a filled circle — grey when idle, accent-blue
     /// with a white glyph when it's the active input (ripped from the system
     /// Sound menu's selection style).
-    private func deviceIcon(for id: AudioDeviceID, selected: Bool) -> NSImage {
-        let diameter: CGFloat = 20
+    private func deviceIcon(for id: AudioDeviceID, name: String, selected: Bool) -> NSImage {
+        let circle: CGFloat = 26
+        let pad: CGFloat = 4 // transparent margin → spacing from the menu edge and text
+        let canvas = circle + pad * 2
         let circleColor: NSColor = selected ? .controlAccentColor : .tertiaryLabelColor
         let glyphColor: NSColor = selected ? .white : .secondaryLabelColor
-        let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
-            .applying(NSImage.SymbolConfiguration(paletteColors: [glyphColor]))
-        let glyph = NSImage(systemSymbolName: symbolName(forTransport: AudioController.transportType(id)),
-                            accessibilityDescription: nil)?
+        // Hierarchical rendering gives the system's multi-tone/translucent look
+        // (e.g. the laptop's screen), not a flat one-color glyph.
+        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+            .applying(NSImage.SymbolConfiguration(hierarchicalColor: glyphColor))
+        let symbol = symbolName(forTransport: AudioController.transportType(id), name: name)
+        let glyph = (NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+                     ?? NSImage(systemSymbolName: "mic", accessibilityDescription: nil))?
             .withSymbolConfiguration(config)
         glyph?.isTemplate = false
 
-        let image = NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
+        let image = NSImage(size: NSSize(width: canvas, height: canvas), flipped: false) { _ in
             circleColor.setFill()
-            NSBezierPath(ovalIn: rect).fill()
+            NSBezierPath(ovalIn: NSRect(x: pad, y: pad, width: circle, height: circle)).fill()
             if let glyph {
+                // Scale to fit inside the circle, preserving aspect ratio, so
+                // wide glyphs (e.g. laptopcomputer) don't overflow.
+                let maxDim = circle * 0.62
                 let size = glyph.size
-                glyph.draw(at: NSPoint(x: (diameter - size.width) / 2, y: (diameter - size.height) / 2),
-                           from: .zero, operation: .sourceOver, fraction: 1)
+                let scale = (size.width > 0 && size.height > 0)
+                    ? min(maxDim / size.width, maxDim / size.height) : 1
+                let w = size.width * scale, h = size.height * scale
+                glyph.draw(in: NSRect(x: (canvas - w) / 2, y: (canvas - h) / 2, width: w, height: h))
             }
             return true
         }
@@ -207,16 +219,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return image
     }
 
-    private func symbolName(forTransport transport: UInt32) -> String {
+    private func symbolName(forTransport transport: UInt32, name: String) -> String {
         switch transport {
         case kAudioDeviceTransportTypeBuiltIn: return "laptopcomputer"
         case kAudioDeviceTransportTypeUSB: return "mic"
-        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE: return "headphones"
+        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE:
+            return bluetoothSymbol(name: name)
         case kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypeDisplayPort: return "display"
         case kAudioDeviceTransportTypeAirPlay: return "airplayaudio"
         case kAudioDeviceTransportTypeAggregate, kAudioDeviceTransportTypeVirtual: return "rectangle.3.group"
         default: return "mic"
         }
+    }
+
+    /// AirPods models get their specific SF Symbol; other Bluetooth audio falls
+    /// back to generic headphones.
+    private func bluetoothSymbol(name: String) -> String {
+        let lower = name.lowercased()
+        if lower.contains("airpods max") { return "airpodsmax" }
+        if lower.contains("airpods pro") { return "airpodspro" }
+        if lower.contains("airpods") { return "airpods" }
+        return "headphones"
     }
 
     // MARK: Menu actions
@@ -228,7 +251,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func selectInput(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? NSNumber else { return }
         AudioController.setDefaultInputDevice(AudioDeviceID(id.uint32Value))
-        // AppState's default-input listener refreshes the icon and readout.
     }
 
     /// The highest-priority preferred input that's currently connected, if any.

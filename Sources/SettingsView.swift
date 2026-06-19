@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     @AppStorage(AppStorageKey.unmuteVolume) private var unmuteVolume =
         AppStorageKey.unmuteVolumeDefault
+    @AppStorage(AppStorageKey.enforcePreferred) private var enforcePreferred = false
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var priority = InputPriorityModel()
 
@@ -30,6 +31,11 @@ struct SettingsView: View {
             }
 
             Section("Preferred Inputs") {
+                Toggle("Automatically switch to preferred input", isOn: $enforcePreferred)
+                    .onChange(of: enforcePreferred) { _, on in
+                        if on { NotificationCenter.default.post(name: .hushEnforcePreferred, object: nil) }
+                    }
+
                 if priority.entries.isEmpty {
                     Text("No input devices seen yet.")
                         .foregroundStyle(.secondary)
@@ -61,7 +67,7 @@ struct SettingsView: View {
                     .scrollContentBackground(.hidden)
                     .frame(height: CGFloat(priority.entries.count) * rowHeight)
                 }
-                Text("Drag to reorder. “Use preferred input” switches to the highest connected device. Green dot = connected.")
+                Text("Drag to reorder; highest connected device wins. When auto-switch is on, Hush re-applies it when inputs are plugged in or removed — choosing an input yourself (here or in System Settings) is left alone. Green dot = connected.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
