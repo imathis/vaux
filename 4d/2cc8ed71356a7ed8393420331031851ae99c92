@@ -1,0 +1,33 @@
+IconSource/lucide-mic-1024.svg
+  s_32fce8dc9e6018::t_984488af44e6c1 1-10
+IconSource/lucide-micoff-preview.svg
+  s_32fce8dc9e6018::t_339eb043a1bcb9 1-15
+IconSource/lucide-mic.svg
+  s_32fce8dc9e6018::t_baae62b48d78ad 1-15
+IconSource/hush-icon-preview.svg
+  s_32fce8dc9e6018::t_33809753834ee0 1-17
+IconSource/hush-mic.svg
+  s_32fce8dc9e6018::t_6ab73ba9a7cfab 1-14
+IconSource/lucide-mic-off.svg
+  s_32fce8dc9e6018::t_baae62b48d78ad 1-18
+IconSource/lucide-micoff-1024.svg
+  s_32fce8dc9e6018::t_690c3512435d04 1-13
+IconSource/lucide-icon-preview.svg
+  s_32fce8dc9e6018::t_15f3e70eaf6b10 1-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "4d2cc8ed71356a7ed8393420331031851ae99c92",
+  "prompts": {},
+  "sessions": {
+    "s_32fce8dc9e6018": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea5a83de-e744-4a9a-9022-165ce36ea873",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
