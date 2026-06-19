@@ -201,6 +201,24 @@ enum AudioController {
         AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &type)
         return type
     }
+
+    /// SF Symbol name for a device, by transport (and name for AirPods models).
+    static func inputSymbolName(_ id: AudioDeviceID, name: String) -> String {
+        switch transportType(id) {
+        case kAudioDeviceTransportTypeBuiltIn: return "laptopcomputer"
+        case kAudioDeviceTransportTypeUSB: return "mic"
+        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE:
+            let lower = name.lowercased()
+            if lower.contains("airpods max") { return "airpodsmax" }
+            if lower.contains("airpods pro") { return "airpodspro" }
+            if lower.contains("airpods") { return "airpods" }
+            return "headphones"
+        case kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypeDisplayPort: return "display"
+        case kAudioDeviceTransportTypeAirPlay: return "airplayaudio"
+        case kAudioDeviceTransportTypeAggregate, kAudioDeviceTransportTypeVirtual: return "rectangle.3.group"
+        default: return "mic"
+        }
+    }
 }
 
 /// Registers a HAL property listener and removes it on `invalidate()`/`deinit`.

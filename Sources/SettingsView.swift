@@ -28,10 +28,12 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
+            } footer: {
+                Text("Inputs will be set to this volume when unmuted.")
             }
 
-            Section("Preferred Inputs") {
-                Toggle("Automatically switch to preferred input", isOn: $enforcePreferred)
+            Section {
+                Toggle("Auto switch", isOn: $enforcePreferred)
                     .onChange(of: enforcePreferred) { _, on in
                         if on { NotificationCenter.default.post(name: .hushEnforcePreferred, object: nil) }
                     }
@@ -65,11 +67,12 @@ struct SettingsView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
-                    .frame(height: CGFloat(priority.entries.count) * rowHeight)
+                    .frame(height: CGFloat(min(priority.entries.count, 6)) * rowHeight)
                 }
-                Text("Drag to reorder; highest connected device wins. When auto-switch is on, Hush re-applies it when inputs are plugged in or removed — choosing an input yourself (here or in System Settings) is left alone. Green dot = connected.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Preferred Inputs")
+            } footer: {
+                Text("Switch to inputs as available in this order.")
             }
 
             Section {

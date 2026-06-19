@@ -1,6 +1,7 @@
 import CoreAudio
 import Foundation
 import KeyboardShortcuts
+import Observation
 
 /// Single source of truth for the mute action and the menu bar state.
 ///
@@ -8,6 +9,7 @@ import KeyboardShortcuts
 /// `muted` (for the icon), and re-resolves automatically when the system
 /// input changes. The hotkey and the menu item both route through `toggle()`.
 @MainActor
+@Observable
 final class AppState {
     private(set) var muted = false
     private(set) var deviceName: String?
@@ -15,13 +17,13 @@ final class AppState {
 
     /// Invoked on the main actor whenever `muted` / `deviceName` /
     /// `supportsMute` change, so the AppKit status item can refresh.
-    var onStateChange: (() -> Void)?
+    @ObservationIgnored var onStateChange: (() -> Void)?
 
     var hasDevice: Bool { currentDevice != nil }
 
-    private var currentDevice: AudioDeviceID?
-    private var defaultDeviceListener: AudioPropertyListener?
-    private var muteListener: AudioPropertyListener?
+    @ObservationIgnored private var currentDevice: AudioDeviceID?
+    @ObservationIgnored private var defaultDeviceListener: AudioPropertyListener?
+    @ObservationIgnored private var muteListener: AudioPropertyListener?
 
     /// Unmute level as a scalar 0.0...1.0, read fresh from `UserDefaults`
     /// (kept in sync by the Settings slider via `@AppStorage`).
@@ -30,13 +32,13 @@ final class AppState {
         return Float32(stored ?? AppStorageKey.unmuteVolumeDefault)
     }
 
-    private var muteIntentInitialized = false
+    @ObservationIgnored private var muteIntentInitialized = false
 
-    private var deviceListListener: AudioPropertyListener?
-    private var enforceScheduled = false
+    @ObservationIgnored private var deviceListListener: AudioPropertyListener?
+    @ObservationIgnored private var enforceScheduled = false
     /// UIDs of the currently-connected input devices, to detect plug/unplug
     /// (the only event that triggers an automatic input switch).
-    private var lastInputUIDs: Set<String> = []
+    @ObservationIgnored private var lastInputUIDs: Set<String> = []
 
     private var enforcePreferred: Bool {
         UserDefaults.standard.bool(forKey: AppStorageKey.enforcePreferred)
