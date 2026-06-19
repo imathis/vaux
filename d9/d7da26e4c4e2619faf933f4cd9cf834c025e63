@@ -1,0 +1,59 @@
+Sources/Shortcuts.swift
+  s_32fce8dc9e6018::t_620aa616d3915a 9-12
+Sources/SettingsView.swift
+  s_32fce8dc9e6018::t_217a1ff4c7520e 14-17,34-36,57,59,65-74
+  s_32fce8dc9e6018::t_9fe4cf0ec81e59 8,32-33,53-54,64
+  s_32fce8dc9e6018::t_69caa838accf2f 37-52,58,60-61
+  s_32fce8dc9e6018::t_2e80984f9a32df 10,19-25,55-56,62,77
+Sources/AudioController.swift
+  s_32fce8dc9e6018::t_8557b89d6968f3 113-126
+  s_32fce8dc9e6018::t_676036fa1b8f05 133-134,145
+  s_32fce8dc9e6018::t_a72227ff330079 191-203
+  s_32fce8dc9e6018::t_50094f1a47cd53 112,127-132,135-144,146-190
+Sources/InputPriorityModel.swift
+  s_32fce8dc9e6018::t_b30b38c4f90600 1-50
+Sources/AppDelegate.swift
+  s_32fce8dc9e6018::t_a9bb305c699b4f 159-191,194-206
+  s_32fce8dc9e6018::t_937d7663ef45b1 211
+  s_32fce8dc9e6018::t_8e71624f6f9870 234-243
+  s_32fce8dc9e6018::t_b6d76dfe4ce2b4 3
+  s_32fce8dc9e6018::t_62f4e61755fc56 244
+  s_32fce8dc9e6018::t_e3e6867aaa7572 90-92,111-114,118,139
+  s_32fce8dc9e6018::t_5b94c306f9dd6d 149
+  s_32fce8dc9e6018::t_008c25d71d051c 2
+  s_32fce8dc9e6018::t_7da4314a6f85c6 88,93-97,99,101,105-107,109-110,116-117,125-138,142-144,146,155,157-158,192-193,207-210,212-219
+  s_32fce8dc9e6018::t_261858d30afb0c 228-233
+  s_32fce8dc9e6018::t_e21aa05284ab93 248-250
+  s_32fce8dc9e6018::t_e003491e01137c 89
+  s_32fce8dc9e6018::t_604789f749b88c 98,100,102-104
+Sources/PreferredInput.swift
+  s_32fce8dc9e6018::t_979f7b579d38ed 1-27
+Sources/InputVolumeView.swift
+  s_32fce8dc9e6018::t_eb38070f67d1b0 1-2,6,8-9,12,15-19,21-24,31,33,35-36,46-50,64,72-73,79,122-123
+  s_32fce8dc9e6018::t_4b38d2e3989320 20
+  s_32fce8dc9e6018::t_fcb1e96d9c3d05 3-5,7,10,25-30,52-54,56-57,75,96-121
+  s_32fce8dc9e6018::t_7548e272e243e4 51,58-63,74
+  s_32fce8dc9e6018::t_1be60faf2984fd 11,13-14,32,34,37-45,55,65-71
+  s_32fce8dc9e6018::t_fa7bc4f62623ce 76-78,80-94
+  s_32fce8dc9e6018::t_37bf4e4624bb2a 95
+Sources/AppState.swift
+  s_32fce8dc9e6018::t_624e49d73f3950 33-34,39-41,46-58
+  s_32fce8dc9e6018::t_e4f91456090535 96,103-104,111-125,131,148-152,159
+  s_32fce8dc9e6018::t_3e739fab6377ee 130,132-147,153-158,160-161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "d9d7da26e4c4e2619faf933f4cd9cf834c025e63",
+  "prompts": {},
+  "sessions": {
+    "s_32fce8dc9e6018": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea5a83de-e744-4a9a-9022-165ce36ea873",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
