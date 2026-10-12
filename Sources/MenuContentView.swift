@@ -48,6 +48,10 @@ struct MenuContentView: View {
             ForEach(inputs) { inputRow($0) }
             divider()
             textRow(appState.muted ? "Unmute" : "Mute", trailing: muteShortcut) { appState.toggle() }
+            textRow(appState.soloActive ? "End Solo Mode" : "Solo Mode", trailing: soloShortcut) {
+                appState.toggleSolo()
+            }
+            soloStatus
             divider()
             textRow("Settings…", trailing: "⌘,") { openSettings(); dismiss() }
             textRow("Quit Hush", trailing: "⌘Q") { NSApp.terminate(nil) }
@@ -112,6 +116,39 @@ struct MenuContentView: View {
         }
     }
 
+    /// What solo is doing (or what went wrong), under the Solo row.
+    @ViewBuilder private var soloStatus: some View {
+        let lines = soloStatusLines
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(lines.indices, id: \.self) { i in
+                    Text(lines[i].text)
+                        .font(.system(size: 11))
+                        .foregroundStyle(lines[i].warning ? Color.orange : .secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, contentInset)
+            .padding(.bottom, 3)
+        }
+    }
+
+    private var soloStatusLines: [(text: String, warning: Bool)] {
+        var lines: [(text: String, warning: Bool)] = []
+        if appState.soloBusy {
+            lines.append((appState.soloActive ? "Unmuting calls…" : "Muting calls…", false))
+        } else if appState.soloActive {
+            var parts = [appState.soloMutedApps.isEmpty
+                ? "No calls to mute"
+                : "Muted in " + appState.soloMutedApps.joined(separator: ", ")]
+            if let ducked = appState.soloDuckedTo {
+                parts.append("speakers at \(Int((ducked * 100).rounded()))%")
+            }
+            lines.append((parts.joined(separator: " · "), false))
+        }
+        return lines + appState.soloProblems.map { ($0, true) }
+    }
+
     private func deviceIcon(_ device: MenuInputDevice) -> some View {
         ZStack {
             Circle()
@@ -142,6 +179,10 @@ struct MenuContentView: View {
 
     private var muteShortcut: String {
         KeyboardShortcuts.getShortcut(for: .toggleMicMute)?.description ?? ""
+    }
+
+    private var soloShortcut: String {
+        KeyboardShortcuts.getShortcut(for: .toggleSolo)?.description ?? ModifierTapMonitor.Key.current.symbol
     }
 
     private func select(_ device: MenuInputDevice) {

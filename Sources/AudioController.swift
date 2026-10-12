@@ -1,3 +1,4 @@
+import AudioToolbox
 import CoreAudio
 import Foundation
 
@@ -122,6 +123,91 @@ enum AudioController {
             }
         }
         return false
+    }
+
+    // MARK: Output volume (solo-mode ducking)
+    //
+    // Virtual main volume is the same control as the menu bar Sound slider; it
+    // works on devices that only expose per-channel volume (e.g. AirPods).
+
+    static func defaultOutputDevice() -> AudioDeviceID? {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var id = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let err = AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &id)
+        return (err == noErr && id != 0) ? id : nil
+    }
+
+    private static func outputVolumeAddress() -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(
+            mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
+            mScope: kAudioObjectPropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain)
+    }
+
+    static func outputVolume(on id: AudioDeviceID) -> Float32? {
+        var a = outputVolumeAddress()
+        var v = Float32(0)
+        var size = UInt32(MemoryLayout<Float32>.size)
+        return AudioObjectGetPropertyData(id, &a, 0, nil, &size, &v) == noErr ? v : nil
+    }
+
+    @discardableResult
+    static func setOutputVolume(_ scalar: Float32, on id: AudioDeviceID) -> Bool {
+        var a = outputVolumeAddress()
+        var v = max(0, min(1, scalar))
+        return AudioObjectSetPropertyData(id, &a, 0, nil, UInt32(MemoryLayout<Float32>.size), &v) == noErr
+    }
+
+    // MARK: Processes using input
+    //
+    // Core Audio process objects (read-only properties): which apps are
+    // running input right now. No stream, no mic permission.
+
+    /// True if any process whose bundle ID starts with `bundlePrefix` is
+    /// running input. Prefix match, because Electron apps capture in a helper
+    /// (Slack's audio runs in `com.tinyspeck.slackmacgap.helper`).
+    static func isCapturingInput(bundlePrefix: String) -> Bool {
+        processObjects().contains { isRunningInput($0) && bundleID(ofProcess: $0).hasPrefix(bundlePrefix) }
+    }
+
+    /// Every process the audio server knows about.
+    static func processObjects() -> [AudioObjectID] {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyProcessObjectList,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var size = UInt32(0)
+        guard AudioObjectGetPropertyDataSize(system, &addr, 0, nil, &size) == noErr else { return [] }
+        var processes = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard !processes.isEmpty,
+              AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &processes) == noErr else { return [] }
+        return processes
+    }
+
+    static func isRunningInput(_ process: AudioObjectID) -> Bool {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyIsRunningInput,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var running = UInt32(0)
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        return AudioObjectGetPropertyData(process, &addr, 0, nil, &size, &running) == noErr && running == 1
+    }
+
+    static func bundleID(ofProcess process: AudioObjectID) -> String {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyBundleID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var bundle: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(process, &addr, 0, nil, &size, &bundle) == noErr,
+              let id = bundle?.takeRetainedValue() else { return "" }
+        return id as String
     }
 
     // MARK: Device enumeration / default-input selection

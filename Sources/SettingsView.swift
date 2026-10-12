@@ -1,3 +1,4 @@
+import AppKit
 import KeyboardShortcuts
 import SwiftUI
 
@@ -5,6 +6,10 @@ struct SettingsView: View {
     @AppStorage(AppStorageKey.unmuteVolume) private var unmuteVolume =
         AppStorageKey.unmuteVolumeDefault
     @AppStorage(AppStorageKey.enforcePreferred) private var enforcePreferred = false
+    @AppStorage(AppStorageKey.soloDuck) private var soloDuck = false
+    @AppStorage(AppStorageKey.soloDuckLevel) private var soloDuckLevel =
+        AppStorageKey.soloDuckLevelDefault
+    @State private var accessibilityTrusted = CallMuter.isTrusted
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var priority = InputPriorityModel()
 
@@ -12,9 +17,41 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Shortcuts") {
+            Section {
                 KeyboardShortcuts.Recorder("Toggle mute:", name: .toggleMicMute)
                 KeyboardShortcuts.Recorder("Use preferred input:", name: .applyPreferredInput)
+                SoloShortcutRecorder(title: "Toggle solo mode:")
+            } header: {
+                Text("Shortcuts")
+            }
+
+            Section {
+                Toggle("Lower speakers while solo", isOn: $soloDuck)
+                HStack {
+                    Slider(value: $soloDuckLevel, in: 0.05...0.8)
+                    Text("\(Int((soloDuckLevel * 100).rounded()))%")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 36, alignment: .trailing)
+                }
+                .disabled(!soloDuck)
+                if !accessibilityTrusted {
+                    HStack {
+                        Text("Solo mode needs Accessibility access.")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Open Settings…") {
+                            CallMuter.requestTrust()
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("Solo Mode")
+            } footer: {
+                Text("For dictating on a call: mutes Slack and Discord in the app and keeps your mic live. Speakers drop to this share of their level.")
             }
 
             Section {
@@ -83,6 +120,9 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            accessibilityTrusted = CallMuter.isTrusted
+        }
         .frame(width: 460)
     }
 }

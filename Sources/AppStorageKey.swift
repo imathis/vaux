@@ -8,6 +8,15 @@ enum AppStorageKey {
 
     /// Auto-switch to the highest-priority connected input on device/input changes.
     static let enforcePreferred = "enforcePreferred"
+
+    /// Solo mode: lower speaker output while solo is on, to this fraction of
+    /// its current level (scalar 0.0...1.0).
+    static let soloDuck = "soloDuck"
+    static let soloDuckLevel = "soloDuckLevel"
+    static let soloDuckLevelDefault = 0.3
+
+    /// Solo mode: modifier key whose lone tap toggles solo (`ModifierTapMonitor.Key`).
+    static let soloTapKey = "soloTapKey"
 }
 
 extension Notification.Name {

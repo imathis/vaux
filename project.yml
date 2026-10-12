@@ -17,7 +17,9 @@ settings:
 packages:
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
-    from: "2.0.0"
+    # 3.1.0+: earlier recorders can't record on macOS 26/27 (editing restarts
+    # end recording immediately; the key monitor gets deallocated).
+    from: "3.1.0"
 
 targets:
   Hush:
@@ -38,6 +40,8 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         # Mac App Store requires App Sandbox. Verified: HAL mute/volume read+write
         # works sandboxed WITHOUT the audio-input entitlement (no mic permission).
+        # Solo mode does NOT: it presses mute in Slack/Discord via Accessibility,
+        # which the sandbox blocks. App Store builds would have to drop it.
         # Uncomment to enable (e.g. for App Store builds):
         # CODE_SIGN_ENTITLEMENTS: Sources/Hush.entitlements
         CODE_SIGN_IDENTITY: "Apple Development"

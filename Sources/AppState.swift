@@ -51,6 +51,11 @@ final class AppState {
         KeyboardShortcuts.onKeyDown(for: .applyPreferredInput) { [weak self] in
             self?.applyPreferredInput()
         }
+        KeyboardShortcuts.onKeyDown(for: .toggleSolo) { [weak self] in
+            self?.toggleSolo()
+        }
+        tapMonitor = ModifierTapMonitor { [weak self] in self?.toggleSolo() }
+        callWatcher.start { [weak self] app, inCall in self?.callStateChanged(app, inCall: inCall) }
         startDefaultDeviceListener()
         lastInputUIDs = Set(AudioController.inputDevices().map(\.uid))
         startDeviceListListener()
@@ -81,17 +86,177 @@ final class AppState {
 
     func toggle() {
         guard let dev = currentDevice ?? AudioController.defaultInputDevice() else { return }
-        if AudioController.supportsMute(dev) {
-            let next = !AudioController.isMuted(dev)
-            AudioController.setMuted(next, on: dev)
-            if !next { AudioController.setVolume(unmuteVolume, on: dev) } // reassert level on unmute
-            muted = next
-        } else {
-            let next = !muted
-            AudioController.setVolume(next ? 0 : unmuteVolume, on: dev)
-            muted = next
-        }
+        setMuted(AudioController.supportsMute(dev) ? !AudioController.isMuted(dev) : !muted)
+    }
+
+    /// Set the mute intent and write it to the current input, if any.
+    private func setMuted(_ next: Bool) {
+        muted = next
+        if let dev = currentDevice ?? AudioController.defaultInputDevice() { writeMuteIntent(to: dev) }
         notify()
+    }
+
+    // MARK: Solo mode
+    //
+    // For dictating during a call: mute the call apps through their own UI
+    // (see CallMuter) and keep the mic live, optionally ducking speaker output
+    // so less of the call bleeds into the mic. Everything solo changes is
+    // recorded and put back on exit.
+
+    private(set) var soloActive = false
+    /// A solo transition is in flight (the Accessibility work runs off main).
+    private(set) var soloBusy = false
+    /// Call apps muted while solo is on, for the menu.
+    private(set) var soloMutedApps: [String] = []
+    /// Speaker level while ducked, for the menu.
+    private(set) var soloDuckedTo: Float32?
+    /// Anything that didn't go to plan, for the menu.
+    private(set) var soloProblems: [String] = []
+
+    @ObservationIgnored private var soloSnapshot: SoloSnapshot?
+    /// A toggle that arrived mid-transition. Queued rather than dropped: a
+    /// trigger shared with a dictation app must never be skipped, or the two
+    /// fall out of step.
+    @ObservationIgnored private var pendingSoloToggle = false
+    @ObservationIgnored private var tapMonitor: ModifierTapMonitor?
+    @ObservationIgnored private let callWatcher = CallWatcher()
+
+    private struct SoloSnapshot {
+        let wasMuted: Bool
+        /// Only apps solo muted itself — ones already muted are left alone.
+        let mutedApps: [CallApp]
+        let duck: OutputDuck?
+    }
+
+    private struct OutputDuck {
+        let device: AudioDeviceID
+        let original: Float32
+        let ducked: Float32
+    }
+
+    func toggleSolo() {
+        guard !soloBusy else { pendingSoloToggle.toggle(); return }
+        if soloActive { endSolo() } else { startSolo() }
+    }
+
+    private func finishSoloTransition() {
+        soloBusy = false
+        notify()
+        if pendingSoloToggle {
+            pendingSoloToggle = false
+            toggleSolo()
+        }
+    }
+
+    /// Keep a call app's AX tree built while it's in a call, so solo can read
+    /// and press its mute toggle at once (a cold tree takes ~2s).
+    private func callStateChanged(_ app: CallApp, inCall: Bool) {
+        guard CallMuter.isTrusted else { return }
+        let mutedBySolo = soloSnapshot?.mutedApps.contains(app) ?? false
+        guard inCall || !mutedBySolo else { return }
+        CallMuter.queue.async { CallMuter.setTreeEnabled(inCall, for: app) }
+    }
+
+    private func startSolo() {
+        guard CallMuter.isTrusted else {
+            CallMuter.requestTrust()
+            soloProblems = ["Allow Hush in Privacy & Security → Accessibility, then try again"]
+            notify()
+            return
+        }
+        soloBusy = true
+        soloProblems = []
+        notify()
+        CallMuter.queue.async { [weak self] in
+            let outcomes = CallApp.all.map { (app: $0, outcome: CallMuter.mute($0)) }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.finishStartingSolo(outcomes) }
+            }
+        }
+    }
+
+    private func finishStartingSolo(_ outcomes: [(app: CallApp, outcome: CallMuter.Outcome)]) {
+        let mutedApps = outcomes.filter { $0.outcome == .muted }.map(\.app)
+        let failures = outcomes.filter { $0.outcome == .failed }.map { "Couldn't mute \($0.app.name)" }
+
+        // The mic is hushed and a call couldn't be confirmed muted: don't open
+        // the mic to it. Put back what we did mute and stay out of solo.
+        if muted, !failures.isEmpty {
+            soloProblems = failures + ["Solo not started — mic stays muted"]
+            pendingSoloToggle = false
+            CallMuter.queue.async { [weak self] in
+                for app in mutedApps { _ = CallMuter.unmute(app) }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.pendingSoloToggle = false
+                        self?.soloBusy = false
+                        self?.notify()
+                    }
+                }
+            }
+            notify()
+            return
+        }
+
+        let duck = duckOutput()
+        soloSnapshot = SoloSnapshot(wasMuted: muted, mutedApps: mutedApps, duck: duck)
+        if muted { setMuted(false) }
+        soloMutedApps = outcomes
+            .filter { $0.outcome == .muted || $0.outcome == .alreadyMuted }
+            .map(\.app.name)
+        soloDuckedTo = duck?.ducked
+        soloProblems = failures
+        soloActive = true
+        finishSoloTransition()
+    }
+
+    /// Restore everything solo changed. `completion` runs once the call apps
+    /// are unmuted (used to delay quitting until then).
+    func endSolo(completion: (@MainActor @Sendable () -> Void)? = nil) {
+        guard let snapshot = soloSnapshot, !soloBusy else { completion?(); return }
+        soloBusy = true
+        notify()
+        if let duck = snapshot.duck { restoreOutput(duck) }
+        // Re-hush the mic before the call apps go live again.
+        if snapshot.wasMuted { setMuted(true) }
+        let apps = snapshot.mutedApps
+        CallMuter.queue.async { [weak self] in
+            let failures = apps.filter { CallMuter.unmute($0) == .failed }
+                .map { "Couldn't unmute \($0.name) — unmute it there" }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    if let self {
+                        self.soloSnapshot = nil
+                        self.soloActive = false
+                        self.soloMutedApps = []
+                        self.soloDuckedTo = nil
+                        self.soloProblems = failures
+                        self.finishSoloTransition()
+                    }
+                    completion?()
+                }
+            }
+        }
+    }
+
+    /// Lower the default output to the configured fraction of its level.
+    private func duckOutput() -> OutputDuck? {
+        guard UserDefaults.standard.bool(forKey: AppStorageKey.soloDuck),
+              let out = AudioController.defaultOutputDevice(),
+              let original = AudioController.outputVolume(on: out) else { return nil }
+        let stored = UserDefaults.standard.object(forKey: AppStorageKey.soloDuckLevel) as? Double
+        let level = Float32(stored ?? AppStorageKey.soloDuckLevelDefault)
+        guard AudioController.setOutputVolume(original * level, on: out) else { return nil }
+        // Read back: devices quantize volume (Bluetooth in 1/16 steps).
+        let ducked = AudioController.outputVolume(on: out) ?? original * level
+        return OutputDuck(device: out, original: original, ducked: ducked)
+    }
+
+    private func restoreOutput(_ duck: OutputDuck) {
+        // Leave it if the volume was changed while ducked — that's a choice.
+        guard let now = AudioController.outputVolume(on: duck.device),
+              abs(now - duck.ducked) < 0.02 else { return }
+        AudioController.setOutputVolume(duck.original, on: duck.device)
     }
 
     // MARK: Device tracking

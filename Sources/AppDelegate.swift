@@ -36,20 +36,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateButton() {
         guard let button = statusItem?.button else { return }
         let muted = appState.muted
-        let symbol = muted ? "mic.slash.fill" : "mic.fill"
-        let description = muted ? "Microphone muted" : "Microphone live"
+        let solo = appState.soloActive
+        let symbol = solo ? "waveform.and.mic" : muted ? "mic.slash.fill" : "mic.fill"
+        let description = solo ? "Solo mode" : muted ? "Microphone muted" : "Microphone live"
+        // Solo is a mode you shouldn't forget you're in: tint it (orange if
+        // something couldn't be muted).
+        let tint: NSColor? = solo
+            ? (appState.soloProblems.isEmpty ? .controlAccentColor : .systemOrange)
+            : muted ? .systemRed : nil
 
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: description)
-        if muted {
-            let config = NSImage.SymbolConfiguration(paletteColors: [.systemRed])
-            let red = image?.withSymbolConfiguration(config)
-            red?.isTemplate = false
-            button.image = red
+        if let tint {
+            let config = NSImage.SymbolConfiguration(paletteColors: [tint])
+            let tinted = image?.withSymbolConfiguration(config)
+            tinted?.isTemplate = false
+            button.image = tinted
         } else {
             image?.isTemplate = true
             button.image = image
         }
         button.toolTip = appState.deviceName.map { "Hush — Input: \($0)" } ?? "Hush — no input device"
+    }
+
+    /// Don't leave call apps muted or speakers ducked behind us.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard appState.soloActive else { return .terminateNow }
+        appState.endSolo { NSApp.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
     }
 
     // MARK: Clicks
