@@ -1,0 +1,38 @@
+Sources/StatusIcon.swift
+  s_7cfcc273794c17::t_bac53d9e6428c7 3-5,14,16,42
+  s_7cfcc273794c17::t_e7405ec4f7c04e 13,15,17,25-27,44,47
+  s_7cfcc273794c17::t_842f23e89630dc 1-2,6-12,18-24,28-41,43,45-46,48-59
+IconSource/Flatline/bar-4.svg
+  s_7cfcc273794c17::t_c765272207bfd9 1-4
+IconSource/Flatline/bars.svg
+  s_7cfcc273794c17::t_c765272207bfd9 1-7
+IconSource/Flatline/line.svg
+  s_7cfcc273794c17::t_c765272207bfd9 1-4
+IconSource/Flatline/bar-2.svg
+  s_7cfcc273794c17::t_c765272207bfd9 1-4
+IconSource/Flatline/bar-1.svg
+  s_7cfcc273794c17::t_c765272207bfd9 1-4
+Sources/AppDelegate.swift
+  s_7cfcc273794c17::t_f565198dd50f3b 43-44
+  s_7cfcc273794c17::t_bac53d9e6428c7 41-42
+IconSource/Flatline/README.md
+  s_7cfcc273794c17::t_14b9180bd4acd8 1-32
+IconSource/Flatline/bar-3.svg
+  s_7cfcc273794c17::t_c765272207bfd9 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8252f8d85fc5891167de0019d7f3d5a900619065",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
