@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import os
 
 /// A call app whose own mic toggle Hush can press in solo mode.
 struct CallApp: Sendable, Hashable {
@@ -34,6 +35,7 @@ struct CallApp: Sendable, Hashable {
 /// never the main thread.
 enum CallMuter {
     static let queue = DispatchQueue(label: "dev.imathis.hush.calls", qos: .userInitiated)
+    private static let log = Logger(subsystem: "dev.imathis.hush", category: "solo")
 
     enum Outcome: Sendable, Equatable {
         /// Not running, not in a call, or (unmuting) the call has ended.
@@ -56,14 +58,29 @@ enum CallMuter {
     static func mute(_ app: CallApp) -> Outcome { set(app, muted: true) }
     static func unmute(_ app: CallApp) -> Outcome { set(app, muted: false) }
 
+    /// Our last press per app, until the app shows it. A press acts at once,
+    /// but an Electron app in the background can hold its accessibility
+    /// updates (Slack: until it's next brought forward), so its toggle reads
+    /// the old state. Until it catches up, the press is the truth.
+    private static let pending = OSAllocatedUnfairLock(initialState: [String: (muted: Bool, press: Int)]())
+    private static let presses = OSAllocatedUnfairLock(initialState: 0)
+    private static let watchQueue = DispatchQueue(label: "dev.imathis.hush.calls.watch", attributes: .concurrent)
+
+    /// The call ended: whatever we pressed no longer says anything about the next one.
+    static func forget(_ app: CallApp) {
+        pending.withLock { $0[app.bundleID] = nil }
+    }
+
     private static func set(_ app: CallApp, muted target: Bool) -> Outcome {
-        guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID)
-            .first?.processIdentifier else { return .notInCall }
+        guard let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).first
+        else { return .notInCall }
+        let capturing = AudioController.isCapturingInput(bundlePrefix: app.bundleID)
         // Only touch apps that are capturing: Discord's mic toggle exists (and
         // plays a sound) even outside a call.
-        if target, !AudioController.isCapturingInput(bundlePrefix: app.bundleID) { return .notInCall }
+        if target, !capturing { return .notInCall }
+        let action = target ? "mute" : "unmute"
 
-        let ax = AXUIElementCreateApplication(pid)
+        let ax = AXUIElementCreateApplication(running.processIdentifier)
         AXUIElementSetMessagingTimeout(ax, 1)
         // Electron only builds its AX tree on request. Keep it while the app is
         // in a call (see `setTreeEnabled`) or muted by us; otherwise switch it
@@ -76,13 +93,81 @@ enum CallMuter {
             }
         }
 
-        guard let current = poll(app, ax, timeout: 4) else { return target ? .failed : .notInCall }
+        let expected = pending.withLock { $0[app.bundleID]?.muted }
+        guard let current = poll(app, ax, timeout: 4, assume: expected) else {
+            log.notice("\(app.name, privacy: .public) \(action, privacy: .public): toggle not found (active \(running.isActive))")
+            // Still capturing means still in the call: say so rather than skip.
+            return target || capturing ? .failed : .notInCall
+        }
         if current.muted == target { return target ? .alreadyMuted : .alreadyLive }
 
-        guard AXUIElementPerformAction(current.element, kAXPressAction as CFString) == .success,
-              poll(app, ax, timeout: 2, want: target) != nil else { return .failed }
+        let focus = Focus(of: ax)
+        let pressed = AXUIElementPerformAction(current.element, kAXPressAction as CFString)
+        focus?.restore()
+        log.notice("\(app.name, privacy: .public) \(action, privacy: .public): press \(pressed.rawValue) (active \(running.isActive), assumed \(expected != nil))")
+        guard pressed == .success else { return .failed }
+
+        let press = presses.withLock { $0 += 1; return $0 }
+        pending.withLock { $0[app.bundleID] = (target, press) }
+        let pid = running.processIdentifier
+        watchQueue.async { watch(app, pid: pid, muted: target, press: press) }
         keepTree = target
         return target ? .muted : .unmuted
+    }
+
+    /// Clears a pending press once the app shows it — or a newer press or the
+    /// call's end makes it moot. Quick checks at first (in front, apps show it
+    /// at once), then a slow one while the app sits in the background, reading
+    /// just the toggle and only re-searching if it's replaced.
+    private static func watch(_ app: CallApp, pid: pid_t, muted target: Bool, press: Int) {
+        let ax = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(ax, 1)
+        let start = Date()
+        var toggle: AXUIElement?
+        var checks = 0
+        while pending.withLock({ $0[app.bundleID]?.press == press }) {
+            guard AudioController.isCapturingInput(bundlePrefix: app.bundleID) else { forget(app); return }
+            checks += 1
+            if toggle == nil || checks % 10 == 0 { toggle = findToggle(app, in: ax)?.element }
+            if let element = toggle {
+                let elapsed = Date().timeIntervalSince(start)
+                switch micState(element, role: string(element, kAXRoleAttribute), app) {
+                case .some(.some(let muted)) where muted == target || (elapsed > 1 && isFrontmost(ax)):
+                    // In front the app reports at once, so a differing state is
+                    // real: changed by hand. Either way its reading is good again.
+                    pending.withLock { if $0[app.bundleID]?.press == press { $0[app.bundleID] = nil } }
+                    log.notice("\(app.name, privacy: .public) shows \(muted ? "muted" : "live", privacy: .public) after \(elapsed, format: .fixed(precision: 1))s")
+                    return
+                case .none: toggle = nil // replaced or relabeled: search again
+                default: break
+                }
+            }
+            Thread.sleep(forTimeInterval: Date().timeIntervalSince(start) < 2 ? 0.2 : 1)
+        }
+    }
+
+    /// Chromium's AXPress focuses the button before clicking it, pulling the
+    /// caret out of e.g. a message box you're about to dictate into. This puts
+    /// text focus and selection back (not other focus — refocusing a window
+    /// could raise it). Unconditionally: in the background the app may not
+    /// report the focus change yet. Actions reach the page in order, so this
+    /// lands after the press.
+    private struct Focus {
+        let element: AXUIElement
+        let selection: AnyObject
+
+        init?(of ax: AXUIElement) {
+            guard let focused = attribute(ax, kAXFocusedUIElementAttribute),
+                  CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
+            element = focused as! AXUIElement
+            guard let selection = attribute(element, kAXSelectedTextRangeAttribute) else { return nil }
+            self.selection = selection
+        }
+
+        func restore() {
+            AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+            AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, selection)
+        }
     }
 
     /// Build (or drop) an Electron app's AX tree ahead of time. A cold tree
@@ -102,12 +187,14 @@ enum CallMuter {
     /// given). A fresh search each time because the web view may replace the
     /// button's node when it flips. The tree builds within a fraction of a
     /// second of enabling, but a switch's AXValue reads "" for ~2s after that.
-    private static func poll(_ app: CallApp, _ ax: AXUIElement, timeout: TimeInterval, want: Bool? = nil)
-        -> (element: AXUIElement, muted: Bool)? {
+    /// With `assume`, the state is known already: just find the toggle.
+    private static func poll(
+        _ app: CallApp, _ ax: AXUIElement, timeout: TimeInterval, want: Bool? = nil, assume: Bool? = nil
+    ) -> (element: AXUIElement, muted: Bool)? {
         let start = Date()
         while true {
             let found = findToggle(app, in: ax)
-            if let found, let muted = found.muted, want == nil || muted == want {
+            if let found, let muted = assume ?? found.muted, want == nil || muted == want {
                 return (found.element, muted)
             }
             let elapsed = Date().timeIntervalSince(start)
@@ -155,6 +242,10 @@ enum CallMuter {
     }
 
     // MARK: AX helpers
+
+    private static func isFrontmost(_ ax: AXUIElement) -> Bool {
+        attribute(ax, kAXFrontmostAttribute) as? Bool ?? false
+    }
 
     private static func attribute(_ element: AXUIElement, _ name: String) -> AnyObject? {
         var value: AnyObject?

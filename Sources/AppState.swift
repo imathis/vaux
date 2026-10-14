@@ -152,6 +152,7 @@ final class AppState {
     /// and press its mute toggle at once (a cold tree takes ~2s).
     private func callStateChanged(_ app: CallApp, inCall: Bool) {
         guard CallMuter.isTrusted else { return }
+        if !inCall { CallMuter.queue.async { CallMuter.forget(app) } }
         let mutedBySolo = soloSnapshot?.mutedApps.contains(app) ?? false
         guard inCall || !mutedBySolo else { return }
         CallMuter.queue.async { CallMuter.setTreeEnabled(inCall, for: app) }

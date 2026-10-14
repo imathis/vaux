@@ -114,8 +114,9 @@ final class ModifierTapMonitor {
     private func startTap() {
         // Listen-only is preferred; it can need Input Monitoring, so fall back
         // to a pass-through tap, which Accessibility alone allows.
-        let tap = [CGEventTapOptions.listenOnly, .defaultTap].lazy.compactMap { options in
-            CGEvent.tapCreate(
+        var tap: CFMachPort?
+        for options in [CGEventTapOptions.listenOnly, .defaultTap] where tap == nil {
+            tap = CGEvent.tapCreate(
                 tap: .cghidEventTap,
                 place: .headInsertEventTap,
                 options: options,
@@ -129,7 +130,7 @@ final class ModifierTapMonitor {
                 },
                 userInfo: Unmanaged.passUnretained(self).toOpaque()
             )
-        }.first
+        }
         guard let tap else { return } // no Accessibility yet; retried when it's granted
         CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(nil, tap, 0), .commonModes)
         eventTap = tap
