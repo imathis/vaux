@@ -37,24 +37,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem?.button else { return }
         let muted = appState.muted
         let solo = appState.soloActive
-        let symbol = solo ? "waveform.and.mic" : muted ? "mic.slash.fill" : "mic.fill"
         let description = solo ? "Solo mode" : muted ? "Microphone muted" : "Microphone live"
-        // Solo is a mode you shouldn't forget you're in: tint it (orange if
-        // something couldn't be muted).
-        let tint: NSColor? = solo
-            ? (appState.soloProblems.isEmpty ? .controlAccentColor : .systemOrange)
-            : muted ? .systemRed : nil
-
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: description)
-        if let tint {
-            let config = NSImage.SymbolConfiguration(paletteColors: [tint])
-            let tinted = image?.withSymbolConfiguration(config)
-            tinted?.isTemplate = false
-            button.image = tinted
-        } else {
-            image?.isTemplate = true
-            button.image = image
-        }
+        // Neutral, so the shape carries the state: muted is dots, solo is three
+        // bars between two dimmed dots (orange if something couldn't be muted).
+        let state: StatusIcon.State = solo ? .solo(problem: !appState.soloProblems.isEmpty) : muted ? .muted : .live
+        button.image = StatusIcon.image(state, description: description)
         button.toolTip = appState.deviceName.map { "Hush — Input: \($0)" } ?? "Hush — no input device"
     }
 
