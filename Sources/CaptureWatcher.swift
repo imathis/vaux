@@ -1,19 +1,25 @@
 import CoreAudio
 import Foundation
 
-/// Reports when a call app starts or stops capturing input (joins or leaves a
-/// call), from Core Audio process objects — property listeners only, no
-/// streams, no mic permission.
+/// Reports when apps start or stop capturing input — a call app joining or
+/// leaving a call, a dictation app starting to listen — from Core Audio
+/// process objects: property listeners only, no streams, no mic permission.
 @MainActor
-final class CallWatcher {
-    private var onChange: ((CallApp, _ inCall: Bool) -> Void)?
-    private var inCall: Set<String> = []
+final class CaptureWatcher {
+    /// Apps to watch. Their helpers count too (Slack captures in
+    /// `com.tinyspeck.slackmacgap.helper`).
+    var bundleIDs: Set<String> = [] {
+        didSet { if bundleIDs != oldValue, onChange != nil { rescan() } }
+    }
+
+    private var onChange: ((_ bundleID: String, _ capturing: Bool) -> Void)?
+    private var capturing: Set<String> = []
     private var listListener: AudioPropertyListener?
-    /// IsRunningInput listeners on the call apps' process objects.
+    /// IsRunningInput listeners on the watched apps' process objects.
     private var inputListeners: [AudioObjectID: AudioPropertyListener] = [:]
 
-    /// Reports current state right away (apps already in a call), then changes.
-    func start(onChange: @escaping (CallApp, _ inCall: Bool) -> Void) {
+    /// Reports current state right away (apps already capturing), then changes.
+    func start(onChange: @escaping (_ bundleID: String, _ capturing: Bool) -> Void) {
         self.onChange = onChange
         // Process objects come and go as apps connect to the audio server.
         listListener = AudioPropertyListener(
@@ -30,7 +36,7 @@ final class CallWatcher {
         var listeners: [AudioObjectID: AudioPropertyListener] = [:]
         for process in AudioController.processObjects() {
             let bundle = AudioController.bundleID(ofProcess: process)
-            guard CallApp.all.contains(where: { bundle.hasPrefix($0.bundleID) }) else { continue }
+            guard bundleIDs.contains(where: { AudioController.bundle(bundle, belongsTo: $0) }) else { continue }
             listeners[process] = inputListeners[process] ?? AudioPropertyListener(
                 objectID: process,
                 selector: kAudioProcessPropertyIsRunningInput,
@@ -40,15 +46,16 @@ final class CallWatcher {
             }
         }
         inputListeners = listeners // dropped listeners unregister on deinit
+        capturing.formIntersection(bundleIDs) // unwatched apps are dropped silently
         evaluate()
     }
 
     private func evaluate() {
-        for app in CallApp.all {
-            let capturing = AudioController.isCapturingInput(bundlePrefix: app.bundleID)
-            guard capturing != inCall.contains(app.bundleID) else { continue }
-            if capturing { inCall.insert(app.bundleID) } else { inCall.remove(app.bundleID) }
-            onChange?(app, capturing)
+        for id in bundleIDs {
+            let now = AudioController.isCapturingInput(id)
+            guard now != capturing.contains(id) else { continue }
+            if now { capturing.insert(id) } else { capturing.remove(id) }
+            onChange?(id, now)
         }
     }
 }

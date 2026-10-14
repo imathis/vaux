@@ -167,11 +167,22 @@ enum AudioController {
     // Core Audio process objects (read-only properties): which apps are
     // running input right now. No stream, no mic permission.
 
-    /// True if any process whose bundle ID starts with `bundlePrefix` is
-    /// running input. Prefix match, because Electron apps capture in a helper
-    /// (Slack's audio runs in `com.tinyspeck.slackmacgap.helper`).
-    static func isCapturingInput(bundlePrefix: String) -> Bool {
-        processObjects().contains { isRunningInput($0) && bundleID(ofProcess: $0).hasPrefix(bundlePrefix) }
+    /// True if the app (bundle ID) or one of its helpers is running input.
+    /// Helpers count because Electron apps capture in one (Slack's audio runs
+    /// in `com.tinyspeck.slackmacgap.helper`).
+    static func isCapturingInput(_ app: String) -> Bool {
+        processObjects().contains { isRunningInput($0) && bundle(bundleID(ofProcess: $0), belongsTo: app) }
+    }
+
+    /// The app itself or one of its helpers (`<app id>.helper…`).
+    static func bundle(_ bundle: String, belongsTo app: String) -> Bool {
+        bundle == app || bundle.hasPrefix(app + ".")
+    }
+
+    /// Apps the audio server knows (ones that have played or recorded sound
+    /// since launch), by bundle ID — candidates for solo to follow.
+    static func audioClientBundleIDs() -> Set<String> {
+        Set(processObjects().map(bundleID(ofProcess:)).filter { !$0.isEmpty })
     }
 
     /// Every process the audio server knows about.

@@ -25,11 +25,10 @@ final class AppState {
     @ObservationIgnored private var defaultDeviceListener: AudioPropertyListener?
     @ObservationIgnored private var muteListener: AudioPropertyListener?
 
-    /// Unmute level as a scalar 0.0...1.0, read fresh from `UserDefaults`
-    /// (kept in sync by the Settings slider via `@AppStorage`).
-    private var unmuteVolume: Float32 {
-        let stored = UserDefaults.standard.object(forKey: AppStorageKey.unmuteVolume) as? Double
-        return Float32(stored ?? AppStorageKey.unmuteVolumeDefault)
+    /// Unmute level for a device as a scalar 0.0...1.0: its own level if set
+    /// in Settings, else the default. Read fresh from `UserDefaults`.
+    private func unmuteVolume(for dev: AudioDeviceID) -> Float32 {
+        Float32(UnmuteVolume.level(forUID: AudioController.deviceUID(dev)))
     }
 
     @ObservationIgnored private var muteIntentInitialized = false
@@ -55,7 +54,18 @@ final class AppState {
             self?.toggleSolo()
         }
         tapMonitor = ModifierTapMonitor { [weak self] in self?.toggleSolo() }
-        callWatcher.start { [weak self] app, inCall in self?.callStateChanged(app, inCall: inCall) }
+        callWatcher.bundleIDs = Set(CallApp.all.map(\.bundleID))
+        callWatcher.start { [weak self] id, inCall in
+            guard let app = CallApp.all.first(where: { $0.bundleID == id }) else { return }
+            self?.callStateChanged(app, inCall: inCall)
+        }
+        followWatcher.bundleIDs = Self.followApp
+        followWatcher.start { [weak self] _, capturing in self?.followAppChanged(capturing: capturing) }
+        NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.followWatcher.bundleIDs = Self.followApp }
+        }
         startDefaultDeviceListener()
         lastInputUIDs = Set(AudioController.inputDevices().map(\.uid))
         startDeviceListListener()
@@ -119,7 +129,19 @@ final class AppState {
     /// fall out of step.
     @ObservationIgnored private var pendingSoloToggle = false
     @ObservationIgnored private var tapMonitor: ModifierTapMonitor?
-    @ObservationIgnored private let callWatcher = CallWatcher()
+    @ObservationIgnored private let callWatcher = CaptureWatcher()
+    /// Watches the app solo follows (e.g. a dictation app): solo turns on
+    /// while it's listening.
+    @ObservationIgnored private let followWatcher = CaptureWatcher()
+    /// Solo was turned on by the followed app, so it ends when that stops.
+    @ObservationIgnored private var soloStartedByFollow = false
+    /// The followed app's state change that arrived mid-transition.
+    @ObservationIgnored private var pendingFollow: Bool?
+
+    private static var followApp: Set<String> {
+        let id = UserDefaults.standard.string(forKey: AppStorageKey.soloFollowApp) ?? ""
+        return id.isEmpty ? [] : [id]
+    }
 
     private struct SoloSnapshot {
         let wasMuted: Bool
@@ -136,7 +158,24 @@ final class AppState {
 
     func toggleSolo() {
         guard !soloBusy else { pendingSoloToggle.toggle(); return }
-        if soloActive { endSolo() } else { startSolo() }
+        if soloActive {
+            endSolo()
+        } else {
+            soloStartedByFollow = false
+            startSolo()
+        }
+    }
+
+    /// The followed app started or stopped listening. Starting turns solo on;
+    /// stopping turns it off only if starting did — a manual solo is left be.
+    private func followAppChanged(capturing: Bool) {
+        guard !soloBusy else { pendingFollow = capturing; return }
+        if capturing, !soloActive {
+            soloStartedByFollow = true
+            startSolo()
+        } else if !capturing, soloActive, soloStartedByFollow {
+            endSolo()
+        }
     }
 
     private func finishSoloTransition() {
@@ -145,6 +184,9 @@ final class AppState {
         if pendingSoloToggle {
             pendingSoloToggle = false
             toggleSolo()
+        } else if let capturing = pendingFollow {
+            pendingFollow = nil
+            followAppChanged(capturing: capturing)
         }
     }
 
@@ -190,6 +232,7 @@ final class AppState {
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
                         self?.pendingSoloToggle = false
+                        self?.pendingFollow = nil
                         self?.soloBusy = false
                         self?.notify()
                     }
@@ -366,9 +409,9 @@ final class AppState {
     private func writeMuteIntent(to dev: AudioDeviceID) {
         if AudioController.supportsMute(dev) {
             AudioController.setMuted(muted, on: dev)
-            if !muted { AudioController.setVolume(unmuteVolume, on: dev) }
+            if !muted { AudioController.setVolume(unmuteVolume(for: dev), on: dev) }
         } else {
-            AudioController.setVolume(muted ? 0 : unmuteVolume, on: dev)
+            AudioController.setVolume(muted ? 0 : unmuteVolume(for: dev), on: dev)
         }
     }
 

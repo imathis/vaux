@@ -10,6 +10,8 @@ import Observation
 final class InputPriorityModel {
     private(set) var entries: [InputEntry] = []
     private(set) var presentUIDs: Set<String> = []
+    /// Per-input unmute levels (see `UnmuteVolume`).
+    private(set) var unmuteOverrides = UnmuteVolume.overrides
 
     @ObservationIgnored private var deviceListener: AudioPropertyListener?
 
@@ -46,5 +48,11 @@ final class InputPriorityModel {
 
     func isConnected(_ entry: InputEntry) -> Bool {
         presentUIDs.contains(entry.uid)
+    }
+
+    /// Give an input its own unmute level, or (nil) go back to the default.
+    func setUnmuteOverride(_ level: Double?, for entry: InputEntry) {
+        unmuteOverrides[entry.uid] = level
+        UnmuteVolume.overrides = unmuteOverrides
     }
 }

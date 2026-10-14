@@ -1,13 +1,68 @@
 # Hush
 
-A tiny macOS menu bar app that toggles mute on the **current default input
-device** via a global keyboard shortcut, with a configurable unmute volume.
+Hush is a tiny macOS menu bar app for your microphone. Mute it from the menu bar
+or a global shortcut, keep your mics in priority order, and use solo mode to
+dictate while you're on a call.
 
-It is deliberately single-purpose and stays out of the audio path: it touches
-audio **only** through Core Audio HAL property reads/writes/listeners — never
-opens a stream, never captures, never inserts a virtual/aggregate device. That
-means no Bluetooth latency or garbled audio, and **no microphone permission
-prompt** (setting HAL properties doesn't trigger TCC).
+It never touches your audio stream. There are no virtual or aggregate devices,
+no HAL plugins, and no capture — only Core Audio property changes. That means no
+Bluetooth quality drop, no added latency, and no microphone permission.
+
+## Features
+
+### Mute
+
+- One click or one shortcut mutes the current input. Unmuting restores a set
+  volume.
+- Devices without a hardware mute are muted by setting their volume to zero.
+- Hush follows the system default input live, and keeps it muted if you switch
+  inputs while muted.
+- The menu bar icon always shows the real state, even when mute is changed in
+  System Settings or another app.
+
+### Preferred inputs
+
+- Rank your mics in Settings. Hush switches to the highest-ranked one that's
+  connected, either automatically when devices come and go or with a shortcut.
+- The menu lists every input, marks the preferred one, and includes an input
+  volume slider.
+
+### Solo mode
+
+For dictating during a call, on the same mic. Solo mode:
+
+- Mutes **Slack** and **Discord** by pressing their own mute buttons, so the
+  call sees you as muted and doesn't hear you dictate.
+- Keeps your mic live for everything else, unmuting it if Hush had it muted.
+- Optionally lowers your speakers while it's on, so less of the call bleeds into
+  the mic.
+- Puts everything back when it ends: it unmutes only the apps it muted and
+  leaves your speakers alone if you changed the volume yourself.
+
+Start solo from the menu, a shortcut, a tap of a right-side modifier on its own
+(e.g. Right ⌥), or automatically while your dictation app is listening.
+
+macOS can't mute one app's microphone for another app without a virtual audio
+device, so solo works the other way around: it mutes the call apps in their own
+UI. That's why it supports specific apps rather than "everything but X".
+
+## Permissions
+
+- **Mute and inputs:** none. Changing Core Audio properties doesn't trigger
+  the microphone permission prompt.
+- **Solo mode:** Accessibility, to press mute in Slack and Discord, and to
+  notice modifier taps. Hush watches only modifier keys, never keystrokes.
+- **Call and dictation detection:** none. Hush reads which apps are using the
+  mic from Core Audio's process list, without opening the mic itself.
+
+## Usage
+
+- The menu bar icon shows the state: live, muted (red), or solo (accent color,
+  or orange if something couldn't be muted).
+- **Click** the icon to open the menu. **Shift-, Option- or Control-click** it
+  to toggle mute.
+- **Settings:** shortcuts, solo mode, unmute volume, preferred inputs, and
+  launch at login.
 
 ## Requirements
 
@@ -15,53 +70,61 @@ prompt** (setting HAL properties doesn't trigger TCC).
 - Xcode 26+
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
 
-## Build & run
+## Build and run
 
-The Xcode project is generated from [`project.yml`](project.yml) and is **not**
-checked into git — generate it first:
+The Xcode project is generated from [`project.yml`](project.yml) and isn't
+checked in. Generate it first:
 
 ```sh
-make open      # xcodegen generate + open in Xcode, then ⌘R
-# or
+make open      # generate the project and open it in Xcode, then ⌘R
 make run       # build and launch from the command line
 ```
 
-On first build, Xcode resolves the one dependency
-([KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)) via SPM.
+On first build, Xcode resolves the one dependency,
+[KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts), via SPM.
 
-Signing is automatic with the personal development team (`VFHUHTXW5A`); no paid
-Apple Developer account is required for local use. A locally compiled app never
-gets the Gatekeeper quarantine flag, so there's no "damaged" error.
+To sign with your own team, set `DEVELOPMENT_TEAM` in `project.yml` and `TEAM`
+in the `Makefile`. A free personal team is enough for local use.
 
-## Usage
+If `xcode-select` points at the Command Line Tools, select Xcode first, or
+prefix the command:
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make run`.
 
-- Menu bar icon shows state: `mic.fill` live, `mic.slash.fill` (red) muted.
-- **Click** the icon to toggle mute; **Shift / Option / Control-click** opens the
-  menu (input device, Mute/Unmute, Settings…, Quit). The global hotkey toggles
-  from anywhere. (Plain right-click is wired up but AppKit doesn't deliver it
-  reliably to status items, so the modifier-clicks are the dependable route.)
-- **Settings:** record the global hotkey, set the unmute volume, toggle
-  launch-at-login.
-- The app follows the system default input live — change it in System Settings
-  and Hush re-targets automatically.
+### App Store builds
+
+The App Sandbox entitlements are in `Sources/Hush.entitlements` and are off by
+default; see the comment in `project.yml`. Mute and inputs work sandboxed, but
+solo mode doesn't, because the sandbox blocks Accessibility control of other
+apps.
 
 ## Layout
 
 ```
-project.yml              # XcodeGen spec (deployment target, signing, SPM deps)
+project.yml                  # XcodeGen spec: deployment target, signing, SPM
+Makefile                     # gen / open / build / run / clean
 Sources/
-  HushApp.swift          # @main App: MenuBarExtra + Settings scenes
-  AppState.swift         # @Observable: muted state, device tracking, toggle()
-  AudioController.swift   # Core Audio HAL: device, mute, volume, listeners
-  MenuContent.swift      # the menu bar menu
-  SettingsView.swift     # hotkey recorder, unmute slider, launch-at-login
-  LaunchAtLogin.swift    # SMAppService wrapper
-  Shortcuts.swift        # KeyboardShortcuts.Name.toggleMicMute
-  AppStorageKey.swift    # shared persistence keys
-  Info.plist             # LSUIElement = YES (menu-bar-only, no Dock icon)
+  main.swift                 # entry point
+  AppDelegate.swift          # status item, icon, clicks, Settings window
+  MenuPanelController.swift  # the custom glass menu panel
+  MenuContentView.swift      # menu: volume, inputs, mute, solo, settings
+  SettingsView.swift         # Settings
+  AppState.swift             # mute intent, device tracking, solo mode
+  AudioController.swift      # Core Audio HAL: devices, mute, volume, processes
+  CallMuter.swift            # presses Slack/Discord mute via Accessibility
+  CaptureWatcher.swift       # which apps are using the mic
+  ModifierTapMonitor.swift   # lone modifier-tap trigger for solo
+  SoloShortcutRecorder.swift # solo shortcut field (combos and modifier taps)
+  InputVolumeView.swift      # volume slider
+  InputPriorityModel.swift   # preferred-input list (Settings)
+  PreferredInput.swift       # preferred-input order storage
+  LaunchAtLogin.swift        # SMAppService wrapper
+  Shortcuts.swift            # KeyboardShortcuts names
+  AppStorageKey.swift        # shared settings keys
+  Info.plist                 # LSUIElement: menu bar only, no Dock icon
+  Hush.entitlements          # App Sandbox (off by default)
 ```
 
 ## Non-goals
 
-No HUD/toast, no Touch Bar, no push-to-talk, no per-app/system-wide muting, no
-audio routing, no analytics, no networking, no auto-update.
+No virtual audio devices or HAL plugins, no audio capture or level meters, no
+push-to-talk, no HUD, no analytics, no networking, no auto-update.

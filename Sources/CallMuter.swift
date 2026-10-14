@@ -74,7 +74,7 @@ enum CallMuter {
     private static func set(_ app: CallApp, muted target: Bool) -> Outcome {
         guard let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).first
         else { return .notInCall }
-        let capturing = AudioController.isCapturingInput(bundlePrefix: app.bundleID)
+        let capturing = AudioController.isCapturingInput(app.bundleID)
         // Only touch apps that are capturing: Discord's mic toggle exists (and
         // plays a sound) even outside a call.
         if target, !capturing { return .notInCall }
@@ -88,7 +88,7 @@ enum CallMuter {
         AXUIElementSetAttributeValue(ax, manualAccessibility, kCFBooleanTrue)
         var keepTree = false
         defer {
-            if !keepTree, !AudioController.isCapturingInput(bundlePrefix: app.bundleID) {
+            if !keepTree, !AudioController.isCapturingInput(app.bundleID) {
                 AXUIElementSetAttributeValue(ax, manualAccessibility, kCFBooleanFalse)
             }
         }
@@ -126,7 +126,7 @@ enum CallMuter {
         var toggle: AXUIElement?
         var checks = 0
         while pending.withLock({ $0[app.bundleID]?.press == press }) {
-            guard AudioController.isCapturingInput(bundlePrefix: app.bundleID) else { forget(app); return }
+            guard AudioController.isCapturingInput(app.bundleID) else { forget(app); return }
             checks += 1
             if toggle == nil || checks % 10 == 0 { toggle = findToggle(app, in: ax)?.element }
             if let element = toggle {

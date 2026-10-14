@@ -25,3 +25,22 @@ enum PreferredInput {
         }
     }
 }
+
+/// The level an input is set to when unmuted: its own, if it has one, else
+/// the default.
+enum UnmuteVolume {
+    static var defaultLevel: Double {
+        UserDefaults.standard.object(forKey: AppStorageKey.unmuteVolume) as? Double
+            ?? AppStorageKey.unmuteVolumeDefault
+    }
+
+    /// Per-input levels, by device UID.
+    static var overrides: [String: Double] {
+        get { UserDefaults.standard.dictionary(forKey: AppStorageKey.unmuteVolumeOverrides) as? [String: Double] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: AppStorageKey.unmuteVolumeOverrides) }
+    }
+
+    static func level(forUID uid: String?) -> Double {
+        uid.flatMap { overrides[$0] } ?? defaultLevel
+    }
+}

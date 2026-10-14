@@ -83,7 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() {
         if settingsWindow == nil {
-            let controller = NSHostingController(rootView: SettingsView())
+            let controller = SettingsHostingController(rootView: SettingsView())
             // Size the window to the SwiftUI content (fixed width, intrinsic height).
             controller.sizingOptions = [.preferredContentSize]
             let window = NSWindow(contentViewController: controller)
@@ -95,5 +95,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+}
+
+/// Sizes the Settings window to its content, but never taller than the screen:
+/// past that, the grouped form scrolls inside it.
+private final class SettingsHostingController: NSHostingController<SettingsView> {
+    override var preferredContentSize: NSSize {
+        get {
+            var size = super.preferredContentSize
+            if let screen = view.window?.screen ?? NSScreen.main {
+                let style = view.window?.styleMask ?? [.titled, .closable]
+                let titleBar = NSWindow.frameRect(forContentRect: .zero, styleMask: style).height
+                size.height = min(size.height, screen.visibleFrame.height - titleBar)
+            }
+            return size
+        }
+        set { super.preferredContentSize = newValue }
     }
 }

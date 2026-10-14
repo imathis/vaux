@@ -5,6 +5,8 @@ enum AppStorageKey {
     static let unmuteVolume = "unmuteVolume"
     /// Scalar 0.0...1.0. macOS's "input volume 0–100" maps to this × 100.
     static let unmuteVolumeDefault = 0.75
+    /// Per-input unmute levels that override the default: [device UID: scalar].
+    static let unmuteVolumeOverrides = "unmuteVolumeOverrides"
 
     /// Auto-switch to the highest-priority connected input on device/input changes.
     static let enforcePreferred = "enforcePreferred"
@@ -17,6 +19,10 @@ enum AppStorageKey {
 
     /// Solo mode: modifier key whose lone tap toggles solo (`ModifierTapMonitor.Key`).
     static let soloTapKey = "soloTapKey"
+
+    /// Solo mode: bundle ID of the app solo follows — on while it's listening
+    /// to the mic. Empty for none.
+    static let soloFollowApp = "soloFollowApp"
 }
 
 extension Notification.Name {
