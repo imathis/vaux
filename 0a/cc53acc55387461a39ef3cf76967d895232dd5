@@ -1,0 +1,53 @@
+Sources/CallMuter.swift
+  s_7cfcc273794c17::t_82936c223dfacf 77,91,129
+Sources/AudioController.swift
+  s_7cfcc273794c17::t_82936c223dfacf 170-174
+  s_7cfcc273794c17::t_6594e32370bc6d 175-185
+Sources/CaptureWatcher.swift
+  s_7cfcc273794c17::t_82936c223dfacf 55
+  s_7cfcc273794c17::t_6594e32370bc6d 1-54,56-61
+Sources/InputVolumeView.swift
+  s_7cfcc273794c17::t_e04d03a5ed6526 3-5,7-13,16-23,26-27,56-67,75-96,123,149-152,155-157,165
+README.md
+  s_7cfcc273794c17::t_0653fad1b8a47d 3-5,7-65,73,75-76,79,83-84,86-87,89-93,95-98,103-104,106-124,129-130
+Sources/PreferredInput.swift
+  s_7cfcc273794c17::t_7b24633c32672e 28-46
+Sources/AppState.swift
+  s_7cfcc273794c17::t_7b24633c32672e 28-31,412,414
+  s_7cfcc273794c17::t_f41cee33756c5d 57-68,132-144,161-178,187-189,235
+Sources/SettingsView.swift
+  s_7cfcc273794c17::t_9dbe9d985cd1c1 205,207,210-213
+  s_7cfcc273794c17::t_49a70fbfebafb7 31-32,34-35
+  s_7cfcc273794c17::t_7255b55a3689f5 153
+  s_7cfcc273794c17::t_4a2bd3dad438e3 224
+  s_7cfcc273794c17::t_7b24633c32672e 39-42,63,66,68,83-88,120-147,158-193
+  s_7cfcc273794c17::t_7d4cacefab8fd8 10-11,33,36,112,115,194-204,206,208-209,214-223,225-237
+  s_7cfcc273794c17::t_2b2de0747ceaae 148,151,154-155
+  s_7cfcc273794c17::t_e28f2c3a89112f 149-150,152,156-157
+  s_7cfcc273794c17::t_fb30a68ff8f6d6 38
+Sources/InputPriorityModel.swift
+  s_7cfcc273794c17::t_7b24633c32672e 13-14,52-56
+  s_7cfcc273794c17::t_6b8b0ec6ce03f8 57
+Sources/AppStorageKey.swift
+  s_7cfcc273794c17::t_7b24633c32672e 8-9
+  s_7cfcc273794c17::t_f41cee33756c5d 22-25
+Sources/AppDelegate.swift
+  s_7cfcc273794c17::t_b9cdcd3c19380b 86
+  s_7cfcc273794c17::t_48cb639b2c6d79 100-116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0acc53acc55387461a39ef3cf76967d895232dd5",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
