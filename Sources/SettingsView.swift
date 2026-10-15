@@ -7,6 +7,7 @@ struct SettingsView: View {
         AppStorageKey.unmuteVolumeDefault
     @AppStorage(AppStorageKey.enforcePreferred) private var enforcePreferred = false
     @AppStorage(AppStorageKey.soloDuck) private var soloDuck = false
+    @AppStorage(AppStorageKey.soloPauseMedia) private var soloPauseMedia = true
     @AppStorage(AppStorageKey.soloFollowApp) private var soloFollowApp = ""
     @State private var followChoices: [FollowChoice] = []
     @AppStorage(AppStorageKey.soloDuckLevel) private var soloDuckLevel =
@@ -35,6 +36,7 @@ struct SettingsView: View {
                             .tag(choice.id)
                     }
                 }
+                Toggle("Pause playing media", isOn: $soloPauseMedia)
                 Toggle("Lower speakers while solo", isOn: $soloDuck)
                 VolumeSlider(
                     value: $soloDuckLevel, icons: .speaker, range: 0.05...0.8,
@@ -56,7 +58,7 @@ struct SettingsView: View {
             } header: {
                 Text("Solo Mode")
             } footer: {
-                Text("For dictating on a call: mutes Slack and Discord in the app and keeps your mic live. Speakers drop to this share of their level.")
+                Text("For dictating on a call: mutes Slack and Discord in the app and keeps your mic live. Paused media plays again when solo ends. Speakers drop to this share of their level.")
             }
 
             Section {

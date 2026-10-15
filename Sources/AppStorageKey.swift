@@ -17,6 +17,9 @@ enum AppStorageKey {
     static let soloDuckLevel = "soloDuckLevel"
     static let soloDuckLevelDefault = 0.3
 
+    /// Solo mode: pause playing media until solo ends. On unless set.
+    static let soloPauseMedia = "soloPauseMedia"
+
     /// Solo mode: modifier key whose lone tap toggles solo (`ModifierTapMonitor.Key`).
     static let soloTapKey = "soloTapKey"
 

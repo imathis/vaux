@@ -209,6 +209,16 @@ enum AudioController {
         return AudioObjectGetPropertyData(process, &addr, 0, nil, &size, &running) == noErr && running == 1
     }
 
+    static func pid(ofProcess process: AudioObjectID) -> pid_t {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyPID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var pid = pid_t(-1)
+        var size = UInt32(MemoryLayout<pid_t>.size)
+        return AudioObjectGetPropertyData(process, &addr, 0, nil, &size, &pid) == noErr ? pid : -1
+    }
+
     static func bundleID(ofProcess process: AudioObjectID) -> String {
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioProcessPropertyBundleID,

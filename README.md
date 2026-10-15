@@ -19,6 +19,7 @@ For dictating during a call, on the same mic. Solo mode:
 - Mutes **Slack** and **Discord** by pressing their own mute buttons, so the
   call sees you as muted and doesn't hear you dictate.
 - Keeps your mic live for everything else, unmuting it if Vaux had it muted.
+- Pauses music or video that's playing, and plays it again when solo ends.
 - Optionally lowers your speakers while it's on, so less of the call bleeds into
   the mic.
 - Puts everything back when it ends: it unmutes only the apps it muted and
@@ -116,6 +117,7 @@ Sources/
   AudioController.swift      # Core Audio HAL: devices, mute, volume, processes
   CallMuter.swift            # presses Slack/Discord mute via Accessibility
   CaptureWatcher.swift       # which apps are using the mic
+  MediaPauser.swift          # pauses playing media during solo
   ModifierTapMonitor.swift   # lone modifier-tap trigger for solo
   SoloShortcutRecorder.swift # solo shortcut field (combos and modifier taps)
   InputVolumeView.swift      # volume slider

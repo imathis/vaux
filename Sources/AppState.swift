@@ -137,10 +137,15 @@ final class AppState {
     @ObservationIgnored private var soloStartedByFollow = false
     /// The followed app's state change that arrived mid-transition.
     @ObservationIgnored private var pendingFollow: Bool?
+    @ObservationIgnored private let mediaPauser = MediaPauser()
 
     private static var followApp: Set<String> {
         let id = UserDefaults.standard.string(forKey: AppStorageKey.soloFollowApp) ?? ""
         return id.isEmpty ? [] : [id]
+    }
+
+    private var pauseMedia: Bool {
+        UserDefaults.standard.object(forKey: AppStorageKey.soloPauseMedia) as? Bool ?? true
     }
 
     private struct SoloSnapshot {
@@ -243,6 +248,9 @@ final class AppState {
         }
 
         let duck = duckOutput()
+        if pauseMedia {
+            mediaPauser.pause(ignoring: Set(CallApp.all.map(\.bundleID)).union(Self.followApp))
+        }
         soloSnapshot = SoloSnapshot(wasMuted: muted, mutedApps: mutedApps, duck: duck)
         if muted { setMuted(false) }
         soloMutedApps = outcomes
@@ -261,6 +269,7 @@ final class AppState {
         soloBusy = true
         notify()
         if let duck = snapshot.duck { restoreOutput(duck) }
+        mediaPauser.resume()
         // Re-mute the mic before the call apps go live again.
         if snapshot.wasMuted { setMuted(true) }
         let apps = snapshot.mutedApps
