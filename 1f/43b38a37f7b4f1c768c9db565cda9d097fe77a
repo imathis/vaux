@@ -1,0 +1,21 @@
+Sources/SettingsView.swift
+  s_7cfcc273794c17::t_4979b17a2d0478 57
+README.md
+  s_7cfcc273794c17::t_4979b17a2d0478 31-32,34-40,56-66,89-93,101,152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1f43b38a37f7b4f1c768c9db565cda9d097fe77a",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
