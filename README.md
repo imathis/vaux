@@ -1,14 +1,28 @@
+<img src="docs/icon.png" width="128" alt="Vaux app icon">
+
 # Vaux
 
 **Talk to your Mac. Not the meeting.**
 
-Vaux is a mic manager for meetings and dictation. One shortcut mutes the call
-while your mic stays live for dictation. Plus mute from anywhere, your mics in
+A microphone manager for the dictation era. One shortcut mutes the call while
+your mic stays live for dictation. Plus mute from anywhere, your mics in
 priority order, and nothing ever recorded.
 
 It never touches your audio stream. There are no virtual or aggregate devices,
 no HAL plugins, and no capture — only Core Audio property changes. That means no
 Bluetooth quality drop, no added latency, and no microphone permission.
+
+## Install
+
+```sh
+brew install --cask imathis/tap/vaux
+```
+
+Or download `Vaux.zip` from the latest
+[release](https://github.com/imathis/vaux/releases/latest), unzip it, and move
+Vaux to Applications. Requires macOS 26 or later.
+
+Vaux lives in the menu bar. To update: `brew upgrade --cask vaux`.
 
 ## Features
 
@@ -73,13 +87,10 @@ UI. That's why it supports specific apps rather than "everything but X".
   to toggle mute.
 - **Settings:** solo mode, mute, preferred inputs, and launch at login.
 
-## Requirements
-
-- macOS 26+
-- Xcode 26+
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
-
 ## Build and run
+
+Requires macOS 26+, Xcode 26+ and
+[XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
 
 The Xcode project is generated from [`project.yml`](project.yml) and isn't
 checked in. Generate it first:
@@ -102,9 +113,10 @@ prefix the command:
 ### App Store builds
 
 The App Sandbox entitlements are in `Sources/Vaux.entitlements` and are off by
-default; see the comment in `project.yml`. Mute and inputs work sandboxed, but
-solo mode doesn't, because the sandbox blocks Accessibility control of other
-apps.
+default; see the comment in `project.yml`. Mute and inputs work sandboxed.
+Pausing media uses a private framework, which the App Store doesn't allow, so
+an App Store build would have to leave it out. Solo mode hasn't been tested
+sandboxed yet.
 
 ## Layout
 
@@ -134,7 +146,9 @@ Sources/
   AppStorageKey.swift        # shared settings keys
   Info.plist                 # LSUIElement: menu bar only, no Dock icon
   Vaux.entitlements          # App Sandbox (off by default)
-IconSource/                  # app icon layer art for Icon Composer
+  Vaux.icon                  # app icon (Icon Composer)
+IconSource/                  # app icon layer art
+docs/                        # README images
 ```
 
 ## Non-goals
