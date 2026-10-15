@@ -47,9 +47,7 @@ struct SettingsView: View {
                 Toggle("Pause playing media", isOn: $soloPauseMedia)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Speaker volume")
-                    VolumeSlider(
-                        value: $soloSpeakerLevel, icons: .speaker, range: 0.05...1,
-                        showsPercent: true)
+                    VolumeSlider(value: $soloSpeakerLevel, icons: .speaker)
                         .frame(height: 28)
                         .padding(.horizontal, -14) // line the icons up with the text
                 }
@@ -61,8 +59,7 @@ struct SettingsView: View {
                 KeyboardShortcuts.Recorder("Shortcut", name: .toggleMicMute)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Unmute volume")
-                    // Never 0%: unmuting to silence would look live and hear nothing.
-                    VolumeSlider(value: $unmuteVolume, range: 0.05...1, showsPercent: true)
+                    VolumeSlider(value: $unmuteVolume)
                         .frame(height: 28)
                         .padding(.horizontal, -14)
                 }
@@ -171,7 +168,7 @@ private struct InputRow: View {
 
     @ViewBuilder private var levelLabel: some View {
         if let unmuteOverride {
-            Text("\(Self.percent(unmuteOverride))")
+            Text(unmuteOverride.percentText)
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 6)
@@ -190,19 +187,13 @@ private struct InputRow: View {
             Text(entry.name)
                 .foregroundStyle(.secondary)
             VolumeSlider(
-                value: Binding(get: { unmuteOverride ?? defaultUnmute }, set: { setUnmuteOverride($0) }),
-                range: 0.05...1,
-                showsPercent: true)
+                value: Binding(get: { unmuteOverride ?? defaultUnmute }, set: { setUnmuteOverride($0) }))
                 .frame(width: 300, height: 28)
                 .padding(.horizontal, -14) // line the icons up with the text
-            Button("Use Default (\(Self.percent(defaultUnmute)))") { setUnmuteOverride(nil) }
+            Button("Use Default (\(defaultUnmute.percentText))") { setUnmuteOverride(nil) }
                 .disabled(unmuteOverride == nil)
         }
         .padding(16)
-    }
-
-    private static func percent(_ level: Double) -> String {
-        "\(Int((level * 100).rounded()))%"
     }
 }
 

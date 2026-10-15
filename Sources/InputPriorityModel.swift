@@ -38,7 +38,8 @@ final class InputPriorityModel {
         }
         entries = stored
         presentUIDs = Set(present.map(\.uid))
-        PreferredInput.order = stored
+        // Every write notifies every settings observer; most reloads add nothing.
+        if stored != PreferredInput.order { PreferredInput.order = stored }
     }
 
     func move(from source: IndexSet, to destination: Int) {

@@ -35,11 +35,15 @@ final class StatusIconAnimator {
     }
 
     func show(_ state: StatusIcon.State, description: String) {
-        self.description = description
         guard state != self.state else {
-            if timer == nil { render() }
+            // Same glyph: redraw only for a new description.
+            if description != self.description {
+                self.description = description
+                if timer == nil { render() }
+            }
             return
         }
+        self.description = description
         let first = self.state == nil
         self.state = state
         target = state.bars

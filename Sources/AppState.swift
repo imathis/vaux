@@ -14,13 +14,10 @@ import os
 final class AppState {
     private(set) var muted = false
     private(set) var deviceName: String?
-    private(set) var supportsMute = false
 
-    /// Invoked on the main actor whenever `muted` / `deviceName` /
-    /// `supportsMute` change, so the AppKit status item can refresh.
+    /// Invoked on the main actor whenever the state changes, so the AppKit
+    /// status item can refresh.
     @ObservationIgnored var onStateChange: (() -> Void)?
-
-    var hasDevice: Bool { currentDevice != nil }
 
     @ObservationIgnored private var currentDevice: AudioDeviceID?
     @ObservationIgnored private var defaultDeviceListener: AudioPropertyListener?
@@ -466,7 +463,6 @@ final class AppState {
 
         guard let dev else {
             deviceName = nil
-            supportsMute = false
             muteListeners = []
             // Keep `muted` as the standing intent so it re-applies when a
             // device returns.
@@ -475,7 +471,6 @@ final class AppState {
         }
 
         deviceName = AudioController.deviceName(dev)
-        supportsMute = AudioController.supportsMute(dev)
 
         if !muteIntentInitialized {
             // First resolve at launch: adopt the device's current state.
@@ -505,7 +500,7 @@ final class AppState {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, self.currentDevice == dev else { return }
-                if !self.muteIntentSatisfied(on: dev) {
+                if self.currentMutedState(dev) != self.muted {
                     self.writeMuteIntent(to: dev)
                     self.notify()
                 }
@@ -524,21 +519,14 @@ final class AppState {
             return AudioController.setMuted(false, on: dev)
         }
         if muted { return AudioController.setVolume(0, on: dev) }
-        guard (AudioController.volume(on: dev) ?? 1) <= 0.0001 else { return true }
+        guard AudioController.isSilent(dev) else { return true }
         return AudioController.setVolume(unmuteVolume(for: dev), on: dev)
-    }
-
-    private func muteIntentSatisfied(on dev: AudioDeviceID) -> Bool {
-        if AudioController.supportsMute(dev) {
-            return AudioController.isMuted(dev) == muted
-        }
-        let isZero = (AudioController.volume(on: dev) ?? 1) <= 0.0001
-        return isZero == muted
     }
 
     /// Keeps the icon honest when mute/volume is changed elsewhere
     /// (System Settings, another app).
     private func startMuteListener(for dev: AudioDeviceID) {
+        let supportsMute = AudioController.supportsMute(dev)
         let selector: AudioObjectPropertySelector =
             supportsMute ? kAudioDevicePropertyMute : kAudioDevicePropertyVolumeScalar
         // Volume can live on the main element or only on the channels.
@@ -558,7 +546,7 @@ final class AppState {
     private func resyncMutedState() {
         guard let dev = currentDevice else { return }
         if Date() < settlingUntil {
-            if !muteIntentSatisfied(on: dev) { writeMuteIntent(to: dev) }
+            if currentMutedState(dev) != muted { writeMuteIntent(to: dev) }
             return
         }
         muted = currentMutedState(dev)
@@ -569,8 +557,7 @@ final class AppState {
         if AudioController.supportsMute(dev) {
             return AudioController.isMuted(dev)
         }
-        // No mute property: treat ~0 input volume as muted.
-        return (AudioController.volume(on: dev) ?? 1) <= 0.0001
+        return AudioController.isSilent(dev)
     }
 
     private func notify() {

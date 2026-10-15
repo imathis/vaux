@@ -49,7 +49,7 @@ final class MenuPanelController {
         hostingController = controller
 
         let panel = MenuPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 308, height: 200),
+            contentRect: NSRect(x: 0, y: 0, width: MenuContentView.width, height: 200),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered, defer: false)
         panel.level = .popUpMenu
@@ -65,25 +65,15 @@ final class MenuPanelController {
         // and rounded shape. Wrapped in a layer-masked container so the window's
         // corner triangles are clipped to the rounded shape; without it the
         // backing shows through as dark corners behind the rounded glass.
-        let glass = NSGlassEffectView()
-        glass.cornerRadius = 12
+        let (container, glass) = Self.glass(
+            frame: NSRect(x: 0, y: 0, width: MenuContentView.width, height: 200), radius: 12)
         glass.contentView = controller.view
-        glass.autoresizingMask = [.width, .height]
-
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 308, height: 200))
-        container.wantsLayer = true
-        container.layer?.cornerRadius = 12
-        container.layer?.cornerCurve = .continuous
-        container.layer?.masksToBounds = true
-        glass.frame = container.bounds
-        container.addSubview(glass)
         panel.contentView = container
 
         // Now that the view is in a window it can report its size.
         controller.view.layoutSubtreeIfNeeded()
         let size = controller.view.fittingSize
         panel.setContentSize(size)
-        glass.frame = container.bounds
 
         position(panel, under: button, size: size)
         panel.makeKeyAndOrderFront(nil)
@@ -159,23 +149,26 @@ final class MenuPanelController {
         let centerY = windowContent.convert(NSPoint(x: 0, y: button.frame.midY), from: superview).y
         let rect = NSRect(x: 0, y: centerY - radius, width: windowContent.bounds.width, height: height)
 
-        // Clip to the capsule so the glass view's rectangular edge/shadow (the
-        // dark border) is masked away.
-        let container = NSView(frame: rect)
+        let (container, _) = Self.glass(frame: rect, radius: radius)
+        windowContent.addSubview(container, positioned: .below, relativeTo: nil)
+        highlightView = container
+    }
+
+    /// Real Liquid Glass — the translucent frosted material the system uses —
+    /// in a container clipped to its rounded shape, so the glass view's
+    /// rectangular edge and shadow (dark corners) are masked away.
+    private static func glass(frame: NSRect, radius: CGFloat) -> (container: NSView, glass: NSGlassEffectView) {
+        let container = NSView(frame: frame)
         container.wantsLayer = true
         container.layer?.cornerRadius = radius
         container.layer?.cornerCurve = .continuous
         container.layer?.masksToBounds = true
-        container.autoresizingMask = []
 
-        // Real Liquid Glass — the translucent frosted material the system uses.
         let glass = NSGlassEffectView(frame: container.bounds)
         glass.cornerRadius = radius
         glass.autoresizingMask = [.width, .height]
         container.addSubview(glass)
-
-        windowContent.addSubview(container, positioned: .below, relativeTo: nil)
-        highlightView = container
+        return (container, glass)
     }
 
     private func position(_ panel: NSPanel, under button: NSStatusBarButton, size: NSSize) {

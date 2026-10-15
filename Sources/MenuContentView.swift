@@ -1,6 +1,7 @@
 import AppKit
 import CoreAudio
 import KeyboardShortcuts
+import os
 import SwiftUI
 
 struct MenuInputDevice: Identifiable {
@@ -33,13 +34,19 @@ struct MenuContentView: View {
         self.dismiss = dismiss
         self.resized = resized
         // Seed the slider with the real value so it doesn't animate up from 0.
-        let current = AudioController.defaultInputDevice()
-        _currentDeviceID = State(initialValue: current)
-        _canSetVolume = State(initialValue: current.map(AudioController.canSetInputVolume) ?? false)
-        _volume = State(initialValue: current.flatMap { AudioController.volume(on: $0) }.map(Double.init) ?? 0)
+        let input = Self.currentInput()
+        _currentDeviceID = State(initialValue: input.id)
+        _canSetVolume = State(initialValue: input.canSetVolume)
+        _volume = State(initialValue: input.volume)
     }
 
-    private let menuWidth: CGFloat = 308
+    /// The default input and its volume.
+    private static func currentInput() -> (id: AudioDeviceID?, canSetVolume: Bool, volume: Double) {
+        guard let id = AudioController.defaultInputDevice() else { return (nil, false, 0) }
+        return (id, AudioController.canSetInputVolume(id), Double(AudioController.volume(on: id) ?? 0))
+    }
+
+    static let width: CGFloat = 308
     private let edgeInset: CGFloat = 5   // hover background inset from the menu edge
     private let contentInset: CGFloat = 14 // text/divider inset from the menu edge
 
@@ -62,7 +69,7 @@ struct MenuContentView: View {
             textRow("Quit Vaux", trailing: "⌘Q") { NSApp.terminate(nil) }
         }
         .padding(.vertical, 5)
-        .frame(width: menuWidth)
+        .frame(width: Self.width)
         .fixedSize(horizontal: false, vertical: true)
         .onGeometryChange(for: CGSize.self, of: \.size) { resized($0) }
         .onAppear(perform: reload)
@@ -167,7 +174,7 @@ struct MenuContentView: View {
                 ? "No calls to mute"
                 : "Muted in " + appState.soloMutedApps.joined(separator: ", ")]
             if let ducked = appState.soloDuckedTo {
-                parts.append("speakers at \(Int((ducked * 100).rounded()))%")
+                parts.append("speakers at \(ducked.percentText)")
             }
             lines.append((parts.joined(separator: " · "), false))
         }
@@ -221,14 +228,11 @@ struct MenuContentView: View {
 
     private func reload() {
         let all = AudioController.inputDevices()
-        let current = AudioController.defaultInputDevice()
-        var preferredID: AudioDeviceID?
-        for entry in PreferredInput.order where !entry.uid.isEmpty {
-            if let match = all.first(where: { $0.uid == entry.uid }) { preferredID = match.id; break }
-        }
+        let input = Self.currentInput()
+        let order = PreferredInput.order
+        let preferredID = PreferredInput.preferred(among: all, in: order, uid: \.uid)?.id
         // Order the menu like the priority list: ranked devices first (in
         // priority order), then any others in their natural order.
-        let order = PreferredInput.order
         let ranked = all.enumerated().sorted { lhs, rhs in
             let r1 = order.firstIndex { $0.uid == lhs.element.uid } ?? Int.max
             let r2 = order.firstIndex { $0.uid == rhs.element.uid } ?? Int.max
@@ -239,16 +243,12 @@ struct MenuContentView: View {
                 id: device.id,
                 name: device.name,
                 symbol: AudioController.inputSymbolName(device.id, name: device.name),
-                isCurrent: device.id == current,
+                isCurrent: device.id == input.id,
                 isPreferred: device.id == preferredID)
         }
-        currentDeviceID = current
-        if let current {
-            canSetVolume = AudioController.canSetInputVolume(current)
-            volume = Double(AudioController.volume(on: current) ?? 0)
-        } else {
-            canSetVolume = false
-        }
+        currentDeviceID = input.id
+        canSetVolume = input.canSetVolume
+        if input.id != nil { volume = input.volume }
     }
 }
 
@@ -278,9 +278,18 @@ private struct MenuRow<Content: View>: View {
 }
 
 /// Serializes input-volume writes off the main thread so dragging stays smooth.
+/// Only the latest value is written: a drag sends far more than the device
+/// needs, and each write notifies every audio client.
 enum VolumeWriter {
     private static let queue = DispatchQueue(label: "dev.imathis.vaux.volume")
+    private static let latest = OSAllocatedUnfairLock<(value: Float, device: AudioDeviceID)?>(initialState: nil)
+
     static func write(_ value: Float, to device: AudioDeviceID) {
-        queue.async { AudioController.setVolume(value, on: device) }
+        let idle = latest.withLock { pending in defer { pending = (value, device) }; return pending == nil }
+        guard idle else { return }
+        queue.async {
+            guard let next = latest.withLock({ pending in defer { pending = nil }; return pending }) else { return }
+            AudioController.setVolume(next.value, on: next.device)
+        }
     }
 }

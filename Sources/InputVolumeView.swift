@@ -1,8 +1,8 @@
 import AppKit
 
 /// Full-width volume slider flanked by icons (mic by default), mirroring the
-/// system Sound slider, with an optional percentage. Reused in the menu (writes
-/// device volume) and in Settings (unmute and duck levels) via `VolumeSlider`.
+/// system Sound slider, with its percentage. Settings' level controls (unmute
+/// and speaker levels), via `VolumeSlider`.
 final class InputVolumeView: NSView {
     struct Icons {
         let low: String
@@ -15,12 +15,11 @@ final class InputVolumeView: NSView {
     private let slider = NSSlider()
     private let low: NSImageView
     private let high: NSImageView
-    private let percent: NSTextField?
+    private let percent = InputVolumeView.percentLabel()
 
-    init(supported: Bool, value: Float, icons: Icons = .mic, range: ClosedRange<Float> = 0...1, showsPercent: Bool = false) {
+    init(value: Float, icons: Icons, range: ClosedRange<Float>) {
         low = Self.icon(icons.low, pointSize: 12)
         high = Self.icon(icons.high, pointSize: 15)
-        percent = showsPercent ? Self.percentLabel() : nil
         super.init(frame: NSRect(x: 0, y: 0, width: 300, height: 30))
 
         slider.minValue = Double(range.lowerBound)
@@ -28,13 +27,12 @@ final class InputVolumeView: NSView {
         slider.floatValue = value
         slider.isContinuous = true
         slider.trackFillColor = .controlAccentColor // the OS active (blue) fill
-        slider.isEnabled = supported
         slider.target = self
         slider.action = #selector(sliderChanged)
         slider.translatesAutoresizingMaskIntoConstraints = false
-        // Menus render with a vibrant material that desaturates the accent fill
-        // to grey. Pin the slider to a concrete (non-vibrant) appearance so the
-        // blue shows, matching the current light/dark setting.
+        // A vibrant background desaturates the accent fill to grey. Pin the
+        // slider to a concrete (non-vibrant) appearance so the blue shows,
+        // matching the current light/dark setting.
         if let match = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) {
             slider.appearance = NSAppearance(named: match)
         }
@@ -42,6 +40,7 @@ final class InputVolumeView: NSView {
         addSubview(low)
         addSubview(slider)
         addSubview(high)
+        addSubview(percent)
 
         NSLayoutConstraint.activate([
             low.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
@@ -52,19 +51,13 @@ final class InputVolumeView: NSView {
             slider.trailingAnchor.constraint(equalTo: high.leadingAnchor, constant: -8),
 
             high.centerYAnchor.constraint(equalTo: centerYAnchor),
+            high.trailingAnchor.constraint(equalTo: percent.leadingAnchor, constant: -8),
+
+            percent.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            percent.centerYAnchor.constraint(equalTo: centerYAnchor),
+            percent.widthAnchor.constraint(equalToConstant: 36),
         ])
-        if let percent {
-            addSubview(percent)
-            NSLayoutConstraint.activate([
-                high.trailingAnchor.constraint(equalTo: percent.leadingAnchor, constant: -8),
-                percent.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-                percent.centerYAnchor.constraint(equalTo: centerYAnchor),
-                percent.widthAnchor.constraint(equalToConstant: 36),
-            ])
-            updatePercent()
-        } else {
-            high.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14).isActive = true
-        }
+        updatePercent()
     }
 
     @available(*, unavailable)
@@ -75,16 +68,8 @@ final class InputVolumeView: NSView {
         updatePercent()
     }
 
-    func setEnabled(_ enabled: Bool) {
-        slider.isEnabled = enabled
-        let color: NSColor = enabled ? .secondaryLabelColor : .tertiaryLabelColor
-        low.contentTintColor = color
-        high.contentTintColor = color
-        percent?.textColor = color
-    }
-
     private func updatePercent() {
-        percent?.stringValue = "\(Int((slider.floatValue * 100).rounded()))%"
+        percent.stringValue = slider.floatValue.percentText
     }
 
     private static func percentLabel() -> NSTextField {
@@ -96,8 +81,7 @@ final class InputVolumeView: NSView {
         return label
     }
 
-    /// Stretch to the full width of the container (the menu, or the SwiftUI
-    /// representable). NSMenu doesn't reliably size custom views to full width.
+    /// Stretch to the full width of the SwiftUI representable.
     override func layout() {
         if let superview, superview.bounds.width > 0, frame.width != superview.bounds.width {
             frame.size.width = superview.bounds.width
@@ -142,27 +126,27 @@ final class InputVolumeView: NSView {
 
 import SwiftUI
 
-/// SwiftUI wrapper so Settings can reuse the exact menu slider (icons, blue
-/// fill, full width).
+extension BinaryFloatingPoint {
+    /// A 0...1 level as a whole percentage: "75%".
+    var percentText: String { "\(Int((Double(self) * 100).rounded()))%" }
+}
+
+/// SwiftUI wrapper for Settings (icons, blue fill, full width). Levels run
+/// from 5%: a level of 0 would be silence that looks live.
 struct VolumeSlider: NSViewRepresentable {
     @Binding var value: Double
     var icons: InputVolumeView.Icons = .mic
-    var range: ClosedRange<Double> = 0...1
-    var showsPercent = false
-    var isEnabled = true
 
     func makeNSView(context: Context) -> InputVolumeView {
-        let view = InputVolumeView(
-            supported: true, value: Float(value), icons: icons,
-            range: Float(range.lowerBound)...Float(range.upperBound), showsPercent: showsPercent)
-        view.onChange = { context.coordinator.value.wrappedValue = Double($0) }
+        let view = InputVolumeView(value: Float(value), icons: icons, range: 0.05...1)
+        let coordinator = context.coordinator
+        view.onChange = { coordinator.value.wrappedValue = Double($0) }
         return view
     }
 
     func updateNSView(_ nsView: InputVolumeView, context: Context) {
         context.coordinator.value = $value
         nsView.setValue(Float(value))
-        nsView.setEnabled(isEnabled)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(value: $value) }

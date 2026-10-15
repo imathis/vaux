@@ -37,9 +37,8 @@ enum StatusIcon {
         var alpha: CGFloat
     }
 
-    /// `bars` overrides the state's resting bars, for frames mid-transition.
-    static func image(_ state: State, bars: [Bar]? = nil, description: String) -> NSImage {
-        let bars = bars ?? state.bars
+    /// `bars`: the state's resting bars, or a frame mid-transition.
+    static func image(_ state: State, bars: [Bar], description: String) -> NSImage {
         let problem = !state.isTemplate
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
             draw(bars, problem: problem)

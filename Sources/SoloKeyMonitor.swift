@@ -228,6 +228,8 @@ private final class TapRelay: @unchecked Sendable {
         default:
             let raw = type.rawValue
             let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+            // Of key presses only two matter; the rest never leave this thread.
+            if type == .keyDown, keyCode != SoloKeyMonitor.dictationKeyCode, keyCode != kVK_Escape { break }
             let flags = event.flags.rawValue
             let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
             DispatchQueue.main.async {
