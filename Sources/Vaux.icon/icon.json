@@ -89,7 +89,7 @@
           "name" : "bars",
           "opacity" : 1,
           "position" : {
-            "scale" : 1.5,
+            "scale" : 1.6,
             "translation-in-points" : [
               0,
               0
@@ -136,7 +136,7 @@
           "image-name" : "side-bars.svg",
           "name" : "side-bars",
           "position" : {
-            "scale" : 1.5,
+            "scale" : 1.55,
             "translation-in-points" : [
               0,
               0

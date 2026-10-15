@@ -24,6 +24,16 @@ enum PreferredInput {
             UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: key)
         }
     }
+
+    /// The highest-ranked of `devices`, if any is ranked.
+    static func preferred<Device>(
+        among devices: [Device], in order: [InputEntry] = order, uid: (Device) -> String
+    ) -> Device? {
+        for entry in order where !entry.uid.isEmpty {
+            if let match = devices.first(where: { uid($0) == entry.uid }) { return match }
+        }
+        return nil
+    }
 }
 
 /// The level an input is set to when unmuted: its own, if it has one, else

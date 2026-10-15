@@ -107,13 +107,11 @@ final class MediaPauser {
 
     /// Playback assertions by ID, with the bundle ID of the app playing.
     private static func playback(ignoring apps: Set<String>) -> [UInt64: String] {
-        let onMic = Set(AudioController.processObjects()
-            .filter(AudioController.isRunningInput)
-            .map { AudioController.responsiblePID(AudioController.pid(ofProcess: $0)) })
+        let onMic = Set(CaptureWatcher.current.map(\.pid))
         var playing: [UInt64: String] = [:]
         for assertion in assertions() where isPlayback(assertion.name) && !onMic.contains(assertion.app) {
             let bundle = NSRunningApplication(processIdentifier: assertion.app)?.bundleIdentifier ?? ""
-            guard !apps.contains(where: { AudioController.bundle(bundle, belongsTo: $0) }) else { continue }
+            guard !AudioController.bundle(bundle, belongsToAnyOf: apps) else { continue }
             playing[assertion.id] = bundle.isEmpty ? "pid \(assertion.app)" : bundle
         }
         return playing

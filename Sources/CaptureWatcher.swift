@@ -1,35 +1,53 @@
+import AppKit
 import CoreAudio
-import Foundation
+import os
 
-/// Reports when apps start or stop capturing input — a call app joining or
-/// leaving a call, a dictation app starting to listen — from Core Audio
-/// process objects: no streams, no mic permission.
+/// An app using the mic: the app a capturing process works for (Slack for
+/// its helper, Safari for its WebKit process, or the process itself).
+struct MicUser: Sendable, Hashable {
+    let bundleID: String
+    let name: String
+    let pid: pid_t
+}
+
+/// Which apps are using the mic: calls, dictation apps, browsers. Read from
+/// Core Audio process objects — no streams, no mic permission. One for the
+/// whole app.
 ///
 /// The process "running input" flag never notifies its listeners; the
-/// "running any IO" flag does. So that's what's listened to, and input is
-/// read when it fires. Input can also start while the app is already
-/// playing sound, which changes nothing there, so while a watched app has
-/// any IO running its input is checked twice a second as well.
+/// "running any IO" flag does. So that's what's listened to, on every
+/// process, and input is read only on the few processes with IO running.
+/// Input can also start while a process is already playing sound, which
+/// changes nothing there, so while any process has IO running their input
+/// is checked twice a second as well. Who a process works for is worked out
+/// once, when it appears.
 @MainActor
 final class CaptureWatcher {
-    /// Apps to watch. Their helpers count too (Slack captures in
-    /// `com.tinyspeck.slackmacgap.helper`).
-    var bundleIDs: Set<String> = [] {
-        didSet { if bundleIDs != oldValue, onChange != nil { rescan() } }
-    }
-    /// Watch every app instead, each reported as the app it works for (a
-    /// browser for its helpers and web processes).
-    var watchesAll = false
+    /// The apps on the mic now. Readable from any thread: solo's call work
+    /// runs off the main thread.
+    nonisolated static var current: [MicUser] { snapshot.withLock { $0 } }
 
-    private var onChange: ((_ bundleID: String, _ capturing: Bool) -> Void)?
-    private var capturing: Set<String> = []
+    /// Whether the app, or a process working for it, is on the mic.
+    nonisolated static func isCapturing(_ app: String) -> Bool {
+        current.contains { AudioController.bundle($0.bundleID, belongsTo: app) }
+    }
+
+    nonisolated private static let snapshot = OSAllocatedUnfairLock(initialState: [MicUser]())
+
+    private struct Process {
+        let user: MicUser
+        let listener: AudioPropertyListener?
+    }
+
+    private var onChange: ((_ user: MicUser, _ capturing: Bool) -> Void)?
+    private var processes: [AudioObjectID: Process] = [:]
+    /// Processes with any IO running.
+    private var running: Set<AudioObjectID> = []
     private var listListener: AudioPropertyListener?
-    /// IsRunning listeners on the watched apps' process objects.
-    private var inputListeners: [AudioObjectID: AudioPropertyListener] = [:]
     private var poll: Timer?
 
-    /// Reports current state right away (apps already capturing), then changes.
-    func start(onChange: @escaping (_ bundleID: String, _ capturing: Bool) -> Void) {
+    /// Reports the apps on the mic right away, then changes.
+    func start(onChange: @escaping (_ user: MicUser, _ capturing: Bool) -> Void) {
         self.onChange = onChange
         // Process objects come and go as apps connect to the audio server.
         listListener = AudioPropertyListener(
@@ -43,51 +61,68 @@ final class CaptureWatcher {
     }
 
     private func rescan() {
-        var listeners: [AudioObjectID: AudioPropertyListener] = [:]
+        var next: [AudioObjectID: Process] = [:]
         for process in AudioController.processObjects() {
-            let bundle = AudioController.bundleID(ofProcess: process)
-            guard watchesAll || bundleIDs.contains(where: { AudioController.bundle(bundle, belongsTo: $0) }) else { continue }
-            listeners[process] = inputListeners[process] ?? AudioPropertyListener(
-                objectID: process,
-                selector: kAudioProcessPropertyIsRunning,
-                scope: kAudioObjectPropertyScopeGlobal
-            ) { [weak self] in
-                MainActor.assumeIsolated { self?.evaluate() }
+            if let known = processes[process] {
+                next[process] = known
+                continue
             }
+            next[process] = Process(
+                user: Self.user(of: process),
+                listener: AudioPropertyListener(
+                    objectID: process,
+                    selector: kAudioProcessPropertyIsRunning,
+                    scope: kAudioObjectPropertyScopeGlobal
+                ) { [weak self] in
+                    MainActor.assumeIsolated { self?.runningChanged(process) }
+                })
+            if AudioController.isRunning(process) { running.insert(process) }
         }
-        inputListeners = listeners // dropped listeners unregister on deinit
-        // An app no longer watched has stopped, as far as anyone here knows:
-        // a solo it started ends with it.
-        for id in capturing.subtracting(bundleIDs) where !watchesAll {
-            capturing.remove(id)
-            onChange?(id, false)
-        }
+        processes = next // dropped listeners unregister on deinit
+        running.formIntersection(next.keys)
+        evaluate()
+    }
+
+    private func runningChanged(_ process: AudioObjectID) {
+        if AudioController.isRunning(process) { running.insert(process) } else { running.remove(process) }
         evaluate()
     }
 
     private func evaluate() {
-        if watchesAll {
-            let now = Set(AudioController.appsCapturingInput().map(\.bundleID))
-            for id in now.subtracting(capturing) { onChange?(id, true) }
-            for id in capturing.subtracting(now) { onChange?(id, false) }
-            capturing = now
+        var users: [MicUser] = []
+        for process in running where AudioController.isRunningInput(process) {
+            guard let user = processes[process]?.user, !user.bundleID.isEmpty,
+                  !users.contains(where: { $0.bundleID == user.bundleID }) else { continue }
+            users.append(user)
         }
-        for id in bundleIDs {
-            let now = AudioController.isCapturingInput(id)
-            guard now != capturing.contains(id) else { continue }
-            if now { capturing.insert(id) } else { capturing.remove(id) }
-            onChange?(id, now)
+        let now = users
+        let before = Self.snapshot.withLock { old in defer { old = now }; return old }
+        for user in users where !before.contains(where: { $0.bundleID == user.bundleID }) {
+            onChange?(user, true)
         }
-        let busy = inputListeners.keys.contains(where: AudioController.isRunning)
-        if busy, poll == nil {
+        for user in before where !users.contains(where: { $0.bundleID == user.bundleID }) {
+            onChange?(user, false)
+        }
+
+        if running.isEmpty {
+            poll?.invalidate()
+            poll = nil
+        } else if poll == nil {
             let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.evaluate() }
             }
+            timer.tolerance = 0.1
             RunLoop.main.add(timer, forMode: .common)
             poll = timer
-        } else if !busy {
-            poll?.invalidate()
-            poll = nil
         }
+    }
+
+    /// The app a process works for.
+    private static func user(of process: AudioObjectID) -> MicUser {
+        let bundle = AudioController.bundleID(ofProcess: process)
+        let pid = AudioController.responsiblePID(AudioController.pid(ofProcess: process))
+        let app = NSRunningApplication(processIdentifier: pid)
+        let id = app?.bundleIdentifier ?? bundle
+        return MicUser(bundleID: id, name: app?.localizedName ?? id, pid: pid)
     }
 }

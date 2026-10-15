@@ -16,8 +16,9 @@ enum AppStorageKey {
     static let soloSpeakerLevel = "soloSpeakerLevel"
     static let soloSpeakerLevelDefault = 1.0
 
-    /// Solo mode: pause playing media until solo ends. On unless set.
+    /// Solo mode: pause playing media until solo ends.
     static let soloPauseMedia = "soloPauseMedia"
+    static let soloPauseMediaDefault = true
 
     /// Solo mode: key shared with dictation that toggles solo
     /// (`SoloKeyMonitor.Key`): the Dictation key or a lone modifier tap.
@@ -26,9 +27,4 @@ enum AppStorageKey {
     /// Solo mode: bundle ID of the app solo follows — on while it's listening
     /// to the mic. Empty for none.
     static let soloFollowApp = "soloFollowApp"
-}
-
-extension Notification.Name {
-    /// Posted when the user enables enforcement, so AppState applies it immediately.
-    static let enforcePreferredInput = Notification.Name("enforcePreferredInput")
 }

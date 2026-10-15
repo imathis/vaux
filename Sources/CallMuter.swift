@@ -4,6 +4,17 @@ import os
 
 /// A call app whose own mic toggle Vaux can press in solo mode.
 struct CallApp: Sendable, Hashable {
+    /// Where the app's mic toggle is.
+    enum Surface: Sendable, Hashable {
+        /// In the app's windows. Electron builds that tree only on request.
+        case window
+        /// A menu item: there whatever the call window is doing (toolbar
+        /// hidden, minimized), so it's preferred.
+        case menuBar
+        /// A web page, in whatever browser `bundleID` names.
+        case webPage
+    }
+
     let name: String
     let bundleID: String
     /// What uses the mic during a call, which is how a call is told apart:
@@ -18,27 +29,22 @@ struct CallApp: Sendable, Hashable {
     /// Roles the toggle can have. Narrower is safer: a plain "Mute" button
     /// could be a video's.
     var roles: Set<String>
-    /// The toggle is a menu item. Menus are there whatever the call window
-    /// is doing (toolbar hidden, minimized), so they're preferred.
-    var inMenuBar = false
-    /// A call in a web page, in whatever browser `bundleID` names.
-    var isWeb = false
+    var surface: Surface
 
     init(name: String, bundleID: String, micProcess: String? = nil,
          muteLabels: Set<String>, unmuteLabels: Set<String>,
-         roles: Set<String> = [kAXButtonRole, kAXCheckBoxRole], inMenuBar: Bool = false, isWeb: Bool = false) {
+         roles: Set<String> = [kAXButtonRole, kAXCheckBoxRole], surface: Surface = .window) {
         self.name = name
         self.bundleID = bundleID
         self.micProcess = micProcess
         self.muteLabels = muteLabels
         self.unmuteLabels = unmuteLabels
         self.roles = roles
-        self.inMenuBar = inMenuBar
-        self.isWeb = isWeb
+        self.surface = surface
     }
 
     /// For logs: which browser a web call is in.
-    var logName: String { isWeb ? "\(name) (\(bundleID))" : name }
+    var logName: String { surface == .webPage ? "\(name) (\(bundleID))" : name }
 
     /// Google Meet in a browser. Any browser: the page and its labels are the
     /// same in all of them, and both engines (Chromium, WebKit) pass the
@@ -47,7 +53,13 @@ struct CallApp: Sendable, Hashable {
         CallApp(
             name: "Google Meet", bundleID: browser,
             muteLabels: ["turn off microphone"], unmuteLabels: ["turn on microphone"],
-            roles: [kAXButtonRole], isWeb: true)
+            roles: [kAXButtonRole], surface: .webPage)
+    }
+
+    /// Whether an app is a web browser: one that opens web links.
+    static func isBrowser(_ bundleID: String) -> Bool {
+        guard let web = URL(string: "https://example.com") else { return false }
+        return NSWorkspace.shared.urlsForApplications(toOpen: web).contains { Bundle(url: $0)?.bundleIdentifier == bundleID }
     }
 
     /// Every call app and the processes their calls use.
@@ -66,13 +78,13 @@ struct CallApp: Sendable, Hashable {
         CallApp(
             name: "Zoom", bundleID: "us.zoom.xos",
             muteLabels: ["mute audio"], unmuteLabels: ["unmute audio"],
-            roles: [kAXMenuItemRole], inMenuBar: true),
+            roles: [kAXMenuItemRole], surface: .menuBar),
         // Video menu: "Mute" gets a checkmark when muted. The call's audio
         // runs in a system daemon, which keeps the mic while muted.
         CallApp(
             name: "FaceTime", bundleID: "com.apple.FaceTime", micProcess: "com.apple.avconferenced",
             muteLabels: ["mute"], unmuteLabels: [],
-            roles: [kAXMenuItemRole], inMenuBar: true),
+            roles: [kAXMenuItemRole], surface: .menuBar),
     ]
 }
 
@@ -109,8 +121,15 @@ enum CallMuter {
         AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
     }
 
-    static func mute(_ app: CallApp) -> Outcome { set(app, muted: true) }
-    static func unmute(_ app: CallApp) -> Outcome { set(app, muted: false) }
+    /// Mute or unmute each app, all at once: each waits only on its own app.
+    static func set(_ apps: [CallApp], muted: Bool) -> [(app: CallApp, outcome: Outcome)] {
+        let outcomes = OSAllocatedUnfairLock(initialState: [Outcome](repeating: .notInCall, count: apps.count))
+        DispatchQueue.concurrentPerform(iterations: apps.count) { i in
+            let outcome = set(apps[i], muted: muted)
+            outcomes.withLock { $0[i] = outcome }
+        }
+        return zip(apps, outcomes.withLock { $0 }).map { (app: $0, outcome: $1) }
+    }
 
     /// Our last press per app, until the app shows it. A press acts at once,
     /// but an Electron app in the background can hold its accessibility
@@ -128,37 +147,37 @@ enum CallMuter {
     private static func set(_ app: CallApp, muted target: Bool) -> Outcome {
         guard let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).first
         else { return .notInCall }
-        let capturing = AudioController.isCapturingInput(app.micBundleID)
+        let capturing = CaptureWatcher.isCapturing(app.micBundleID)
         // Only touch apps that are capturing: Discord's mic toggle exists (and
         // plays a sound) even outside a call.
         if target, !capturing { return .notInCall }
         let action = target ? "mute" : "unmute"
+        let pid = running.processIdentifier
+        let ax = axApp(pid)
 
-        let ax = AXUIElementCreateApplication(running.processIdentifier)
-        AXUIElementSetMessagingTimeout(ax, 1)
         // Electron only builds its AX tree on request. Keep it while the app is
         // in a call (see `setTreeEnabled`) or muted by us; otherwise switch it
         // off so the app doesn't pay for it.
-        AXUIElementSetAttributeValue(ax, manualAccessibility, kCFBooleanTrue)
-        if app.isWeb { prepareWebTree(app, ax, pid: running.processIdentifier) }
+        let electron = app.surface == .window
+        if electron { setFlag(ax, manualAccessibility, true) }
         var keepTree = false
         defer {
-            if !keepTree, !AudioController.isCapturingInput(app.micBundleID) {
-                AXUIElementSetAttributeValue(ax, manualAccessibility, kCFBooleanFalse)
+            if electron, !keepTree, !CaptureWatcher.isCapturing(app.micBundleID) {
+                setFlag(ax, manualAccessibility, false)
             }
         }
 
         let expected = pending.withLock { $0[app.bundleID]?.muted }
-        guard let current = poll(app, ax, timeout: 4, assume: expected) else {
+        guard let current = poll(app, ax, pid: pid, assume: expected) else {
             log.notice("\(app.logName, privacy: .public) \(action, privacy: .public): toggle not found (active \(running.isActive))")
             // A browser on the mic may not be in a call at all.
-            if app.isWeb, target { return .notFound }
+            if app.surface == .webPage, target { return .notFound }
             // Still capturing means still in the call: say so rather than skip.
             return target || capturing ? .failed : .notInCall
         }
         if current.muted == target { return target ? .alreadyMuted : .alreadyLive }
 
-        let focus = app.inMenuBar ? nil : Focus(of: ax)
+        let focus = app.surface == .menuBar ? nil : Focus(of: ax)
         let pressed = AXUIElementPerformAction(current.element, kAXPressAction as CFString)
         focus?.restore()
         log.notice("\(app.logName, privacy: .public) \(action, privacy: .public): press \(pressed.rawValue) (active \(running.isActive), assumed \(expected != nil))")
@@ -166,7 +185,6 @@ enum CallMuter {
 
         let press = presses.withLock { $0 += 1; return $0 }
         pending.withLock { $0[app.bundleID] = (target, press) }
-        let pid = running.processIdentifier
         watchQueue.async { watch(app, pid: pid, muted: target, press: press) }
         keepTree = target
         return target ? .muted : .unmuted
@@ -177,13 +195,12 @@ enum CallMuter {
     /// at once), then a slow one while the app sits in the background, reading
     /// just the toggle and only re-searching if it's replaced.
     private static func watch(_ app: CallApp, pid: pid_t, muted target: Bool, press: Int) {
-        let ax = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(ax, 1)
+        let ax = axApp(pid)
         let start = Date()
         var toggle: AXUIElement?
         var checks = 0
         while pending.withLock({ $0[app.bundleID]?.press == press }) {
-            guard AudioController.isCapturingInput(app.micBundleID) else { forget(app); return }
+            guard CaptureWatcher.isCapturing(app.micBundleID) else { forget(app); return }
             checks += 1
             if toggle == nil || checks % 10 == 0 { toggle = findToggle(app, in: ax)?.element }
             if let element = toggle {
@@ -214,9 +231,8 @@ enum CallMuter {
         let selection: AnyObject
 
         init?(of ax: AXUIElement) {
-            guard let focused = attribute(ax, kAXFocusedUIElementAttribute),
-                  CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
-            element = focused as! AXUIElement
+            guard let focused = CallMuter.element(ax, kAXFocusedUIElementAttribute) else { return nil }
+            element = focused
             guard let selection = attribute(element, kAXSelectedTextRangeAttribute) else { return nil }
             self.selection = selection
         }
@@ -231,11 +247,8 @@ enum CallMuter {
     /// takes ~2s before its toggle states read, which would delay solo's mute —
     /// so the tree is kept warm while the app is in a call.
     static func setTreeEnabled(_ enabled: Bool, for app: CallApp) {
-        guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID)
-            .first?.processIdentifier else { return }
-        let ax = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(ax, 1)
-        AXUIElementSetAttributeValue(ax, manualAccessibility, enabled ? kCFBooleanTrue : kCFBooleanFalse)
+        guard app.surface == .window, let pid = pid(of: app) else { return }
+        setFlag(axApp(pid), manualAccessibility, enabled)
     }
 
     private static var manualAccessibility: CFString { "AXManualAccessibility" as CFString }
@@ -253,62 +266,55 @@ enum CallMuter {
     /// the way a screen reader does, takes ~2s to build. Off again once the
     /// mic is released.
     static func setWebTreeEnabled(_ enabled: Bool, for app: CallApp) {
-        guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID)
-            .first?.processIdentifier else { return }
-        let ax = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(ax, 1)
+        guard let pid = pid(of: app) else { return }
+        let ax = axApp(pid)
         guard enabled else {
-            if enhanced.withLock({ $0.remove(pid) }) != nil {
-                AXUIElementSetAttributeValue(ax, enhancedUserInterface, kCFBooleanFalse)
-            }
+            if enhanced.withLock({ $0.remove(pid) }) != nil { setFlag(ax, enhancedUserInterface, false) }
             return
         }
         // The page may still be loading.
         let start = Date()
         while Date().timeIntervalSince(start) < 3 {
-            if findToggle(app, in: ax) != nil {
-                prepareWebTree(app, ax, pid: pid)
+            if let found = findToggle(app, in: ax) {
+                if !found.pressable { buildFullTree(app, ax, pid: pid) }
                 return
             }
             Thread.sleep(forTimeInterval: 0.3)
         }
     }
 
-    /// Switch on the full tree if the toggle is there but can't be pressed.
-    private static func prepareWebTree(_ app: CallApp, _ ax: AXUIElement, pid: pid_t) {
-        guard let found = findToggle(app, in: ax), !found.pressable,
-              // Already on: a screen reader's, so it's left to it.
-              attribute(ax, enhancedUserInterface as String) as? Bool != true else { return }
+    /// Switch on a browser's full tree, for a toggle it shows but can't press.
+    private static func buildFullTree(_ app: CallApp, _ ax: AXUIElement, pid: pid_t) {
+        // Already on: a screen reader's, so it's left to it.
+        guard bool(ax, enhancedUserInterface as String) != true else { return }
         log.notice("\(app.logName, privacy: .public): building full tree")
-        AXUIElementSetAttributeValue(ax, enhancedUserInterface, kCFBooleanTrue)
+        setFlag(ax, enhancedUserInterface, true)
         enhanced.withLock { _ = $0.insert(pid) }
     }
 
     /// Quitting: switch off every full tree Vaux switched on.
     static func releaseWebTrees() {
         for pid in enhanced.withLock({ all in defer { all = [] }; return all }) {
-            let ax = AXUIElementCreateApplication(pid)
-            AXUIElementSetMessagingTimeout(ax, 0.5)
-            AXUIElementSetAttributeValue(ax, enhancedUserInterface, kCFBooleanFalse)
+            setFlag(axApp(pid, timeout: 0.5), enhancedUserInterface, false)
         }
     }
 
-    /// Re-searches until the toggle has a readable state (matching `want`, if
-    /// given). A fresh search each time because the web view may replace the
+    /// Re-searches until the toggle can be pressed and has a readable state.
+    /// A fresh search each time because the web view may replace the
     /// button's node when it flips. The tree builds within a fraction of a
     /// second of enabling, but a switch's AXValue reads "" for ~2s after that.
     /// With `assume`, the state is known already: just find the toggle.
-    private static func poll(
-        _ app: CallApp, _ ax: AXUIElement, timeout: TimeInterval, want: Bool? = nil, assume: Bool? = nil
-    ) -> (element: AXUIElement, muted: Bool)? {
+    private static func poll(_ app: CallApp, _ ax: AXUIElement, pid: pid_t, assume: Bool?) -> (element: AXUIElement, muted: Bool)? {
         let start = Date()
         while true {
             let found = findToggle(app, in: ax)
-            if let found, found.pressable, let muted = assume ?? found.muted, want == nil || muted == want {
+            if let found, found.pressable, let muted = assume ?? found.muted {
                 return (found.element, muted)
             }
+            // A browser not ready yet (the call started before Vaux did).
+            if let found, !found.pressable, app.surface == .webPage { buildFullTree(app, ax, pid: pid) }
             let elapsed = Date().timeIntervalSince(start)
-            if (found == nil && elapsed > 1) || elapsed > timeout { return nil }
+            if (found == nil && elapsed > 1) || elapsed > 4 { return nil }
             Thread.sleep(forTimeInterval: 0.15)
         }
     }
@@ -330,9 +336,8 @@ enum CallMuter {
             }
             return nil
         }
-        if app.inMenuBar {
-            guard let bar = attribute(ax, kAXMenuBarAttribute), CFGetTypeID(bar) == AXUIElementGetTypeID() else { return nil }
-            return walk(bar as! AXUIElement, depth: 0)
+        if app.surface == .menuBar {
+            return element(ax, kAXMenuBarAttribute).flatMap { walk($0, depth: 0) }
         }
         for window in children(ax, attribute: kAXWindowsAttribute) {
             if let hit = walk(window, depth: 0) { return hit }
@@ -365,6 +370,29 @@ enum CallMuter {
 
     // MARK: AX helpers
 
+    private static func pid(of app: CallApp) -> pid_t? {
+        NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).first?.processIdentifier
+    }
+
+    private static func axApp(_ pid: pid_t, timeout: Float = 1) -> AXUIElement {
+        let ax = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(ax, timeout)
+        return ax
+    }
+
+    private static func setFlag(_ element: AXUIElement, _ name: CFString, _ on: Bool) {
+        AXUIElementSetAttributeValue(element, name, on ? kCFBooleanTrue : kCFBooleanFalse)
+    }
+
+    private static func element(_ element: AXUIElement, _ name: String) -> AXUIElement? {
+        guard let value = attribute(element, name), CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return (value as! AXUIElement)
+    }
+
+    private static func bool(_ element: AXUIElement, _ name: String) -> Bool? {
+        attribute(element, name) as? Bool
+    }
+
     private static func canPress(_ element: AXUIElement) -> Bool {
         var actions: CFArray?
         AXUIElementCopyActionNames(element, &actions)
@@ -372,7 +400,7 @@ enum CallMuter {
     }
 
     private static func isFrontmost(_ ax: AXUIElement) -> Bool {
-        attribute(ax, kAXFrontmostAttribute) as? Bool ?? false
+        bool(ax, kAXFrontmostAttribute) ?? false
     }
 
     private static func attribute(_ element: AXUIElement, _ name: String) -> AnyObject? {

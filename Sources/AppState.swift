@@ -59,49 +59,48 @@ final class AppState {
             onKey: { [weak self] in self?.toggleSolo(byKey: true) },
             onEscape: { [weak self] in self?.escapePressed() }
         )
-        callWatcher.bundleIDs = Set(CallApp.all.map(\.micBundleID))
-        callWatcher.start { [weak self] id, inCall in
-            guard let app = CallApp.all.first(where: { $0.micBundleID == id }) else { return }
-            self?.callStateChanged(app, inCall: inCall)
-        }
-        webWatcher.watchesAll = true
-        webWatcher.start { [weak self] id, capturing in
-            self?.otherAppChanged(id, capturing: capturing)
-        }
-        followWatcher.bundleIDs = Self.followApp
-        followWatcher.start { [weak self] id, capturing in
-            Self.log.notice("follow: \(id, privacy: .public) \(capturing ? "listening" : "stopped", privacy: .public)")
-            self?.followAppChanged(capturing: capturing)
+        lastFollowApp = Self.followApp
+        lastEnforcePreferred = enforcePreferred
+        micWatcher.start { [weak self] user, capturing in
+            self?.micUseChanged(user, capturing: capturing)
         }
         NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.followWatcher.bundleIDs = Self.followApp }
+            MainActor.assumeIsolated { self?.settingsChanged() }
         }
         startDefaultDeviceListener()
         lastInputUIDs = Set(AudioController.inputDevices().map(\.uid))
         startDeviceListListener()
-        NotificationCenter.default.addObserver(
-            forName: .enforcePreferredInput, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.applyPreferredInput() }
-        }
         refreshDevice()
+    }
+
+    @ObservationIgnored private var lastFollowApp: String?
+    @ObservationIgnored private var lastEnforcePreferred = false
+
+    private func settingsChanged() {
+        // Auto switch turned on: switch now, not at the next plug-in.
+        if enforcePreferred != lastEnforcePreferred {
+            lastEnforcePreferred = enforcePreferred
+            if enforcePreferred { applyPreferredInput() }
+        }
+        // A new app to follow: the old one's solo ends; the new one's starts
+        // if it's listening already.
+        if Self.followApp != lastFollowApp {
+            let was = lastFollowApp.map(CaptureWatcher.isCapturing) ?? false
+            lastFollowApp = Self.followApp
+            let now = Self.followApp.map(CaptureWatcher.isCapturing) ?? false
+            if was || now { followAppChanged(capturing: now) }
+        }
     }
 
     /// Switch the system default input to the highest-priority connected device
     /// in the preferred order. No-op if none are present or it's already current.
     func applyPreferredInput() {
-        let present = AudioController.inputDevices()
-        let current = AudioController.defaultInputDevice()
-        for entry in PreferredInput.order where !entry.uid.isEmpty {
-            guard let match = present.first(where: { $0.uid == entry.uid }) else { continue }
-            if match.id != current {
-                AudioController.setDefaultInputDevice(match.id)
-                // The default-input listener will enforce mute intent onto it.
-            }
-            return
-        }
+        guard let match = PreferredInput.preferred(among: AudioController.inputDevices(), uid: \.uid),
+              match.id != AudioController.defaultInputDevice() else { return }
+        // The default-input listener will enforce mute intent onto it.
+        AudioController.setDefaultInputDevice(match.id)
     }
 
     // MARK: Actions
@@ -151,12 +150,9 @@ final class AppState {
     /// Quitting: once the transition in flight lands, end solo and call this.
     @ObservationIgnored private var quitWhenSettled: (@MainActor @Sendable () -> Void)?
     @ObservationIgnored private var keyMonitor: SoloKeyMonitor?
-    @ObservationIgnored private let callWatcher = CaptureWatcher()
-    /// Every app on the mic, for calls in web pages (any browser).
-    @ObservationIgnored private let webWatcher = CaptureWatcher()
-    /// Watches the app solo follows (e.g. a dictation app): solo turns on
-    /// while it's listening.
-    @ObservationIgnored private let followWatcher = CaptureWatcher()
+    /// Who's on the mic: calls joining and leaving, the app solo follows
+    /// (e.g. a dictation app) listening, browsers maybe in a web call.
+    @ObservationIgnored private let micWatcher = CaptureWatcher()
     /// Solo was turned on by the followed app, so it ends when that stops.
     @ObservationIgnored private var soloStartedByFollow = false
     /// Solo was turned on by a key shared with dictation, so Escape, which
@@ -166,13 +162,13 @@ final class AppState {
     @ObservationIgnored private var pendingFollow: Bool?
     @ObservationIgnored private let mediaPauser = MediaPauser()
 
-    private static var followApp: Set<String> {
+    private static var followApp: String? {
         let id = UserDefaults.standard.string(forKey: AppStorageKey.soloFollowApp) ?? ""
-        return id.isEmpty ? [] : [id]
+        return id.isEmpty ? nil : id
     }
 
     private var pauseMedia: Bool {
-        UserDefaults.standard.object(forKey: AppStorageKey.soloPauseMedia) as? Bool ?? true
+        UserDefaults.standard.object(forKey: AppStorageKey.soloPauseMedia) as? Bool ?? AppStorageKey.soloPauseMediaDefault
     }
 
     private struct SoloSnapshot {
@@ -256,18 +252,26 @@ final class AppState {
         CallMuter.queue.async { CallMuter.setTreeEnabled(inCall, for: app) }
     }
 
-    /// Apps solo knows already (or is): not checked for web calls.
+    /// Apps solo knows already (or is): never warned about or searched for
+    /// web calls.
     private static var knownApps: Set<String> {
-        CallApp.bundleIDs.union(followApp).union([Bundle.main.bundleIdentifier ?? ""])
+        CallApp.bundleIDs.union([followApp, Bundle.main.bundleIdentifier].compactMap { $0 })
     }
 
-    /// An app solo doesn't know started or stopped using the mic: a browser
-    /// joining a web call, maybe. Get its tree ready, or let it go.
-    private func otherAppChanged(_ id: String, capturing: Bool) {
-        guard CallMuter.isTrusted, !Self.knownApps.contains(where: { AudioController.bundle(id, belongsTo: $0) }) else { return }
-        let app = CallApp.meet(in: id)
-        if !capturing { CallMuter.queue.async { CallMuter.forget(app) } }
-        CallMuter.webQueue.async { CallMuter.setWebTreeEnabled(capturing, for: app) }
+    /// An app started or stopped using the mic.
+    private func micUseChanged(_ user: MicUser, capturing: Bool) {
+        let id = user.bundleID
+        if let app = CallApp.all.first(where: { AudioController.bundle(id, belongsTo: $0.micBundleID) }) {
+            callStateChanged(app, inCall: capturing)
+        } else if let follow = Self.followApp, AudioController.bundle(id, belongsTo: follow) {
+            Self.log.notice("follow: \(id, privacy: .public) \(capturing ? "listening" : "stopped", privacy: .public)")
+            followAppChanged(capturing: capturing)
+        } else if !AudioController.bundle(id, belongsToAnyOf: Self.knownApps), CallApp.isBrowser(id), CallMuter.isTrusted {
+            // A browser, maybe joining a web call: get its tree ready, or let it go.
+            let app = CallApp.meet(in: id)
+            if !capturing { CallMuter.queue.async { CallMuter.forget(app) } }
+            CallMuter.webQueue.async { CallMuter.setWebTreeEnabled(capturing, for: app) }
+        }
     }
 
     private func startSolo() {
@@ -281,37 +285,34 @@ final class AppState {
         soloBusy = true
         soloProblems = []
         notify()
-        // Other apps on the mic: browsers in a web call, or apps solo can't
-        // mute. Read now, before a dictation app sharing the trigger starts
-        // listening too.
-        let others = AudioController.appsCapturingInput(ignoring: Self.knownApps)
-        let targets = CallApp.all + others.map { CallApp.meet(in: $0.bundleID) }
+        // Other apps on the mic: browsers maybe in a web call, or apps solo
+        // can't mute. Read now, before a dictation app sharing the trigger
+        // starts listening too.
+        let others = CaptureWatcher.current.filter { !AudioController.bundle($0.bundleID, belongsToAnyOf: Self.knownApps) }
+        let browsers = others.filter { CallApp.isBrowser($0.bundleID) }
+        let targets = CallApp.all + browsers.map { CallApp.meet(in: $0.bundleID) }
         CallMuter.queue.async { [weak self] in
-            let outcomes = targets.map { (app: $0, outcome: CallMuter.mute($0)) }
+            let outcomes = CallMuter.set(targets, muted: true)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.finishStartingSolo(outcomes, others: others) }
             }
         }
     }
 
-    /// `others`: apps on the mic solo doesn't know, by name. Those with no
-    /// call found still hear you.
-    private func finishStartingSolo(
-        _ outcomes: [(app: CallApp, outcome: CallMuter.Outcome)], others: [(bundleID: String, name: String)]
-    ) {
+    /// `others`: apps on the mic solo doesn't know. Those with no call found
+    /// still hear you.
+    private func finishStartingSolo(_ outcomes: [(app: CallApp, outcome: CallMuter.Outcome)], others: [MicUser]) {
         let mutedApps = outcomes.filter { $0.outcome == .muted }.map(\.app)
         let failures = outcomes.filter { $0.outcome == .failed }.map { "Couldn't mute \($0.app.name)" }
-        let unmutable = outcomes.filter { $0.outcome == .notFound }.compactMap { outcome in
-            others.first { $0.bundleID == outcome.app.bundleID }?.name
-        }
+        let handled = Set(outcomes.filter { $0.outcome != .notFound }.map(\.app.bundleID))
+        let unmutable = others.filter { !handled.contains($0.bundleID) }.map(\.name)
 
         // The mic is muted and a call couldn't be confirmed muted: don't open
         // the mic to it. Put back what we did mute and stay out of solo.
         if muted, !failures.isEmpty {
             soloProblems = failures + ["Solo not started — mic stays muted"]
-            pendingSoloToggle = false
             CallMuter.queue.async { [weak self] in
-                for app in mutedApps { _ = CallMuter.unmute(app) }
+                _ = CallMuter.set(mutedApps, muted: false)
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
                         self?.pendingSoloToggle = false
@@ -330,7 +331,7 @@ final class AppState {
         // as it stops listening, so a solo the Dictation key started leaves it be.
         let dictationKey = soloStartedByKey && SoloKeyMonitor.Key.current == .dictation
         if pauseMedia, !dictationKey {
-            mediaPauser.pause(ignoring: CallApp.bundleIDs.union(Self.followApp))
+            mediaPauser.pause(ignoring: Self.knownApps)
         } else {
             mediaPauser.hold()
         }
@@ -369,8 +370,8 @@ final class AppState {
         if snapshot.wasMuted { setMuted(true) }
         let apps = snapshot.mutedApps
         CallMuter.queue.async { [weak self] in
-            let failures = apps.filter { CallMuter.unmute($0) == .failed }
-                .map { "Couldn't unmute \($0.name) — unmute it there" }
+            let failures = CallMuter.set(apps, muted: false).filter { $0.outcome == .failed }
+                .map { "Couldn't unmute \($0.app.name) — unmute it there" }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let self {

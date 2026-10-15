@@ -72,9 +72,6 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Auto switch", isOn: $autoSwitch)
-                    .onChange(of: autoSwitch) { _, on in
-                        if on { NotificationCenter.default.post(name: .enforcePreferredInput, object: nil) }
-                    }
                 if autoSwitch {
                     if priority.entries.isEmpty {
                         Text("No input devices seen yet.")
@@ -217,9 +214,9 @@ private struct FollowChoice: Identifiable {
     let icon: NSImage
 
     static func all(including chosen: String) -> [FollowChoice] {
-        let excluded = CallApp.all.map(\.bundleID) + [Bundle.main.bundleIdentifier ?? ""]
+        let excluded = CallApp.bundleIDs.union([Bundle.main.bundleIdentifier ?? ""])
         var choices = AudioController.audioClientBundleIDs()
-            .filter { id in !excluded.contains { AudioController.bundle(id, belongsTo: $0) } }
+            .filter { !AudioController.bundle($0, belongsToAnyOf: excluded) }
             .compactMap { id -> FollowChoice? in
                 guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first,
                       app.activationPolicy != .prohibited,

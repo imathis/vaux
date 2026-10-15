@@ -120,9 +120,6 @@ struct MenuContentView: View {
                 .toggleStyle(.switch)
                 .controlSize(.mini)
                 .labelsHidden()
-                .onChange(of: autoSwitch) { _, on in
-                    if on { NotificationCenter.default.post(name: .enforcePreferredInput, object: nil) }
-                }
         }
         .padding(.horizontal, contentInset)
         .frame(height: 26)

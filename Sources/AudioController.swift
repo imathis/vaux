@@ -11,60 +11,82 @@ import CoreAudio
 enum AudioController {
     static let system = AudioObjectID(kAudioObjectSystemObject)
 
+    // MARK: Property access
+
+    private static func address(
+        _ selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal,
+        element: AudioObjectPropertyElement = kAudioObjectPropertyElementMain
+    ) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: element)
+    }
+
+    private static func has(_ id: AudioObjectID, _ address: AudioObjectPropertyAddress) -> Bool {
+        var address = address
+        return AudioObjectHasProperty(id, &address)
+    }
+
+    /// A fixed-size value (number, ID, flag).
+    private static func read<T>(_ id: AudioObjectID, _ address: AudioObjectPropertyAddress, as initial: T) -> T? {
+        var address = address
+        var value = initial
+        var size = UInt32(MemoryLayout<T>.size)
+        return AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr ? value : nil
+    }
+
+    @discardableResult
+    private static func write<T>(_ id: AudioObjectID, _ address: AudioObjectPropertyAddress, _ value: T) -> Bool {
+        var address = address
+        var value = value
+        return AudioObjectSetPropertyData(id, &address, 0, nil, UInt32(MemoryLayout<T>.size), &value) == noErr
+    }
+
+    private static func readString(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector) -> String? {
+        var address = address(selector)
+        var value: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr else { return nil }
+        return value?.takeRetainedValue() as String?
+    }
+
+    private static func readIDs(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector) -> [AudioObjectID] {
+        var address = address(selector)
+        var size = UInt32(0)
+        guard AudioObjectGetPropertyDataSize(id, &address, 0, nil, &size) == noErr else { return [] }
+        var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard !ids.isEmpty, AudioObjectGetPropertyData(id, &address, 0, nil, &size, &ids) == noErr else { return [] }
+        return ids
+    }
+
+    private static func device(_ selector: AudioObjectPropertySelector) -> AudioDeviceID? {
+        read(system, address(selector), as: AudioDeviceID(0)).flatMap { $0 == 0 ? nil : $0 }
+    }
+
     // MARK: Default input device
 
     static func defaultInputDevice() -> AudioDeviceID? {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultInputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var id = AudioDeviceID(0)
-        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        let err = AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &id)
-        return (err == noErr && id != 0) ? id : nil
+        device(kAudioHardwarePropertyDefaultInputDevice)
     }
 
     static func deviceName(_ id: AudioDeviceID) -> String {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioObjectPropertyName,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var name: Unmanaged<CFString>?
-        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        let err = AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &name)
-        guard err == noErr, let cf = name?.takeRetainedValue() else { return "Unknown input" }
-        return cf as String
+        readString(id, kAudioObjectPropertyName) ?? "Unknown input"
     }
 
     // MARK: Mute
 
-    private static func muteAddress() -> AudioObjectPropertyAddress {
-        AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyMute,
-            mScope: kAudioObjectPropertyScopeInput,
-            mElement: kAudioObjectPropertyElementMain)
-    }
+    private static let muteAddress = address(kAudioDevicePropertyMute, scope: kAudioObjectPropertyScopeInput)
 
     static func supportsMute(_ id: AudioDeviceID) -> Bool {
-        var a = muteAddress()
-        return AudioObjectHasProperty(id, &a)
+        has(id, muteAddress)
     }
 
     static func isMuted(_ id: AudioDeviceID) -> Bool {
-        var a = muteAddress()
-        var v = UInt32(0)
-        var size = UInt32(MemoryLayout<UInt32>.size)
-        let err = AudioObjectGetPropertyData(id, &a, 0, nil, &size, &v)
-        return err == noErr && v == 1
+        read(id, muteAddress, as: UInt32(0)) == 1
     }
 
     @discardableResult
     static func setMuted(_ muted: Bool, on id: AudioDeviceID) -> Bool {
-        var a = muteAddress()
-        guard AudioObjectHasProperty(id, &a) else { return false }
-        var v: UInt32 = muted ? 1 : 0
-        let err = AudioObjectSetPropertyData(id, &a, 0, nil, UInt32(MemoryLayout<UInt32>.size), &v)
-        return err == noErr
+        supportsMute(id) && write(id, muteAddress, UInt32(muted ? 1 : 0))
     }
 
     // MARK: Input volume (0.0...1.0)
@@ -75,62 +97,43 @@ enum AudioController {
     // first couple of channels.
 
     private static func volumeAddress(element: UInt32) -> AudioObjectPropertyAddress {
-        AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyVolumeScalar,
-            mScope: kAudioObjectPropertyScopeInput,
-            mElement: element)
+        address(kAudioDevicePropertyVolumeScalar, scope: kAudioObjectPropertyScopeInput, element: element)
     }
 
-    private static let volumeElements: [UInt32] = [kAudioObjectPropertyElementMain, 1, 2]
+    /// The elements that carry the device's input volume.
+    static func volumeElements(on id: AudioDeviceID) -> [UInt32] {
+        [kAudioObjectPropertyElementMain, 1, 2].filter { has(id, volumeAddress(element: $0)) }
+    }
 
     static func volume(on id: AudioDeviceID) -> Float32? {
-        for element in volumeElements {
-            var a = volumeAddress(element: element)
-            guard AudioObjectHasProperty(id, &a) else { continue }
-            var v = Float32(0)
-            var size = UInt32(MemoryLayout<Float32>.size)
-            if AudioObjectGetPropertyData(id, &a, 0, nil, &size, &v) == noErr { return v }
-        }
-        return nil
+        volumeElements(on: id).lazy.compactMap { read(id, volumeAddress(element: $0), as: Float32(0)) }.first
+    }
+
+    /// No mute property: input at ~0 volume counts as muted.
+    static func isSilent(_ id: AudioDeviceID) -> Bool {
+        (volume(on: id) ?? 1) <= 0.0001
     }
 
     @discardableResult
     static func setVolume(_ scalar: Float32, on id: AudioDeviceID) -> Bool {
         let clamped = max(0, min(1, scalar))
         var didSet = false
-        for element in volumeElements {
-            var a = volumeAddress(element: element)
-            guard AudioObjectHasProperty(id, &a) else { continue }
-            var v = clamped
-            if AudioObjectSetPropertyData(id, &a, 0, nil, UInt32(MemoryLayout<Float32>.size), &v) == noErr {
-                didSet = true
-            }
+        for element in volumeElements(on: id) {
+            if write(id, volumeAddress(element: element), clamped) { didSet = true }
             // The Main element alone is enough when it takes the write.
             if element == kAudioObjectPropertyElementMain, didSet { return true }
         }
         return didSet
     }
 
-    /// The elements that carry the device's input volume.
-    static func volumeElements(on id: AudioDeviceID) -> [UInt32] {
-        volumeElements.filter { element in
-            var a = volumeAddress(element: element)
-            return AudioObjectHasProperty(id, &a)
-        }
-    }
-
     /// Whether the device exposes a *settable* input volume control. Many USB
     /// mics and Bluetooth headsets manage their own gain and report false here.
     static func canSetInputVolume(_ id: AudioDeviceID) -> Bool {
-        for element in volumeElements {
+        volumeElements(on: id).contains { element in
             var a = volumeAddress(element: element)
-            guard AudioObjectHasProperty(id, &a) else { continue }
             var settable: DarwinBoolean = false
-            if AudioObjectIsPropertySettable(id, &a, &settable) == noErr, settable.boolValue {
-                return true
-            }
+            return AudioObjectIsPropertySettable(id, &a, &settable) == noErr && settable.boolValue
         }
-        return false
     }
 
     // MARK: Output volume (solo-mode ducking)
@@ -139,71 +142,54 @@ enum AudioController {
     // works on devices that only expose per-channel volume (e.g. AirPods).
 
     static func defaultOutputDevice() -> AudioDeviceID? {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var id = AudioDeviceID(0)
-        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        let err = AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &id)
-        return (err == noErr && id != 0) ? id : nil
+        device(kAudioHardwarePropertyDefaultOutputDevice)
     }
 
-    private static func outputVolumeAddress() -> AudioObjectPropertyAddress {
-        AudioObjectPropertyAddress(
-            mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
-            mScope: kAudioObjectPropertyScopeOutput,
-            mElement: kAudioObjectPropertyElementMain)
-    }
+    private static let outputVolumeAddress = address(
+        kAudioHardwareServiceDeviceProperty_VirtualMainVolume, scope: kAudioObjectPropertyScopeOutput)
 
     static func outputVolume(on id: AudioDeviceID) -> Float32? {
-        var a = outputVolumeAddress()
-        var v = Float32(0)
-        var size = UInt32(MemoryLayout<Float32>.size)
-        return AudioObjectGetPropertyData(id, &a, 0, nil, &size, &v) == noErr ? v : nil
+        read(id, outputVolumeAddress, as: Float32(0))
     }
 
     @discardableResult
     static func setOutputVolume(_ scalar: Float32, on id: AudioDeviceID) -> Bool {
-        var a = outputVolumeAddress()
-        var v = max(0, min(1, scalar))
-        return AudioObjectSetPropertyData(id, &a, 0, nil, UInt32(MemoryLayout<Float32>.size), &v) == noErr
+        write(id, outputVolumeAddress, max(0, min(1, scalar)))
     }
 
-    // MARK: Processes using input
+    // MARK: Processes
     //
     // Core Audio process objects (read-only properties): which apps are
-    // running input right now. No stream, no mic permission.
+    // running audio right now. No stream, no mic permission. See
+    // CaptureWatcher for who's on the mic.
 
-    /// True if the app (bundle ID) or a process working for it is running
-    /// input. Helpers count because Electron apps capture in one (Slack's
-    /// audio runs in `com.tinyspeck.slackmacgap.helper`), and Safari's pages
-    /// capture in a shared WebKit process.
-    static func isCapturingInput(_ app: String) -> Bool {
-        processObjects().contains { process in
-            guard isRunningInput(process) else { return false }
-            return bundle(bundleID(ofProcess: process), belongsTo: app) || responsibleBundleID(process) == app
-        }
+    /// Every process the audio server knows about.
+    static func processObjects() -> [AudioObjectID] {
+        readIDs(system, kAudioHardwarePropertyProcessObjectList)
     }
 
-    /// The app a process works for, by bundle ID.
-    static func responsibleBundleID(_ process: AudioObjectID) -> String? {
-        NSRunningApplication(processIdentifier: responsiblePID(pid(ofProcess: process)))?.bundleIdentifier
+    /// Apps the audio server knows (ones that have played or recorded sound
+    /// since launch), by bundle ID — candidates for solo to follow.
+    static func audioClientBundleIDs() -> Set<String> {
+        Set(processObjects().map(bundleID(ofProcess:)).filter { !$0.isEmpty })
     }
 
-    /// Apps using the mic right now, leaving out `apps` (and their helpers).
-    /// A helper or web process counts as the app it works for.
-    static func appsCapturingInput(ignoring apps: Set<String> = []) -> [(bundleID: String, name: String)] {
-        var found: [(bundleID: String, name: String)] = []
-        for process in processObjects() where isRunningInput(process) {
-            let bundle = bundleID(ofProcess: process)
-            let app = NSRunningApplication(processIdentifier: responsiblePID(pid(ofProcess: process)))
-            let id = app?.bundleIdentifier ?? bundle
-            let ignored = [bundle, id].contains { candidate in apps.contains { self.bundle(candidate, belongsTo: $0) } }
-            guard !id.isEmpty, !ignored, !found.contains(where: { $0.bundleID == id }) else { continue }
-            found.append((id, app?.localizedName ?? id))
-        }
-        return found
+    /// Any IO at all. Unlike the input and output flags, this one notifies
+    /// its listeners when it changes.
+    static func isRunning(_ process: AudioObjectID) -> Bool {
+        read(process, address(kAudioProcessPropertyIsRunning), as: UInt32(0)) == 1
+    }
+
+    static func isRunningInput(_ process: AudioObjectID) -> Bool {
+        read(process, address(kAudioProcessPropertyIsRunningInput), as: UInt32(0)) == 1
+    }
+
+    static func pid(ofProcess process: AudioObjectID) -> pid_t {
+        read(process, address(kAudioProcessPropertyPID), as: pid_t(-1)) ?? -1
+    }
+
+    static func bundleID(ofProcess process: AudioObjectID) -> String {
+        readString(process, kAudioProcessPropertyBundleID) ?? ""
     }
 
     private typealias ResponsiblePID = @convention(c) (pid_t) -> pid_t
@@ -227,68 +213,8 @@ enum AudioController {
         bundle == app || bundle.hasPrefix(app + ".")
     }
 
-    /// Apps the audio server knows (ones that have played or recorded sound
-    /// since launch), by bundle ID — candidates for solo to follow.
-    static func audioClientBundleIDs() -> Set<String> {
-        Set(processObjects().map(bundleID(ofProcess:)).filter { !$0.isEmpty })
-    }
-
-    /// Every process the audio server knows about.
-    static func processObjects() -> [AudioObjectID] {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyProcessObjectList,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var size = UInt32(0)
-        guard AudioObjectGetPropertyDataSize(system, &addr, 0, nil, &size) == noErr else { return [] }
-        var processes = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
-        guard !processes.isEmpty,
-              AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &processes) == noErr else { return [] }
-        return processes
-    }
-
-    /// Any IO at all. Unlike the input and output flags, this one notifies
-    /// its listeners when it changes.
-    static func isRunning(_ process: AudioObjectID) -> Bool {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioProcessPropertyIsRunning,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var running = UInt32(0)
-        var size = UInt32(MemoryLayout<UInt32>.size)
-        return AudioObjectGetPropertyData(process, &addr, 0, nil, &size, &running) == noErr && running == 1
-    }
-
-    static func isRunningInput(_ process: AudioObjectID) -> Bool {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioProcessPropertyIsRunningInput,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var running = UInt32(0)
-        var size = UInt32(MemoryLayout<UInt32>.size)
-        return AudioObjectGetPropertyData(process, &addr, 0, nil, &size, &running) == noErr && running == 1
-    }
-
-    static func pid(ofProcess process: AudioObjectID) -> pid_t {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioProcessPropertyPID,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var pid = pid_t(-1)
-        var size = UInt32(MemoryLayout<pid_t>.size)
-        return AudioObjectGetPropertyData(process, &addr, 0, nil, &size, &pid) == noErr ? pid : -1
-    }
-
-    static func bundleID(ofProcess process: AudioObjectID) -> String {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioProcessPropertyBundleID,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var bundle: Unmanaged<CFString>?
-        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        guard AudioObjectGetPropertyData(process, &addr, 0, nil, &size, &bundle) == noErr,
-              let id = bundle?.takeRetainedValue() else { return "" }
-        return id as String
+    static func bundle(_ bundle: String, belongsToAnyOf apps: some Sequence<String>) -> Bool {
+        apps.contains { self.bundle(bundle, belongsTo: $0) }
     }
 
     // MARK: Device enumeration / default-input selection
@@ -299,26 +225,15 @@ enum AudioController {
     /// All devices that expose at least one input channel, in HAL order.
     /// `uid` is the stable identifier (empty string if the device has none).
     static func inputDevices() -> [(id: AudioDeviceID, uid: String, name: String)] {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDevices,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var size = UInt32(0)
-        guard AudioObjectGetPropertyDataSize(system, &addr, 0, nil, &size) == noErr else { return [] }
-        let count = Int(size) / MemoryLayout<AudioDeviceID>.size
-        guard count > 0 else { return [] }
-        var ids = [AudioDeviceID](repeating: 0, count: count)
-        guard AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &ids) == noErr else { return [] }
-        return ids.filter { hasInput($0) }.map { (id: $0, uid: deviceUID($0) ?? "", name: deviceName($0)) }
+        readIDs(system, kAudioHardwarePropertyDevices)
+            .filter { hasInput($0) }
+            .map { (id: $0, uid: deviceUID($0) ?? "", name: deviceName($0)) }
     }
 
     /// True if the device has any input channels. Reads the stream
     /// *configuration* (channel layout) — this does not open a stream.
     static func hasInput(_ id: AudioDeviceID) -> Bool {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyStreamConfiguration,
-            mScope: kAudioObjectPropertyScopeInput,
-            mElement: kAudioObjectPropertyElementMain)
+        var addr = address(kAudioDevicePropertyStreamConfiguration, scope: kAudioObjectPropertyScopeInput)
         var size = UInt32(0)
         guard AudioObjectGetPropertyDataSize(id, &addr, 0, nil, &size) == noErr, size > 0 else { return false }
         let raw = UnsafeMutableRawPointer.allocate(
@@ -332,41 +247,20 @@ enum AudioController {
     /// Stable per-device identifier that survives reconnects (unlike the
     /// ephemeral AudioDeviceID). Used to persist a preferred-input order.
     static func deviceUID(_ id: AudioDeviceID) -> String? {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyDeviceUID,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var uid: Unmanaged<CFString>?
-        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &uid) == noErr,
-              let cf = uid?.takeRetainedValue() else { return nil }
-        return cf as String
+        readString(id, kAudioDevicePropertyDeviceUID)
     }
 
     /// Change the system default input device (the Sound-settings input picker).
     /// A property write on the system object — does not touch output.
     @discardableResult
     static func setDefaultInputDevice(_ id: AudioDeviceID) -> Bool {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultInputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var dev = id
-        return AudioObjectSetPropertyData(
-            system, &addr, 0, nil, UInt32(MemoryLayout<AudioDeviceID>.size), &dev) == noErr
+        write(system, address(kAudioHardwarePropertyDefaultInputDevice), id)
     }
 
     /// Connection transport (built-in, USB, Bluetooth, HDMI, …) used to pick a
     /// device-type icon, like the system Sound menu.
     static func transportType(_ id: AudioDeviceID) -> UInt32 {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyTransportType,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var type: UInt32 = 0
-        var size = UInt32(MemoryLayout<UInt32>.size)
-        AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &type)
-        return type
+        read(id, address(kAudioDevicePropertyTransportType), as: UInt32(0)) ?? 0
     }
 
     /// SF Symbol name for a device, by transport (and name for AirPods models).
@@ -388,35 +282,25 @@ enum AudioController {
     }
 }
 
-/// Registers a HAL property listener and removes it on `invalidate()`/`deinit`.
-/// The handler runs on the supplied queue (main by default).
+/// Registers a HAL property listener on the main queue and removes it when
+/// released.
 final class AudioPropertyListener {
     private let objectID: AudioObjectID
     private var address: AudioObjectPropertyAddress
-    private let queue: DispatchQueue
     private let block: AudioObjectPropertyListenerBlock
-    private var active = false
 
     init?(objectID: AudioObjectID,
           selector: AudioObjectPropertySelector,
           scope: AudioObjectPropertyScope,
           element: AudioObjectPropertyElement = kAudioObjectPropertyElementMain,
-          queue: DispatchQueue = .main,
           handler: @escaping @Sendable () -> Void) {
         self.objectID = objectID
         self.address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: element)
-        self.queue = queue
         self.block = { _, _ in handler() }
-        let err = AudioObjectAddPropertyListenerBlock(objectID, &address, queue, block)
-        guard err == noErr else { return nil }
-        active = true
+        guard AudioObjectAddPropertyListenerBlock(objectID, &address, .main, block) == noErr else { return nil }
     }
 
-    func invalidate() {
-        guard active else { return }
-        AudioObjectRemovePropertyListenerBlock(objectID, &address, queue, block)
-        active = false
+    deinit {
+        AudioObjectRemovePropertyListenerBlock(objectID, &address, .main, block)
     }
-
-    deinit { invalidate() }
 }
