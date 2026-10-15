@@ -1,0 +1,39 @@
+Sources/MenuContentView.swift
+  s_7cfcc273794c17::t_e0e8cfa80c60cf 4,37-40,43-48,231-233,246,249-251,281-282,285-286,288-293
+  s_7cfcc273794c17::t_0c7720fd8128e7 49,72
+  s_7cfcc273794c17::t_8b00a2a0b139b0 177
+Sources/SoloKeyMonitor.swift
+  s_7cfcc273794c17::t_5aad4702b69f26 231-232
+Sources/SettingsView.swift
+  s_7cfcc273794c17::t_8b00a2a0b139b0 171,193
+  s_7cfcc273794c17::t_b6e27ca27daf70 50,62,190
+Sources/InputVolumeView.swift
+  s_7cfcc273794c17::t_b6e27ca27daf70 4-5,18,20,33-35,43,54-58,60,72,84,129-135,141-143
+Sources/StatusIcon.swift
+  s_7cfcc273794c17::t_5aad4702b69f26 40-41
+Sources/AppState.swift
+  s_7cfcc273794c17::t_68028a0a430506 18-19
+  s_7cfcc273794c17::t_d2a2e4179e918d 503,522,529,549,560
+Sources/StatusIconAnimator.swift
+  s_7cfcc273794c17::t_5aad4702b69f26 39-43,46
+Sources/InputPriorityModel.swift
+  s_7cfcc273794c17::t_5aad4702b69f26 41-42
+Sources/MenuPanelController.swift
+  s_7cfcc273794c17::t_0c7720fd8128e7 52,68-69,152-161,171
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "98cd9df42583fd32c7f9188ff33f117a42e06331",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
