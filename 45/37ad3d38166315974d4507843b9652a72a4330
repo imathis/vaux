@@ -1,0 +1,30 @@
+Makefile
+  s_7cfcc273794c17::t_f5b2b5127f24d2 14-15
+Sources/Info.plist
+  s_7cfcc273794c17::t_f5b2b5127f24d2 28-30
+Sources/MenuPanelController.swift
+  s_7cfcc273794c17::t_bdbdf43fb9c4aa 10
+  s_7cfcc273794c17::t_f5b2b5127f24d2 14,23,25,45
+project.yml
+  s_7cfcc273794c17::t_f5b2b5127f24d2 12,14-15
+Sources/AppDelegate.swift
+  s_7cfcc273794c17::t_f5b2b5127f24d2 30-33,83-103
+Sources/MenuContentView.swift
+  s_7cfcc273794c17::t_f5b2b5127f24d2 20,31-32,34,70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4537ad3d38166315974d4507843b9652a72a4330",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
