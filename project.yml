@@ -46,5 +46,5 @@ targets:
         # CODE_SIGN_ENTITLEMENTS: Sources/Vaux.entitlements
         CODE_SIGN_IDENTITY: "Apple Development"
         ENABLE_HARDENED_RUNTIME: YES
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: Vaux
         COMBINE_HIDPI_IMAGES: YES
