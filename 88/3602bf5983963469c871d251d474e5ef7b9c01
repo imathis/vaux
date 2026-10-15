@@ -1,0 +1,33 @@
+Sources/SoloShortcutRecorder.swift
+  s_7cfcc273794c17::t_3dcbc04422c250 72-76
+  s_7cfcc273794c17::t_cf27f50679f49c 77
+README.md
+  s_7cfcc273794c17::t_d6e04f19f928e6 52-55,74
+Sources/AppState.swift
+  s_7cfcc273794c17::t_e9784d31f71ceb 319-321
+Sources/SettingsView.swift
+  s_7cfcc273794c17::t_e9784d31f71ceb 8,10-11,36-55,57,61-67,69,73-74,77-93,95-97,101,119-130
+  s_7cfcc273794c17::t_ecdff8bcd41278 183
+  s_7cfcc273794c17::t_58705d5397865b 131
+Sources/MenuContentView.swift
+  s_7cfcc273794c17::t_d6e04f19f928e6 26,50,104,109-123
+  s_7cfcc273794c17::t_34e0a3eae344a8 124-125
+Sources/AppStorageKey.swift
+  s_7cfcc273794c17::t_e9784d31f71ceb 14-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "883602bf5983963469c871d251d474e5ef7b9c01",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
