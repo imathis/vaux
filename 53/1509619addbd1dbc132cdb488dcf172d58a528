@@ -1,0 +1,29 @@
+Sources/AudioController.swift
+  s_7cfcc273794c17::t_d69b12f9e28cc6 30,38
+Makefile
+  s_7cfcc273794c17::t_7af770b7b32322 13-21,23-26,30,44-62,64
+  s_7cfcc273794c17::t_b415326351ddd1 22,27-28
+  s_7cfcc273794c17::t_5f46eb2d77c032 29
+.gitignore
+  s_7cfcc273794c17::t_7af770b7b32322 7
+project.yml
+  s_7cfcc273794c17::t_7af770b7b32322 12-14
+README.md
+  s_7cfcc273794c17::t_a97ae8e615222c 30,138-148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "531509619addbd1dbc132cdb488dcf172d58a528",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
