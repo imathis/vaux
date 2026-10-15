@@ -14,6 +14,9 @@ struct CallApp: Sendable, Hashable {
     /// Roles the toggle can have. Narrower is safer: a plain "Mute" button
     /// could be a video's.
     var roles: Set<String> = [kAXButtonRole, kAXCheckBoxRole]
+    /// The toggle is a menu item. Menus are there whatever the call window
+    /// is doing (toolbar hidden, minimized), so they're preferred.
+    var inMenuBar = false
 
     static let all: [CallApp] = [
         CallApp(
@@ -24,6 +27,11 @@ struct CallApp: Sendable, Hashable {
         CallApp(
             name: "Discord", bundleID: "com.hnc.Discord",
             muteLabels: ["mute"], unmuteLabels: ["unmute"], roles: [kAXCheckBoxRole]),
+        // Meeting menu. Its title follows a press about a second later.
+        CallApp(
+            name: "Zoom", bundleID: "us.zoom.xos",
+            muteLabels: ["mute audio"], unmuteLabels: ["unmute audio"],
+            roles: [kAXMenuItemRole], inMenuBar: true),
     ]
 }
 
@@ -104,7 +112,7 @@ enum CallMuter {
         }
         if current.muted == target { return target ? .alreadyMuted : .alreadyLive }
 
-        let focus = Focus(of: ax)
+        let focus = app.inMenuBar ? nil : Focus(of: ax)
         let pressed = AXUIElementPerformAction(current.element, kAXPressAction as CFString)
         focus?.restore()
         log.notice("\(app.name, privacy: .public) \(action, privacy: .public): press \(pressed.rawValue) (active \(running.isActive), assumed \(expected != nil))")
@@ -206,7 +214,7 @@ enum CallMuter {
         }
     }
 
-    /// First button/checkbox carrying one of the app's mic-toggle labels, with
+    /// First control carrying one of the app's mic-toggle labels, with
     /// its state if readable yet.
     private static func findToggle(_ app: CallApp, in ax: AXUIElement) -> (element: AXUIElement, muted: Bool?)? {
         var visited = 0
@@ -221,6 +229,10 @@ enum CallMuter {
                 if let hit = walk(child, depth: depth + 1) { return hit }
             }
             return nil
+        }
+        if app.inMenuBar {
+            guard let bar = attribute(ax, kAXMenuBarAttribute), CFGetTypeID(bar) == AXUIElementGetTypeID() else { return nil }
+            return walk(bar as! AXUIElement, depth: 0)
         }
         for window in children(ax, attribute: kAXWindowsAttribute) {
             if let hit = walk(window, depth: 0) { return hit }
