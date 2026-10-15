@@ -142,11 +142,7 @@ final class SoloKeyMonitor {
             CGEvent.tapEnable(tap: eventTap, enable: false)
             CFMachPortInvalidate(eventTap)
         }
-        if let relay {
-            // Let go of it on the tap thread, after any callback in progress.
-            CFRunLoopPerformBlock(TapRelay.runLoop, CFRunLoopMode.commonModes.rawValue) { withExtendedLifetime(relay) {} }
-            CFRunLoopWakeUp(TapRelay.runLoop)
-        }
+        if let relay { TapRelay.release(relay) }
         eventTap = nil
         relay = nil
         tapMask = 0
@@ -240,6 +236,13 @@ private final class TapRelay: @unchecked Sendable {
             }
         }
         return Unmanaged.passUnretained(event)
+    }
+
+    /// Let go of a relay on the tap thread, after any callback in progress.
+    /// Not from main-actor code: the block runs on the tap thread.
+    static func release(_ relay: TapRelay) {
+        CFRunLoopPerformBlock(runLoop, CFRunLoopMode.commonModes.rawValue) { withExtendedLifetime(relay) {} }
+        CFRunLoopWakeUp(runLoop)
     }
 
     /// The tap thread's run loop, started on first use. Adding and removing
