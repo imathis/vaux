@@ -1,0 +1,25 @@
+Sources/AudioController.swift
+  s_7cfcc273794c17::t_54da980b205838 202-213
+Sources/AppState.swift
+  s_7cfcc273794c17::t_ad0539426eb167 5,64-67,130
+  s_7cfcc273794c17::t_ac57b5dfd7a5b1 131
+Sources/CaptureWatcher.swift
+  s_7cfcc273794c17::t_54da980b205838 6-12,24,26,49,67-76
+  s_7cfcc273794c17::t_81e7563d342f9d 77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d8413b3f853ece2bafafa49ca9b6fc62a4526ce2",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
