@@ -1,0 +1,61 @@
+Makefile
+  s_7cfcc273794c17::t_3e77f30b82e0d3 1-2
+IconSource/Flatline/bar-1.svg
+  s_7cfcc273794c17::t_3e77f30b82e0d3 2
+IconSource/Flatline/bar-2.svg
+  s_7cfcc273794c17::t_3e77f30b82e0d3 2
+Sources/Info.plist
+  s_7cfcc273794c17::t_3e77f30b82e0d3 8,28
+IconSource/Flatline/bar-3.svg
+  s_7cfcc273794c17::t_3e77f30b82e0d3 2
+Sources/LaunchAtLogin.swift
+  s_7cfcc273794c17::t_3e77f30b82e0d3 16
+IconSource/Flatline/bars.svg
+  s_7cfcc273794c17::t_3e77f30b82e0d3 2
+project.yml
+  s_7cfcc273794c17::t_3e77f30b82e0d3 1,25,37-38,46
+Sources/AppState.swift
+  s_7cfcc273794c17::t_3e77f30b82e0d3 73,206,225,264
+Sources/AppStorageKey.swift
+  s_7cfcc273794c17::t_3e77f30b82e0d3 30
+.gitignore
+  s_7cfcc273794c17::t_3e77f30b82e0d3 2
+IconSource/Flatline/line.svg
+  s_7cfcc273794c17::t_3e77f30b82e0d3 2
+IconSource/Flatline/bar-4.svg
+  s_7cfcc273794c17::t_3e77f30b82e0d3 2
+README.md
+  s_7cfcc273794c17::t_831822d5a4b99a 1,3-7,21,34-50,56-57,62-64,98,110-111,128-129
+Sources/AudioController.swift
+  s_7cfcc273794c17::t_3e77f30b82e0d3 7
+Sources/CallMuter.swift
+  s_7cfcc273794c17::t_3e77f30b82e0d3 5,37-38,67
+Sources/SettingsView.swift
+  s_7cfcc273794c17::t_3e77f30b82e0d3 74
+Sources/MenuContentView.swift
+  s_7cfcc273794c17::t_3e77f30b82e0d3 57,253
+Sources/AppDelegate.swift
+  s_7cfcc273794c17::t_3e77f30b82e0d3 45,77
+Sources/SoloShortcutRecorder.swift
+  s_7cfcc273794c17::t_3e77f30b82e0d3 29
+Sources/ModifierTapMonitor.swift
+  s_7cfcc273794c17::t_3e77f30b82e0d3 62
+IconSource/mic-glyph.svg
+  s_7cfcc273794c17::t_3e77f30b82e0d3 1-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fd3b152e632586afd7c6921d4ada7ddae32f97e0",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
