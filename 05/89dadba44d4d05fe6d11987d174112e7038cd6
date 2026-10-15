@@ -1,0 +1,19 @@
+scripts/update-cask.sh
+  s_7cfcc273794c17::t_1c927d6ea5e7d9 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0589dadba44d4d05fe6d11987d174112e7038cd6",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
