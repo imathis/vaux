@@ -1,0 +1,21 @@
+Sources/CallMuter.swift
+  s_7cfcc273794c17::t_43b5c5c76665f0 217
+  s_7cfcc273794c17::t_53ca9120cd191b 17-19,30-34,115,233-235
+  s_7cfcc273794c17::t_f97d4c1e685252 236
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "80dd9780b2d370d7b3db6b2345a12abc325e804c",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
