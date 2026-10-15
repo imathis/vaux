@@ -20,7 +20,7 @@ cask "vaux" do
   desc "Microphone control for the dictation age"
   homepage "https://github.com/imathis/vaux"
 
-  depends_on macos: ">= :tahoe"
+  depends_on macos: :tahoe
 
   app "Vaux.app"
 
