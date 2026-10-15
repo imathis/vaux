@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let appState = AppState()
     private var statusItem: NSStatusItem?
     private var menuController: MenuPanelController?
+    private var iconAnimator: StatusIconAnimator?
     private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -23,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.target = self
             button.action = #selector(handleClick(_:))
             button.sendAction(on: [.leftMouseUp])
+            iconAnimator = StatusIconAnimator(button: button)
         }
         statusItem = item
         menuController = MenuPanelController(appState: appState) { [weak self] in self?.openSettings() }
@@ -41,7 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Neutral, so the shape carries the state: muted is dots, solo is three
         // bars between two dimmed dots (orange if something couldn't be muted).
         let state: StatusIcon.State = solo ? .solo(problem: !appState.soloProblems.isEmpty) : muted ? .muted : .live
-        button.image = StatusIcon.image(state, description: description)
+        iconAnimator?.show(state, description: description)
         button.toolTip = appState.deviceName.map { "Vaux — Input: \($0)" } ?? "Vaux — no input device"
     }
 

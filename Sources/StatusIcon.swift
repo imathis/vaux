@@ -3,9 +3,10 @@ import AppKit
 /// The menu bar glyph: five voice bars. Muted flattens them all to dots
 /// (silence); solo keeps three bars live between two dimmed dots. All neutral,
 /// following the menu bar: the shape carries the state.
-/// Drawn rather than an SF Symbol so the three states share one shape.
+/// Drawn rather than an SF Symbol so the three states share one shape, and so
+/// StatusIconAnimator can draw the frames in between.
 enum StatusIcon {
-    enum State {
+    enum State: Equatable {
         case live
         case muted
         /// `problem`: something couldn't be muted, so the voice turns orange.
@@ -15,11 +16,33 @@ enum StatusIcon {
         var isTemplate: Bool {
             if case .solo(problem: true) = self { false } else { true }
         }
+
+        /// The bars at rest in this state.
+        var bars: [Bar] {
+            switch self {
+            case .live:
+                liveHeights.map { Bar(height: $0, alpha: 1) }
+            case .muted:
+                Array(repeating: Bar(height: dot, alpha: 1), count: 5)
+            case .solo:
+                [Bar(height: dot, alpha: 0.45), Bar(height: 8, alpha: 1), Bar(height: 16, alpha: 1),
+                 Bar(height: 9.4, alpha: 1), Bar(height: dot, alpha: 0.45)]
+            }
+        }
     }
 
-    static func image(_ state: State, description: String) -> NSImage {
+    /// One bar on the 18pt grid: its height and opacity.
+    struct Bar: Equatable {
+        var height: CGFloat
+        var alpha: CGFloat
+    }
+
+    /// `bars` overrides the state's resting bars, for frames mid-transition.
+    static func image(_ state: State, bars: [Bar]? = nil, description: String) -> NSImage {
+        let bars = bars ?? state.bars
+        let problem = !state.isTemplate
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
-            draw(state)
+            draw(bars, problem: problem)
             return true
         }
         // Template images follow the menu bar like any system icon; a colored
@@ -34,24 +57,21 @@ enum StatusIcon {
     private static let liveHeights: [CGFloat] = [8, 13.9, 10.7, 16, 8.5]
     private static let dot: CGFloat = 2.4
 
-    private static func draw(_ state: State) {
-        switch state {
-        case .live:
-            for (i, height) in liveHeights.enumerated() { bar(i, height: height, color: .black) }
-        case .muted:
-            for i in xs.indices { bar(i, height: dot, color: .black) }
-        case .solo(let problem):
-            let quiet = (problem ? NSColor.labelColor : .black).withAlphaComponent(0.45)
-            bar(0, height: dot, color: quiet)
-            bar(4, height: dot, color: quiet)
-            let voice: NSColor = problem ? .systemOrange : .black
-            bar(1, height: 8, color: voice)
-            bar(2, height: 16, color: voice)
-            bar(3, height: 9.4, color: voice)
+    private static func draw(_ bars: [Bar], problem: Bool) {
+        for (i, bar) in bars.enumerated() {
+            let base: NSColor
+            if problem {
+                base = (1...3).contains(i) ? .systemOrange : .labelColor
+            } else {
+                base = .black
+            }
+            fill(i, height: bar.height, color: base.withAlphaComponent(bar.alpha))
         }
     }
 
-    private static func bar(_ index: Int, height: CGFloat, color: NSColor) {
+    private static func fill(_ index: Int, height: CGFloat, color: NSColor) {
+        // A bounce can overshoot; keep it inside the 18pt image.
+        let height = min(max(height, 0.5), 18)
         color.setFill()
         let rect = NSRect(x: xs[index], y: 9 - height / 2, width: 2, height: height)
         NSBezierPath(roundedRect: rect, xRadius: 1, yRadius: 1).fill()

@@ -115,6 +115,7 @@ Sources/
   main.swift                 # entry point
   AppDelegate.swift          # status item, clicks, Settings window
   StatusIcon.swift           # menu bar glyph: live, muted, solo
+  StatusIconAnimator.swift   # springs the glyph between states
   MenuPanelController.swift  # the custom glass menu panel
   MenuContentView.swift      # menu: volume, inputs, mute, solo, settings
   SettingsView.swift         # Settings
