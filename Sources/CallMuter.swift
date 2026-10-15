@@ -21,10 +21,12 @@ struct CallApp: Sendable, Hashable {
     /// The toggle is a menu item. Menus are there whatever the call window
     /// is doing (toolbar hidden, minimized), so they're preferred.
     var inMenuBar = false
+    /// A call in a web page, in whatever browser `bundleID` names.
+    var isWeb = false
 
     init(name: String, bundleID: String, micProcess: String? = nil,
          muteLabels: Set<String>, unmuteLabels: Set<String>,
-         roles: Set<String> = [kAXButtonRole, kAXCheckBoxRole], inMenuBar: Bool = false) {
+         roles: Set<String> = [kAXButtonRole, kAXCheckBoxRole], inMenuBar: Bool = false, isWeb: Bool = false) {
         self.name = name
         self.bundleID = bundleID
         self.micProcess = micProcess
@@ -32,6 +34,20 @@ struct CallApp: Sendable, Hashable {
         self.unmuteLabels = unmuteLabels
         self.roles = roles
         self.inMenuBar = inMenuBar
+        self.isWeb = isWeb
+    }
+
+    /// For logs: which browser a web call is in.
+    var logName: String { isWeb ? "\(name) (\(bundleID))" : name }
+
+    /// Google Meet in a browser. Any browser: the page and its labels are the
+    /// same in all of them, and both engines (Chromium, WebKit) pass the
+    /// labels through. Meet keeps the mic while muted.
+    static func meet(in browser: String) -> CallApp {
+        CallApp(
+            name: "Google Meet", bundleID: browser,
+            muteLabels: ["turn off microphone"], unmuteLabels: ["turn on microphone"],
+            roles: [kAXButtonRole], isWeb: true)
     }
 
     /// Every call app and the processes their calls use.
@@ -82,6 +98,8 @@ enum CallMuter {
         case unmuted
         /// In a call, but the toggle couldn't be found or didn't respond.
         case failed
+        /// On the mic, but no call was found there: a web page that isn't one.
+        case notFound
     }
 
     static var isTrusted: Bool { AXIsProcessTrusted() }
@@ -122,6 +140,7 @@ enum CallMuter {
         // in a call (see `setTreeEnabled`) or muted by us; otherwise switch it
         // off so the app doesn't pay for it.
         AXUIElementSetAttributeValue(ax, manualAccessibility, kCFBooleanTrue)
+        if app.isWeb { prepareWebTree(app, ax, pid: running.processIdentifier) }
         var keepTree = false
         defer {
             if !keepTree, !AudioController.isCapturingInput(app.micBundleID) {
@@ -131,7 +150,9 @@ enum CallMuter {
 
         let expected = pending.withLock { $0[app.bundleID]?.muted }
         guard let current = poll(app, ax, timeout: 4, assume: expected) else {
-            log.notice("\(app.name, privacy: .public) \(action, privacy: .public): toggle not found (active \(running.isActive))")
+            log.notice("\(app.logName, privacy: .public) \(action, privacy: .public): toggle not found (active \(running.isActive))")
+            // A browser on the mic may not be in a call at all.
+            if app.isWeb, target { return .notFound }
             // Still capturing means still in the call: say so rather than skip.
             return target || capturing ? .failed : .notInCall
         }
@@ -140,7 +161,7 @@ enum CallMuter {
         let focus = app.inMenuBar ? nil : Focus(of: ax)
         let pressed = AXUIElementPerformAction(current.element, kAXPressAction as CFString)
         focus?.restore()
-        log.notice("\(app.name, privacy: .public) \(action, privacy: .public): press \(pressed.rawValue) (active \(running.isActive), assumed \(expected != nil))")
+        log.notice("\(app.logName, privacy: .public) \(action, privacy: .public): press \(pressed.rawValue) (active \(running.isActive), assumed \(expected != nil))")
         guard pressed == .success else { return .failed }
 
         let press = presses.withLock { $0 += 1; return $0 }
@@ -172,7 +193,7 @@ enum CallMuter {
                     // In front the app reports at once, so a differing state is
                     // real: changed by hand. Either way its reading is good again.
                     pending.withLock { if $0[app.bundleID]?.press == press { $0[app.bundleID] = nil } }
-                    log.notice("\(app.name, privacy: .public) shows \(muted ? "muted" : "live", privacy: .public) after \(elapsed, format: .fixed(precision: 1))s")
+                    log.notice("\(app.logName, privacy: .public) shows \(muted ? "muted" : "live", privacy: .public) after \(elapsed, format: .fixed(precision: 1))s")
                     return
                 case .none: toggle = nil // replaced or relabeled: search again
                 default: break
@@ -218,6 +239,59 @@ enum CallMuter {
     }
 
     private static var manualAccessibility: CFString { "AXManualAccessibility" as CFString }
+    private static var enhancedUserInterface: CFString { "AXEnhancedUserInterface" as CFString }
+
+    /// Web-call work that waits on a page, kept off `queue` so solo never
+    /// waits behind it.
+    static let webQueue = DispatchQueue(label: "dev.imathis.vaux.calls.web", qos: .userInitiated)
+    /// Browsers whose full tree Vaux switched on, to switch off again.
+    private static let enhanced = OSAllocatedUnfairLock(initialState: Set<pid_t>())
+
+    /// An app Vaux doesn't know started (or stopped) using the mic. If it's
+    /// showing a web call, get its tree ready now: Chromium's reduced tree
+    /// shows the toggle but can't press it, and the full one, switched on
+    /// the way a screen reader does, takes ~2s to build. Off again once the
+    /// mic is released.
+    static func setWebTreeEnabled(_ enabled: Bool, for app: CallApp) {
+        guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID)
+            .first?.processIdentifier else { return }
+        let ax = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(ax, 1)
+        guard enabled else {
+            if enhanced.withLock({ $0.remove(pid) }) != nil {
+                AXUIElementSetAttributeValue(ax, enhancedUserInterface, kCFBooleanFalse)
+            }
+            return
+        }
+        // The page may still be loading.
+        let start = Date()
+        while Date().timeIntervalSince(start) < 3 {
+            if findToggle(app, in: ax) != nil {
+                prepareWebTree(app, ax, pid: pid)
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.3)
+        }
+    }
+
+    /// Switch on the full tree if the toggle is there but can't be pressed.
+    private static func prepareWebTree(_ app: CallApp, _ ax: AXUIElement, pid: pid_t) {
+        guard let found = findToggle(app, in: ax), !found.pressable,
+              // Already on: a screen reader's, so it's left to it.
+              attribute(ax, enhancedUserInterface as String) as? Bool != true else { return }
+        log.notice("\(app.logName, privacy: .public): building full tree")
+        AXUIElementSetAttributeValue(ax, enhancedUserInterface, kCFBooleanTrue)
+        enhanced.withLock { _ = $0.insert(pid) }
+    }
+
+    /// Quitting: switch off every full tree Vaux switched on.
+    static func releaseWebTrees() {
+        for pid in enhanced.withLock({ all in defer { all = [] }; return all }) {
+            let ax = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(ax, 0.5)
+            AXUIElementSetAttributeValue(ax, enhancedUserInterface, kCFBooleanFalse)
+        }
+    }
 
     /// Re-searches until the toggle has a readable state (matching `want`, if
     /// given). A fresh search each time because the web view may replace the
@@ -230,7 +304,7 @@ enum CallMuter {
         let start = Date()
         while true {
             let found = findToggle(app, in: ax)
-            if let found, let muted = assume ?? found.muted, want == nil || muted == want {
+            if let found, found.pressable, let muted = assume ?? found.muted, want == nil || muted == want {
                 return (found.element, muted)
             }
             let elapsed = Date().timeIntervalSince(start)
@@ -240,15 +314,16 @@ enum CallMuter {
     }
 
     /// First control carrying one of the app's mic-toggle labels, with
-    /// its state if readable yet.
-    private static func findToggle(_ app: CallApp, in ax: AXUIElement) -> (element: AXUIElement, muted: Bool?)? {
+    /// its state if readable yet, and whether it can be pressed yet: a
+    /// reduced tree (Chromium's) reports presses as done and drops them.
+    private static func findToggle(_ app: CallApp, in ax: AXUIElement) -> (element: AXUIElement, muted: Bool?, pressable: Bool)? {
         var visited = 0
-        func walk(_ element: AXUIElement, depth: Int) -> (element: AXUIElement, muted: Bool?)? {
+        func walk(_ element: AXUIElement, depth: Int) -> (element: AXUIElement, muted: Bool?, pressable: Bool)? {
             visited += 1
             guard visited < 20_000, depth < 80 else { return nil }
             let role = string(element, kAXRoleAttribute)
             if app.roles.contains(role), let state = micState(element, role: role, app) {
-                return (element, state)
+                return (element, state, canPress(element))
             }
             for child in children(element) {
                 if let hit = walk(child, depth: depth + 1) { return hit }
@@ -289,6 +364,12 @@ enum CallMuter {
     }
 
     // MARK: AX helpers
+
+    private static func canPress(_ element: AXUIElement) -> Bool {
+        var actions: CFArray?
+        AXUIElementCopyActionNames(element, &actions)
+        return (actions as? [String])?.contains(kAXPressAction) ?? false
+    }
 
     private static func isFrontmost(_ ax: AXUIElement) -> Bool {
         attribute(ax, kAXFrontmostAttribute) as? Bool ?? false

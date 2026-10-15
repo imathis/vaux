@@ -58,6 +58,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
+    /// Browsers' full accessibility trees are switched on only while needed.
+    func applicationWillTerminate(_ notification: Notification) {
+        CallMuter.releaseWebTrees()
+    }
+
     // MARK: Clicks
 
     @objc private func handleClick(_ sender: NSStatusBarButton) {

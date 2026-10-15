@@ -64,6 +64,10 @@ final class AppState {
             guard let app = CallApp.all.first(where: { $0.micBundleID == id }) else { return }
             self?.callStateChanged(app, inCall: inCall)
         }
+        webWatcher.watchesAll = true
+        webWatcher.start { [weak self] id, capturing in
+            self?.otherAppChanged(id, capturing: capturing)
+        }
         followWatcher.bundleIDs = Self.followApp
         followWatcher.start { [weak self] id, capturing in
             Self.log.notice("follow: \(id, privacy: .public) \(capturing ? "listening" : "stopped", privacy: .public)")
@@ -148,6 +152,8 @@ final class AppState {
     @ObservationIgnored private var quitWhenSettled: (@MainActor @Sendable () -> Void)?
     @ObservationIgnored private var keyMonitor: SoloKeyMonitor?
     @ObservationIgnored private let callWatcher = CaptureWatcher()
+    /// Every app on the mic, for calls in web pages (any browser).
+    @ObservationIgnored private let webWatcher = CaptureWatcher()
     /// Watches the app solo follows (e.g. a dictation app): solo turns on
     /// while it's listening.
     @ObservationIgnored private let followWatcher = CaptureWatcher()
@@ -250,6 +256,20 @@ final class AppState {
         CallMuter.queue.async { CallMuter.setTreeEnabled(inCall, for: app) }
     }
 
+    /// Apps solo knows already (or is): not checked for web calls.
+    private static var knownApps: Set<String> {
+        CallApp.bundleIDs.union(followApp).union([Bundle.main.bundleIdentifier ?? ""])
+    }
+
+    /// An app solo doesn't know started or stopped using the mic: a browser
+    /// joining a web call, maybe. Get its tree ready, or let it go.
+    private func otherAppChanged(_ id: String, capturing: Bool) {
+        guard CallMuter.isTrusted, !Self.knownApps.contains(where: { AudioController.bundle(id, belongsTo: $0) }) else { return }
+        let app = CallApp.meet(in: id)
+        if !capturing { CallMuter.queue.async { CallMuter.forget(app) } }
+        CallMuter.webQueue.async { CallMuter.setWebTreeEnabled(capturing, for: app) }
+    }
+
     private func startSolo() {
         guard CallMuter.isTrusted else {
             CallMuter.requestTrust()
@@ -261,22 +281,29 @@ final class AppState {
         soloBusy = true
         soloProblems = []
         notify()
-        // Apps on the mic that solo can't mute. Read now, before a dictation
-        // app sharing the trigger starts listening too.
-        let mine = CallApp.bundleIDs.union(Self.followApp).union([Bundle.main.bundleIdentifier ?? ""])
-        let unmutable = AudioController.appsCapturingInput(ignoring: mine)
+        // Other apps on the mic: browsers in a web call, or apps solo can't
+        // mute. Read now, before a dictation app sharing the trigger starts
+        // listening too.
+        let others = AudioController.appsCapturingInput(ignoring: Self.knownApps)
+        let targets = CallApp.all + others.map { CallApp.meet(in: $0.bundleID) }
         CallMuter.queue.async { [weak self] in
-            let outcomes = CallApp.all.map { (app: $0, outcome: CallMuter.mute($0)) }
+            let outcomes = targets.map { (app: $0, outcome: CallMuter.mute($0)) }
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { self?.finishStartingSolo(outcomes, unmutable: unmutable) }
+                MainActor.assumeIsolated { self?.finishStartingSolo(outcomes, others: others) }
             }
         }
     }
 
-    /// `unmutable`: other apps using the mic, which still hear you.
-    private func finishStartingSolo(_ outcomes: [(app: CallApp, outcome: CallMuter.Outcome)], unmutable: [String]) {
+    /// `others`: apps on the mic solo doesn't know, by name. Those with no
+    /// call found still hear you.
+    private func finishStartingSolo(
+        _ outcomes: [(app: CallApp, outcome: CallMuter.Outcome)], others: [(bundleID: String, name: String)]
+    ) {
         let mutedApps = outcomes.filter { $0.outcome == .muted }.map(\.app)
         let failures = outcomes.filter { $0.outcome == .failed }.map { "Couldn't mute \($0.app.name)" }
+        let unmutable = outcomes.filter { $0.outcome == .notFound }.compactMap { outcome in
+            others.first { $0.bundleID == outcome.app.bundleID }?.name
+        }
 
         // The mic is muted and a call couldn't be confirmed muted: don't open
         // the mic to it. Put back what we did mute and stay out of solo.
@@ -309,9 +336,11 @@ final class AppState {
         }
         soloSnapshot = SoloSnapshot(wasMuted: muted, mutedApps: mutedApps, duck: duck)
         if muted { setMuted(false) }
+        // Unique: the same web call can be open in two browsers.
         soloMutedApps = outcomes
             .filter { $0.outcome == .muted || $0.outcome == .alreadyMuted }
             .map(\.app.name)
+            .reduce(into: []) { names, name in if !names.contains(name) { names.append(name) } }
         soloDuckedTo = duck?.ducked
         soloProblems = failures + unmutable.map { "\($0) can still hear you" }
         soloActive = true

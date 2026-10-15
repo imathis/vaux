@@ -17,6 +17,9 @@ final class CaptureWatcher {
     var bundleIDs: Set<String> = [] {
         didSet { if bundleIDs != oldValue, onChange != nil { rescan() } }
     }
+    /// Watch every app instead, each reported as the app it works for (a
+    /// browser for its helpers and web processes).
+    var watchesAll = false
 
     private var onChange: ((_ bundleID: String, _ capturing: Bool) -> Void)?
     private var capturing: Set<String> = []
@@ -43,7 +46,7 @@ final class CaptureWatcher {
         var listeners: [AudioObjectID: AudioPropertyListener] = [:]
         for process in AudioController.processObjects() {
             let bundle = AudioController.bundleID(ofProcess: process)
-            guard bundleIDs.contains(where: { AudioController.bundle(bundle, belongsTo: $0) }) else { continue }
+            guard watchesAll || bundleIDs.contains(where: { AudioController.bundle(bundle, belongsTo: $0) }) else { continue }
             listeners[process] = inputListeners[process] ?? AudioPropertyListener(
                 objectID: process,
                 selector: kAudioProcessPropertyIsRunning,
@@ -55,7 +58,7 @@ final class CaptureWatcher {
         inputListeners = listeners // dropped listeners unregister on deinit
         // An app no longer watched has stopped, as far as anyone here knows:
         // a solo it started ends with it.
-        for id in capturing.subtracting(bundleIDs) {
+        for id in capturing.subtracting(bundleIDs) where !watchesAll {
             capturing.remove(id)
             onChange?(id, false)
         }
@@ -63,6 +66,12 @@ final class CaptureWatcher {
     }
 
     private func evaluate() {
+        if watchesAll {
+            let now = Set(AudioController.appsCapturingInput().map(\.bundleID))
+            for id in now.subtracting(capturing) { onChange?(id, true) }
+            for id in capturing.subtracting(now) { onChange?(id, false) }
+            capturing = now
+        }
         for id in bundleIDs {
             let now = AudioController.isCapturingInput(id)
             guard now != capturing.contains(id) else { continue }

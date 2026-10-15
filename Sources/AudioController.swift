@@ -175,26 +175,35 @@ enum AudioController {
     // Core Audio process objects (read-only properties): which apps are
     // running input right now. No stream, no mic permission.
 
-    /// True if the app (bundle ID) or one of its helpers is running input.
-    /// Helpers count because Electron apps capture in one (Slack's audio runs
-    /// in `com.tinyspeck.slackmacgap.helper`).
+    /// True if the app (bundle ID) or a process working for it is running
+    /// input. Helpers count because Electron apps capture in one (Slack's
+    /// audio runs in `com.tinyspeck.slackmacgap.helper`), and Safari's pages
+    /// capture in a shared WebKit process.
     static func isCapturingInput(_ app: String) -> Bool {
-        processObjects().contains { isRunningInput($0) && bundle(bundleID(ofProcess: $0), belongsTo: app) }
+        processObjects().contains { process in
+            guard isRunningInput(process) else { return false }
+            return bundle(bundleID(ofProcess: process), belongsTo: app) || responsibleBundleID(process) == app
+        }
     }
 
-    /// Apps using the mic right now, by name, leaving out `apps` (and their
-    /// helpers). A helper or web process counts as the app it works for.
-    static func appsCapturingInput(ignoring apps: Set<String>) -> [String] {
-        var names: [String] = []
+    /// The app a process works for, by bundle ID.
+    static func responsibleBundleID(_ process: AudioObjectID) -> String? {
+        NSRunningApplication(processIdentifier: responsiblePID(pid(ofProcess: process)))?.bundleIdentifier
+    }
+
+    /// Apps using the mic right now, leaving out `apps` (and their helpers).
+    /// A helper or web process counts as the app it works for.
+    static func appsCapturingInput(ignoring apps: Set<String> = []) -> [(bundleID: String, name: String)] {
+        var found: [(bundleID: String, name: String)] = []
         for process in processObjects() where isRunningInput(process) {
             let bundle = bundleID(ofProcess: process)
-            guard !apps.contains(where: { self.bundle(bundle, belongsTo: $0) }) else { continue }
             let app = NSRunningApplication(processIdentifier: responsiblePID(pid(ofProcess: process)))
-            if let id = app?.bundleIdentifier, apps.contains(where: { self.bundle(id, belongsTo: $0) }) { continue }
-            let name = app?.localizedName ?? bundle
-            if !name.isEmpty, !names.contains(name) { names.append(name) }
+            let id = app?.bundleIdentifier ?? bundle
+            let ignored = [bundle, id].contains { candidate in apps.contains { self.bundle(candidate, belongsTo: $0) } }
+            guard !id.isEmpty, !ignored, !found.contains(where: { $0.bundleID == id }) else { continue }
+            found.append((id, app?.localizedName ?? id))
         }
-        return names
+        return found
     }
 
     private typealias ResponsiblePID = @convention(c) (pid_t) -> pid_t
