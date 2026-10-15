@@ -48,7 +48,7 @@ struct MenuContentView: View {
             ForEach(inputs) { inputRow($0) }
             divider()
             textRow(appState.muted ? "Unmute" : "Mute", trailing: muteShortcut) { appState.toggle() }
-            textRow(appState.soloActive ? "End Solo Mode" : "Solo Mode", trailing: soloShortcut) {
+            textRow(appState.soloActive ? "End Solo Mode" : "Solo Mode", trailing: soloShortcut, trailingSymbol: soloShortcutSymbol) {
                 appState.toggleSolo()
             }
             soloStatus
@@ -104,12 +104,16 @@ struct MenuContentView: View {
         }
     }
 
-    private func textRow(_ title: String, trailing: String?, action: @escaping () -> Void) -> some View {
+    /// `trailingSymbol`: an SF Symbol shown instead of `trailing`, for keys
+    /// with no text name (the 🎤 Dictation key).
+    private func textRow(_ title: String, trailing: String?, trailingSymbol: String? = nil, action: @escaping () -> Void) -> some View {
         MenuRow(height: 22, edgeInset: edgeInset, contentInset: contentInset, action: action) {
             HStack {
                 Text(title).font(.system(size: 13))
                 Spacer()
-                if let trailing, !trailing.isEmpty {
+                if let trailingSymbol {
+                    Image(systemName: trailingSymbol).font(.system(size: 13)).foregroundStyle(.secondary)
+                } else if let trailing, !trailing.isEmpty {
                     Text(trailing).font(.system(size: 13)).foregroundStyle(.secondary)
                 }
             }
@@ -182,7 +186,11 @@ struct MenuContentView: View {
     }
 
     private var soloShortcut: String {
-        KeyboardShortcuts.getShortcut(for: .toggleSolo)?.description ?? ModifierTapMonitor.Key.current.symbol
+        KeyboardShortcuts.getShortcut(for: .toggleSolo)?.description ?? SoloKeyMonitor.Key.current.symbol
+    }
+
+    private var soloShortcutSymbol: String? {
+        KeyboardShortcuts.getShortcut(for: .toggleSolo) == nil && SoloKeyMonitor.Key.current == .dictation ? "mic" : nil
     }
 
     private func select(_ device: MenuInputDevice) {

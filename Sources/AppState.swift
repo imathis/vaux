@@ -53,7 +53,10 @@ final class AppState {
         KeyboardShortcuts.onKeyDown(for: .toggleSolo) { [weak self] in
             self?.toggleSolo()
         }
-        tapMonitor = ModifierTapMonitor { [weak self] in self?.toggleSolo() }
+        keyMonitor = SoloKeyMonitor(
+            onKey: { [weak self] in self?.toggleSolo(byKey: true) },
+            onEscape: { [weak self] in self?.escapePressed() }
+        )
         callWatcher.bundleIDs = Set(CallApp.all.map(\.bundleID))
         callWatcher.start { [weak self] id, inCall in
             guard let app = CallApp.all.first(where: { $0.bundleID == id }) else { return }
@@ -128,13 +131,16 @@ final class AppState {
     /// trigger shared with a dictation app must never be skipped, or the two
     /// fall out of step.
     @ObservationIgnored private var pendingSoloToggle = false
-    @ObservationIgnored private var tapMonitor: ModifierTapMonitor?
+    @ObservationIgnored private var keyMonitor: SoloKeyMonitor?
     @ObservationIgnored private let callWatcher = CaptureWatcher()
     /// Watches the app solo follows (e.g. a dictation app): solo turns on
     /// while it's listening.
     @ObservationIgnored private let followWatcher = CaptureWatcher()
     /// Solo was turned on by the followed app, so it ends when that stops.
     @ObservationIgnored private var soloStartedByFollow = false
+    /// Solo was turned on by a key shared with dictation, so Escape, which
+    /// ends dictation, ends solo too.
+    @ObservationIgnored private var soloStartedByKey = false
     /// The followed app's state change that arrived mid-transition.
     @ObservationIgnored private var pendingFollow: Bool?
     @ObservationIgnored private let mediaPauser = MediaPauser()
@@ -161,13 +167,27 @@ final class AppState {
         let ducked: Float32
     }
 
-    func toggleSolo() {
+    /// `byKey`: from the key shared with dictation, rather than the menu or a
+    /// key combo of Vaux's own.
+    func toggleSolo(byKey: Bool = false) {
         guard !soloBusy else { pendingSoloToggle.toggle(); return }
         if soloActive {
             endSolo()
         } else {
             soloStartedByFollow = false
+            soloStartedByKey = byKey
             startSolo()
+        }
+    }
+
+    /// Escape ends dictation, so it ends a solo the shared key started. A solo
+    /// still starting ends as soon as it's on.
+    private func escapePressed() {
+        guard soloStartedByKey else { return }
+        if soloActive, !soloBusy {
+            endSolo()
+        } else if !soloActive, soloBusy {
+            pendingSoloToggle = true
         }
     }
 
@@ -238,6 +258,7 @@ final class AppState {
                     MainActor.assumeIsolated {
                         self?.pendingSoloToggle = false
                         self?.pendingFollow = nil
+                        self?.soloStartedByKey = false
                         self?.soloBusy = false
                         self?.notify()
                     }
@@ -248,7 +269,10 @@ final class AppState {
         }
 
         let duck = duckOutput()
-        if pauseMedia {
+        // macOS Dictation pauses and resumes media itself, and resumes as soon
+        // as it stops listening, so a solo the Dictation key started leaves it be.
+        let dictationKey = soloStartedByKey && SoloKeyMonitor.Key.current == .dictation
+        if pauseMedia, !dictationKey {
             mediaPauser.pause(ignoring: Set(CallApp.all.map(\.bundleID)).union(Self.followApp))
         }
         soloSnapshot = SoloSnapshot(wasMuted: muted, mutedApps: mutedApps, duck: duck)
@@ -281,6 +305,7 @@ final class AppState {
                     if let self {
                         self.soloSnapshot = nil
                         self.soloActive = false
+                        self.soloStartedByKey = false
                         self.soloMutedApps = []
                         self.soloDuckedTo = nil
                         self.soloProblems = failures
@@ -461,6 +486,7 @@ final class AppState {
     }
 
     private func notify() {
+        keyMonitor?.watchesEscape = soloStartedByKey && (soloActive || soloBusy)
         onStateChange?()
     }
 }

@@ -20,7 +20,8 @@ enum AppStorageKey {
     /// Solo mode: pause playing media until solo ends. On unless set.
     static let soloPauseMedia = "soloPauseMedia"
 
-    /// Solo mode: modifier key whose lone tap toggles solo (`ModifierTapMonitor.Key`).
+    /// Solo mode: key shared with dictation that toggles solo
+    /// (`SoloKeyMonitor.Key`): the Dictation key or a lone modifier tap.
     static let soloTapKey = "soloTapKey"
 
     /// Solo mode: bundle ID of the app solo follows — on while it's listening

@@ -20,13 +20,18 @@ For dictating during a call, on the same mic. Solo mode:
   call sees you as muted and doesn't hear you dictate.
 - Keeps your mic live for everything else, unmuting it if Vaux had it muted.
 - Pauses music or video that's playing, and plays it again when solo ends.
+  (macOS Dictation does this itself, so Vaux leaves media alone when the 🎤
+  key starts solo.)
 - Optionally lowers your speakers while it's on, so less of the call bleeds into
   the mic.
 - Puts everything back when it ends: it unmutes only the apps it muted and
   leaves your speakers alone if you changed the volume yourself.
 
-Start solo from the menu, a shortcut, a tap of a right-side modifier on its own
-(e.g. Right ⌥), or automatically while your dictation app is listening.
+Start solo from the menu, a shortcut, or automatically while your dictation app
+is listening. Or share a key with dictation, so one press starts both: the 🎤
+Dictation key (the default, which starts macOS Dictation) or a tap of a
+right-side modifier on its own (e.g. Right ⌥, for apps like FluidVoice). When
+the shared key starts solo, Escape, which ends dictation, ends solo too.
 
 macOS can't mute one app's microphone for another app without a virtual audio
 device, so solo works the other way around: it mutes the call apps in their own
@@ -54,7 +59,8 @@ UI. That's why it supports specific apps rather than "everything but X".
 - **Mute and inputs:** none. Changing Core Audio properties doesn't trigger
   the microphone permission prompt.
 - **Solo mode:** Accessibility, to press mute in Slack and Discord, and to
-  notice modifier taps. Vaux watches only modifier keys, never keystrokes.
+  notice the key you share with dictation. Vaux reacts only to that key and
+  Escape, and ignores every other key.
 - **Call and dictation detection:** none. Vaux reads which apps are using the
   mic from Core Audio's process list, without opening the mic itself.
 
@@ -118,7 +124,7 @@ Sources/
   CallMuter.swift            # presses Slack/Discord mute via Accessibility
   CaptureWatcher.swift       # which apps are using the mic
   MediaPauser.swift          # pauses playing media during solo
-  ModifierTapMonitor.swift   # lone modifier-tap trigger for solo
+  SoloKeyMonitor.swift       # solo key shared with dictation, and Escape
   SoloShortcutRecorder.swift # solo shortcut field (combos and modifier taps)
   InputVolumeView.swift      # volume slider
   InputPriorityModel.swift   # preferred-input list (Settings)

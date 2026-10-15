@@ -1,28 +1,32 @@
 import AppKit
 import Carbon.HIToolbox
 
-/// Fires on a lone tap of a modifier key: pressed and released with nothing
-/// else in between — no other key, modifier, or click. That's the rule
-/// FluidVoice uses for its modifier-only trigger (any hold length), so the two
-/// can share one key and stay in step.
+/// Watches a solo trigger shared with a dictation app: the 🎤 Dictation key
+/// (macOS Dictation's) or a lone tap of a right-side modifier (FluidVoice's).
+/// Neither is claimed as a hotkey, so the dictation app still gets the key and
+/// the two stay in step. While a solo started this way is on, it also watches
+/// Escape, which ends dictation in both, so solo ends with it.
 ///
-/// Carbon hotkeys (KeyboardShortcuts) can't express modifier-only shortcuts, so
-/// this watches modifier changes with a listen-only event tap at the HID level.
-/// It has to sit that low: dictation apps' session-level taps swallow their own
-/// trigger, so NSEvent monitors never see it. Needs Accessibility (solo already
-/// has it). Keystrokes are never observed: "was anything else pressed?" is
-/// answered by asking how long ago the last key or click was.
+/// Carbon hotkeys (KeyboardShortcuts) can't do this: they swallow the key, and
+/// can't express modifier-only shortcuts. So this is a listen-only event tap at
+/// the HID level. It has to sit that low: dictation apps' session-level taps
+/// swallow their own trigger, so NSEvent monitors never see it. Needs
+/// Accessibility (solo already has it). Key presses are watched only while the
+/// Dictation key is the trigger or Escape matters, and only those two keys are
+/// looked at. A modifier tap is told apart from typing by asking how long ago
+/// the last key or click was, not by watching keys.
 @MainActor
-final class ModifierTapMonitor {
+final class SoloKeyMonitor {
     enum Key: String, CaseIterable, Identifiable {
-        case off, rightOption, rightCommand, rightControl, rightShift
+        case off, dictation, rightOption, rightCommand, rightControl, rightShift
 
         var id: String { rawValue }
 
-        /// Shown in the recorder and the menu's shortcut column.
+        /// Shown in the recorder field.
         var symbol: String {
             switch self {
             case .off: ""
+            case .dictation: "Dictation Key"
             case .rightOption: "Right ⌥"
             case .rightCommand: "Right ⌘"
             case .rightControl: "Right ⌃"
@@ -30,9 +34,12 @@ final class ModifierTapMonitor {
             }
         }
 
+        var isModifier: Bool { self != .off && self != .dictation }
+
         fileprivate var keyCode: Int {
             switch self {
             case .off: -1
+            case .dictation: SoloKeyMonitor.dictationKeyCode
             case .rightOption: kVK_RightOption
             case .rightCommand: kVK_RightCommand
             case .rightControl: kVK_RightControl
@@ -43,7 +50,7 @@ final class ModifierTapMonitor {
         /// Side-specific flag bit (NX_DEVICER*KEYMASK in IOLLEvent.h).
         fileprivate var deviceBit: UInt64 {
             switch self {
-            case .off: 0
+            case .off, .dictation: 0
             case .rightOption: 0x40
             case .rightCommand: 0x10
             case .rightControl: 0x2000
@@ -51,26 +58,43 @@ final class ModifierTapMonitor {
             }
         }
 
+        /// Unset means the Dictation key: macOS Dictation's own trigger, so solo
+        /// works with it out of the box.
         static var current: Key {
-            get { UserDefaults.standard.string(forKey: AppStorageKey.soloTapKey).flatMap(Key.init) ?? .off }
+            get {
+                guard let raw = UserDefaults.standard.string(forKey: AppStorageKey.soloTapKey) else { return .dictation }
+                return Key(rawValue: raw) ?? .off
+            }
             set { UserDefaults.standard.set(newValue.rawValue, forKey: AppStorageKey.soloTapKey) }
         }
     }
 
-    /// Posted (object: the tapped `Key`) instead of firing while a shortcut
-    /// recorder is capturing, so the solo recorder can record the tap.
-    static let recordedTap = Notification.Name("VauxModifierTapRecorded")
+    /// The 🎤 key on Apple keyboards (top row, F5). Not in Carbon's key list.
+    nonisolated fileprivate static let dictationKeyCode = 176
+
+    /// Posted (object: the pressed `Key`) instead of firing while a shortcut
+    /// recorder is capturing, so the solo recorder can record it.
+    static let recordedTap = Notification.Name("VauxSoloKeyRecorded")
 
     /// KeyboardShortcuts' recorders post this (userInfo "isActive": Bool).
     static let recorderStatus = Notification.Name("KeyboardShortcuts_recorderActiveStatusDidChange")
 
-    private let onTap: () -> Void
+    /// Watch Escape: on while a solo started by the key is on.
+    var watchesEscape = false {
+        didSet { if watchesEscape != oldValue { update() } }
+    }
+
+    private let onKey: () -> Void
+    private let onEscape: () -> Void
     private var eventTap: CFMachPort?
+    /// The events the tap was created for; 0 when there's no tap.
+    private var tapMask: CGEventMask = 0
     private var detector = ModifierTapDetector()
     private var recording = false
 
-    init(onTap: @escaping () -> Void) {
-        self.onTap = onTap
+    init(onKey: @escaping () -> Void, onEscape: @escaping () -> Void) {
+        self.onKey = onKey
+        self.onEscape = onEscape
         NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -91,27 +115,38 @@ final class ModifierTapMonitor {
         ) { [weak self] _ in
             // The new trust state lands a moment after the notification.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                MainActor.assumeIsolated { self?.update() }
+                MainActor.assumeIsolated {
+                    self?.stopTap() // a tap made before the change may be dead
+                    self?.update()
+                }
             }
         }
         update()
     }
 
-    /// Only watch modifiers while a tap key is chosen, or one may be recorded.
+    /// Watch only what the trigger needs: modifier changes for a modifier tap,
+    /// key presses for the Dictation key or Escape. Both while recording.
     private func update() {
-        let wanted = Key.current != .off || recording
-        guard wanted != (eventTap != nil) else { return }
-        if wanted {
-            startTap()
-        } else if let eventTap {
-            CGEvent.tapEnable(tap: eventTap, enable: false)
-            CFMachPortInvalidate(eventTap)
-            self.eventTap = nil
-            detector = ModifierTapDetector()
-        }
+        let key = Key.current
+        var mask: CGEventMask = 0
+        if key.isModifier || recording { mask |= CGEventMask(1) << CGEventType.flagsChanged.rawValue }
+        if key == .dictation || recording || watchesEscape { mask |= CGEventMask(1) << CGEventType.keyDown.rawValue }
+        guard mask != tapMask else { return }
+        stopTap()
+        if mask != 0 { startTap(mask) }
     }
 
-    private func startTap() {
+    private func stopTap() {
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+            CFMachPortInvalidate(eventTap)
+        }
+        eventTap = nil
+        tapMask = 0
+        detector = ModifierTapDetector()
+    }
+
+    private func startTap(_ mask: CGEventMask) {
         // Listen-only is preferred; it can need Input Monitoring, so fall back
         // to a pass-through tap, which Accessibility alone allows.
         var tap: CFMachPort?
@@ -120,10 +155,10 @@ final class ModifierTapMonitor {
                 tap: .cghidEventTap,
                 place: .headInsertEventTap,
                 options: options,
-                eventsOfInterest: CGEventMask(1) << CGEventType.flagsChanged.rawValue,
+                eventsOfInterest: mask,
                 callback: { _, type, event, refcon in
                     if let refcon {
-                        let monitor = Unmanaged<ModifierTapMonitor>.fromOpaque(refcon).takeUnretainedValue()
+                        let monitor = Unmanaged<SoloKeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
                         MainActor.assumeIsolated { monitor.handle(type, event) }
                     }
                     return Unmanaged.passUnretained(event)
@@ -134,6 +169,7 @@ final class ModifierTapMonitor {
         guard let tap else { return } // no Accessibility yet; retried when it's granted
         CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(nil, tap, 0), .commonModes)
         eventTap = tap
+        tapMask = mask
     }
 
     private func handle(_ type: CGEventType, _ event: CGEvent) {
@@ -143,27 +179,42 @@ final class ModifierTapMonitor {
         case .flagsChanged:
             let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
             guard let key = detector.tap(keyCode: keyCode, flags: event.flags.rawValue) else { return }
-            if recording {
-                NotificationCenter.default.post(name: Self.recordedTap, object: key)
-            } else if key == Key.current {
-                onTap()
+            fire(key)
+        case .keyDown:
+            // Only the key code is read, and only two values mean anything.
+            let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+            if keyCode == Self.dictationKeyCode, event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
+                fire(.dictation)
+            } else if keyCode == kVK_Escape, watchesEscape {
+                onEscape()
             }
         default:
             break
         }
     }
+
+    private func fire(_ key: Key) {
+        if recording {
+            NotificationCenter.default.post(name: Self.recordedTap, object: key)
+        } else if key == Key.current {
+            onKey()
+        }
+    }
 }
 
-/// Picks lone right-modifier taps out of a stream of modifier changes.
+/// Picks lone right-modifier taps out of a stream of modifier changes: pressed
+/// and released with nothing else in between — no other key, modifier, or
+/// click. That's the rule FluidVoice uses for its modifier-only trigger (any
+/// hold length), so the two can share one key and stay in step.
 struct ModifierTapDetector {
     /// Every left/right modifier bit, to tell "pressed alone" from a chord.
     private static let sideBits: UInt64 = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 | 0x20 | 0x40 | 0x2000
 
-    private var pressed: (key: ModifierTapMonitor.Key, at: Date)?
+    private var pressed: (key: SoloKeyMonitor.Key, at: Date)?
 
     /// The key, if this change completes a clean tap of it.
-    mutating func tap(keyCode: Int, flags: UInt64) -> ModifierTapMonitor.Key? {
-        guard let key = ModifierTapMonitor.Key.allCases.first(where: { $0 != .off && $0.keyCode == keyCode }) else {
+    mutating func tap(keyCode: Int, flags: UInt64) -> SoloKeyMonitor.Key? {
+        guard let key = SoloKeyMonitor.Key.allCases.first(where: { $0.isModifier && $0.keyCode == keyCode }) else {
             pressed = nil // some other modifier joined in: a chord, not a tap
             return nil
         }
