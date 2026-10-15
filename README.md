@@ -27,7 +27,7 @@ Bluetooth quality drop, no added latency, and no microphone permission.
 brew install --cask imathis/tap/vaux
 ```
 
-Or download `Vaux.zip` from the latest
+Or download the zip from the latest
 [release](https://github.com/imathis/vaux/releases/latest), unzip it, and move
 Vaux to Applications. Requires macOS 26 or later.
 
@@ -134,6 +134,17 @@ in the `Makefile`. A free personal team is enough for local use.
 If `xcode-select` points at the Command Line Tools, select Xcode first, or
 prefix the command:
 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make run`.
+
+### Releases
+
+```sh
+make install    # Release build signed with Developer ID, into /Applications
+make notarize   # notarize and staple it, zipped in dist/ with its SHA-256
+```
+
+`RELEASE` in the `Makefile` names the release (tag, zip, cask); the app's own
+version is `MARKETING_VERSION` in `project.yml`. Notarizing needs a stored
+`notarytool` profile, `vaux` by default (`NOTARY_PROFILE`).
 
 ### App Store builds
 

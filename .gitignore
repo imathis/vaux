@@ -4,6 +4,7 @@ Vaux.xcodeproj/
 # Xcode
 DerivedData/
 build/
+dist/
 *.xcuserstate
 xcuserdata/
 

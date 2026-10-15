@@ -27,7 +27,7 @@ enum AudioController {
     }
 
     /// A fixed-size value (number, ID, flag).
-    private static func read<T>(_ id: AudioObjectID, _ address: AudioObjectPropertyAddress, as initial: T) -> T? {
+    private static func read<T: BitwiseCopyable>(_ id: AudioObjectID, _ address: AudioObjectPropertyAddress, as initial: T) -> T? {
         var address = address
         var value = initial
         var size = UInt32(MemoryLayout<T>.size)
@@ -35,7 +35,7 @@ enum AudioController {
     }
 
     @discardableResult
-    private static func write<T>(_ id: AudioObjectID, _ address: AudioObjectPropertyAddress, _ value: T) -> Bool {
+    private static func write<T: BitwiseCopyable>(_ id: AudioObjectID, _ address: AudioObjectPropertyAddress, _ value: T) -> Bool {
         var address = address
         var value = value
         return AudioObjectSetPropertyData(id, &address, 0, nil, UInt32(MemoryLayout<T>.size), &value) == noErr
