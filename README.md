@@ -28,10 +28,16 @@ Vaux lives in the menu bar. To update: `brew upgrade --cask vaux`.
 
 ### Solo mode
 
-For dictating during a call, on the same mic. Solo mode:
+For dictating during a call, on the same mic. The call stops hearing you; your
+dictation app doesn't.
 
-- Mutes **Slack** and **Discord** by pressing their own mute buttons, so the
-  call sees you as muted and doesn't hear you dictate.
+Works with **Zoom**, **Google Meet** (in any browser), **FaceTime**, **Slack**
+and **Discord**. Solo mode:
+
+- Mutes you in every call you're in by pressing the call's own mute button, so
+  everyone sees you as muted and nobody hears you dictate.
+- Warns you if another app on the mic can still hear you: the menu bar icon
+  turns orange and the menu names the app.
 - Keeps your mic live for everything else, unmuting it if Vaux had it muted.
 - Pauses music or video that's playing, and plays it again when solo ends.
   (macOS Dictation does this itself, so Vaux leaves media alone when the 🎤
@@ -47,9 +53,17 @@ Dictation key (the default, which starts macOS Dictation) or a tap of a
 right-side modifier on its own (e.g. Right ⌥, for apps like FluidVoice). When
 the shared key starts solo, Escape, which ends dictation, ends solo too.
 
-macOS can't mute one app's microphone for another app without a virtual audio
-device, so solo works the other way around: it mutes the call apps in their own
-UI. That's why it supports specific apps rather than "everything but X".
+#### How it works, and what that means
+
+macOS can't mute your mic for one app but not another without a virtual audio
+device, which costs quality and adds latency. So solo works the other way
+around: it mutes you inside the call app, through Accessibility. Each app's
+mute control is different, so apps are supported one by one. Microsoft Teams
+and Webex aren't yet; if one is using the mic, solo warns you.
+
+Google Meet works in browsers built on Chromium (Chrome, Arc, Edge, Brave,
+Helium and most others) or WebKit (Safari), but not Firefox yet. The call has
+to be the visible tab in its window, since browsers only expose that one.
 
 ### Mute
 
@@ -72,9 +86,11 @@ UI. That's why it supports specific apps rather than "everything but X".
 
 - **Mute and inputs:** none. Changing Core Audio properties doesn't trigger
   the microphone permission prompt.
-- **Solo mode:** Accessibility, to press mute in Slack and Discord, and to
-  notice the key you share with dictation. Vaux reacts only to that key and
-  Escape, and ignores every other key.
+- **Solo mode:** Accessibility, to press mute in your call apps, and to notice
+  the key you share with dictation. Vaux reacts only to that key and Escape,
+  and ignores every other key. While a Chromium browser is using the mic, Vaux
+  turns on its full accessibility support (as a screen reader does) so Meet's
+  mute button can be pressed, and turns it off again after.
 - **Call and dictation detection:** none. Vaux reads which apps are using the
   mic from Core Audio's process list, without opening the mic itself.
 
@@ -82,7 +98,7 @@ UI. That's why it supports specific apps rather than "everything but X".
 
 - The menu bar icon shows the state: voice bars when live, flat dots when
   muted, and three bars between two dots in solo (orange if something couldn't
-  be muted).
+  be muted or can still hear you).
 - **Click** the icon to open the menu. **Shift-, Option- or Control-click** it
   to toggle mute.
 - **Settings:** solo mode, mute, preferred inputs, and launch at login.
@@ -133,7 +149,7 @@ Sources/
   SettingsView.swift         # Settings
   AppState.swift             # mute intent, device tracking, solo mode
   AudioController.swift      # Core Audio HAL: devices, mute, volume, processes
-  CallMuter.swift            # presses Slack/Discord mute via Accessibility
+  CallMuter.swift            # presses call apps' mute via Accessibility
   CaptureWatcher.swift       # which apps are using the mic
   MediaPauser.swift          # pauses playing media during solo
   SoloKeyMonitor.swift       # solo key shared with dictation, and Escape
