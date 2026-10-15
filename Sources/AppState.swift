@@ -59,9 +59,9 @@ final class AppState {
             onKey: { [weak self] in self?.toggleSolo(byKey: true) },
             onEscape: { [weak self] in self?.escapePressed() }
         )
-        callWatcher.bundleIDs = Set(CallApp.all.map(\.bundleID))
+        callWatcher.bundleIDs = Set(CallApp.all.map(\.micBundleID))
         callWatcher.start { [weak self] id, inCall in
-            guard let app = CallApp.all.first(where: { $0.bundleID == id }) else { return }
+            guard let app = CallApp.all.first(where: { $0.micBundleID == id }) else { return }
             self?.callStateChanged(app, inCall: inCall)
         }
         followWatcher.bundleIDs = Self.followApp
@@ -263,7 +263,7 @@ final class AppState {
         notify()
         // Apps on the mic that solo can't mute. Read now, before a dictation
         // app sharing the trigger starts listening too.
-        let mine = Set(CallApp.all.map(\.bundleID)).union(Self.followApp).union([Bundle.main.bundleIdentifier ?? ""])
+        let mine = CallApp.bundleIDs.union(Self.followApp).union([Bundle.main.bundleIdentifier ?? ""])
         let unmutable = AudioController.appsCapturingInput(ignoring: mine)
         CallMuter.queue.async { [weak self] in
             let outcomes = CallApp.all.map { (app: $0, outcome: CallMuter.mute($0)) }
@@ -303,7 +303,7 @@ final class AppState {
         // as it stops listening, so a solo the Dictation key started leaves it be.
         let dictationKey = soloStartedByKey && SoloKeyMonitor.Key.current == .dictation
         if pauseMedia, !dictationKey {
-            mediaPauser.pause(ignoring: Set(CallApp.all.map(\.bundleID)).union(Self.followApp))
+            mediaPauser.pause(ignoring: CallApp.bundleIDs.union(Self.followApp))
         } else {
             mediaPauser.hold()
         }

@@ -6,6 +6,10 @@ import os
 struct CallApp: Sendable, Hashable {
     let name: String
     let bundleID: String
+    /// What uses the mic during a call, which is how a call is told apart:
+    /// the app or its helpers, unless the system does it for the app.
+    var micBundleID: String { micProcess ?? bundleID }
+    private var micProcess: String?
     /// Lowercased accessibility labels of the app's mic toggle. A "mute" label
     /// may be a toggle reporting state in AXValue; an "unmute" label means the
     /// mic is currently muted.
@@ -13,10 +17,25 @@ struct CallApp: Sendable, Hashable {
     let unmuteLabels: Set<String>
     /// Roles the toggle can have. Narrower is safer: a plain "Mute" button
     /// could be a video's.
-    var roles: Set<String> = [kAXButtonRole, kAXCheckBoxRole]
+    var roles: Set<String>
     /// The toggle is a menu item. Menus are there whatever the call window
     /// is doing (toolbar hidden, minimized), so they're preferred.
     var inMenuBar = false
+
+    init(name: String, bundleID: String, micProcess: String? = nil,
+         muteLabels: Set<String>, unmuteLabels: Set<String>,
+         roles: Set<String> = [kAXButtonRole, kAXCheckBoxRole], inMenuBar: Bool = false) {
+        self.name = name
+        self.bundleID = bundleID
+        self.micProcess = micProcess
+        self.muteLabels = muteLabels
+        self.unmuteLabels = unmuteLabels
+        self.roles = roles
+        self.inMenuBar = inMenuBar
+    }
+
+    /// Every call app and the processes their calls use.
+    static var bundleIDs: Set<String> { Set(all.flatMap { [$0.bundleID, $0.micBundleID] }) }
 
     static let all: [CallApp] = [
         CallApp(
@@ -31,6 +50,12 @@ struct CallApp: Sendable, Hashable {
         CallApp(
             name: "Zoom", bundleID: "us.zoom.xos",
             muteLabels: ["mute audio"], unmuteLabels: ["unmute audio"],
+            roles: [kAXMenuItemRole], inMenuBar: true),
+        // Video menu: "Mute" gets a checkmark when muted. The call's audio
+        // runs in a system daemon, which keeps the mic while muted.
+        CallApp(
+            name: "FaceTime", bundleID: "com.apple.FaceTime", micProcess: "com.apple.avconferenced",
+            muteLabels: ["mute"], unmuteLabels: [],
             roles: [kAXMenuItemRole], inMenuBar: true),
     ]
 }
@@ -85,7 +110,7 @@ enum CallMuter {
     private static func set(_ app: CallApp, muted target: Bool) -> Outcome {
         guard let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).first
         else { return .notInCall }
-        let capturing = AudioController.isCapturingInput(app.bundleID)
+        let capturing = AudioController.isCapturingInput(app.micBundleID)
         // Only touch apps that are capturing: Discord's mic toggle exists (and
         // plays a sound) even outside a call.
         if target, !capturing { return .notInCall }
@@ -99,7 +124,7 @@ enum CallMuter {
         AXUIElementSetAttributeValue(ax, manualAccessibility, kCFBooleanTrue)
         var keepTree = false
         defer {
-            if !keepTree, !AudioController.isCapturingInput(app.bundleID) {
+            if !keepTree, !AudioController.isCapturingInput(app.micBundleID) {
                 AXUIElementSetAttributeValue(ax, manualAccessibility, kCFBooleanFalse)
             }
         }
@@ -137,7 +162,7 @@ enum CallMuter {
         var toggle: AXUIElement?
         var checks = 0
         while pending.withLock({ $0[app.bundleID]?.press == press }) {
-            guard AudioController.isCapturingInput(app.bundleID) else { forget(app); return }
+            guard AudioController.isCapturingInput(app.micBundleID) else { forget(app); return }
             checks += 1
             if toggle == nil || checks % 10 == 0 { toggle = findToggle(app, in: ax)?.element }
             if let element = toggle {
@@ -248,11 +273,19 @@ enum CallMuter {
             .trimmingCharacters(in: .whitespaces).lowercased()
         if app.unmuteLabels.contains(label) { return .some(true) }
         guard app.muteLabels.contains(label) else { return nil }
-        // A plain "Mute" button means live. A toggle keeps its "Mute" label and
-        // reports on/off in AXValue — a number once Chromium has filled it in.
-        guard role == kAXCheckBoxRole else { return .some(false) }
-        guard let value = attribute(element, kAXValueAttribute) as? NSNumber else { return .some(nil) }
-        return .some(value.intValue == 1)
+        switch role {
+        case kAXCheckBoxRole:
+            // A toggle keeps its "Mute" label and reports on/off in AXValue —
+            // a number once Chromium has filled it in.
+            guard let value = attribute(element, kAXValueAttribute) as? NSNumber else { return .some(nil) }
+            return .some(value.intValue == 1)
+        case kAXMenuItemRole:
+            // A "Mute" item may stay put and get checked instead.
+            return .some(!string(element, kAXMenuItemMarkCharAttribute).isEmpty)
+        default:
+            // A plain "Mute" button means live.
+            return .some(false)
+        }
     }
 
     // MARK: AX helpers
