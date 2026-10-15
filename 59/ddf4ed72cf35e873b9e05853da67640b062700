@@ -1,0 +1,48 @@
+Sources/CallMuter.swift
+  s_7cfcc273794c17::t_1a6c7e0ba5cadc 14-16,26,217
+Sources/SettingsView.swift
+  s_7cfcc273794c17::t_3e0b38afd818e4 64-65,197
+Sources/MediaPauser.swift
+  s_7cfcc273794c17::t_d71fbe8a3aaa4a 112,130
+  s_7cfcc273794c17::t_fdbc27d72dbf3c 21-22,33,38,45,51-59,84-85
+  s_7cfcc273794c17::t_20611b50d1ab07 86
+Sources/AudioController.swift
+  s_7cfcc273794c17::t_d71fbe8a3aaa4a 1,108-109,114-121,185-214
+  s_7cfcc273794c17::t_5e03d7ba345324 215
+Sources/MenuContentView.swift
+  s_7cfcc273794c17::t_e583de9e7d3624 21,29-30,34,66-67
+Sources/MenuPanelController.swift
+  s_7cfcc273794c17::t_23f46afa78a1c2 108
+  s_7cfcc273794c17::t_e583de9e7d3624 44-45,104-107,109-118,123-131
+  s_7cfcc273794c17::t_699096bb1f2a07 132-133
+Sources/SoloKeyMonitor.swift
+  s_7cfcc273794c17::t_904845c82b5d13 145-149
+  s_7cfcc273794c17::t_3298d2a6109b31 243-245
+  s_7cfcc273794c17::t_c40a788f1321e5 92,151,157-159,169-170,174-175,177,181,184,188,207-242,246-261
+  s_7cfcc273794c17::t_fb58d17f333e74 262-263
+Sources/AppState.swift
+  s_7cfcc273794c17::t_fdbc27d72dbf3c 307-308
+  s_7cfcc273794c17::t_60edda7fa8a1c5 316
+  s_7cfcc273794c17::t_0a117a9d33ad8f 264-267,271,276-277
+  s_7cfcc273794c17::t_9370fb17b74ef9 27,36-39,110-112,115-117,145-148,188-192,219,229-230,232-236,257,293,321-330,440,470,486-489,491-494,496-498,514-524,530-533
+Sources/AppDelegate.swift
+  s_7cfcc273794c17::t_911fdd680964e6 42-43,46,53-57
+Sources/CaptureWatcher.swift
+  s_7cfcc273794c17::t_a89cea7da4c5a7 56-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "59ddf4ed72cf35e873b9e05853da67640b062700",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
