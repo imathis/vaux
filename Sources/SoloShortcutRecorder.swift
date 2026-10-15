@@ -69,6 +69,12 @@ struct SoloShortcutRecorder: View {
 
         func updateNSView(_ nsView: KeyboardShortcuts.RecorderCocoa, context: Context) {}
 
+        /// A touch wider than the stock 130pt: the text area mirrors the cancel
+        /// button's inset on both sides, leaving 74pt, and "Dictation Key" needs 80.
+        func sizeThatFits(_ proposal: ProposedViewSize, nsView: KeyboardShortcuts.RecorderCocoa, context: Context) -> CGSize? {
+            CGSize(width: 150, height: nsView.intrinsicContentSize.height)
+        }
+
         static func dismantleNSView(_ nsView: KeyboardShortcuts.RecorderCocoa, coordinator: Coordinator) {
             coordinator.observers.forEach(NotificationCenter.default.removeObserver)
         }

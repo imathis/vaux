@@ -49,10 +49,10 @@ UI. That's why it supports specific apps rather than "everything but X".
 
 ### Preferred inputs
 
-- Rank your mics in Settings. Vaux switches to the highest-ranked one that's
-  connected, either automatically when devices come and go or with a shortcut.
-- The menu lists every input, marks the preferred one, and includes an input
-  volume slider.
+- Turn on auto switch and rank your mics in Settings. Vaux switches to the
+  highest-ranked one that's connected as devices come and go.
+- The menu lists every input, marks the preferred one, and has an input volume
+  slider and an auto switch toggle.
 
 ## Permissions
 
@@ -71,8 +71,7 @@ UI. That's why it supports specific apps rather than "everything but X".
   be muted).
 - **Click** the icon to open the menu. **Shift-, Option- or Control-click** it
   to toggle mute.
-- **Settings:** shortcuts, solo mode, unmute volume, preferred inputs, and
-  launch at login.
+- **Settings:** solo mode, mute, preferred inputs, and launch at login.
 
 ## Requirements
 

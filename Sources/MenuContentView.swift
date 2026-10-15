@@ -23,6 +23,7 @@ struct MenuContentView: View {
     @State private var volume: Double = 0
     @State private var canSetVolume = false
     @State private var currentDeviceID: AudioDeviceID?
+    @AppStorage(AppStorageKey.enforcePreferred) private var autoSwitch = false
 
     init(appState: AppState, openSettings: @escaping () -> Void, dismiss: @escaping () -> Void) {
         _appState = Bindable(wrappedValue: appState)
@@ -46,6 +47,7 @@ struct MenuContentView: View {
             divider()
             header("Input", color: .secondary)
             ForEach(inputs) { inputRow($0) }
+            autoSwitchRow
             divider()
             textRow(appState.muted ? "Unmute" : "Mute", trailing: muteShortcut) { appState.toggle() }
             textRow(appState.soloActive ? "End Solo Mode" : "Solo Mode", trailing: soloShortcut, trailingSymbol: soloShortcutSymbol) {
@@ -99,9 +101,26 @@ struct MenuContentView: View {
                 deviceIcon(device)
                 Text(device.name).font(.system(size: 13))
                 Spacer(minLength: 6)
-                if device.isPreferred { preferredBadge }
+                if device.isPreferred, autoSwitch { preferredBadge }
             }
         }
+    }
+
+    /// Switch to the preferred input as devices come and go (Settings ranks them).
+    private var autoSwitchRow: some View {
+        HStack {
+            Text("Auto Switch").font(.system(size: 13))
+            Spacer()
+            Toggle("Auto Switch", isOn: $autoSwitch)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .labelsHidden()
+                .onChange(of: autoSwitch) { _, on in
+                    if on { NotificationCenter.default.post(name: .enforcePreferredInput, object: nil) }
+                }
+        }
+        .padding(.horizontal, contentInset)
+        .frame(height: 26)
     }
 
     /// `trailingSymbol`: an SF Symbol shown instead of `trailing`, for keys

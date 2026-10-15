@@ -47,9 +47,6 @@ final class AppState {
         KeyboardShortcuts.onKeyDown(for: .toggleMicMute) { [weak self] in
             self?.toggle()
         }
-        KeyboardShortcuts.onKeyDown(for: .applyPreferredInput) { [weak self] in
-            self?.applyPreferredInput()
-        }
         KeyboardShortcuts.onKeyDown(for: .toggleSolo) { [weak self] in
             self?.toggleSolo()
         }
@@ -319,11 +316,11 @@ final class AppState {
 
     /// Lower the default output to the configured fraction of its level.
     private func duckOutput() -> OutputDuck? {
-        guard UserDefaults.standard.bool(forKey: AppStorageKey.soloDuck),
+        let stored = UserDefaults.standard.object(forKey: AppStorageKey.soloSpeakerLevel) as? Double
+        let level = Float32(stored ?? AppStorageKey.soloSpeakerLevelDefault)
+        guard level < 0.995,
               let out = AudioController.defaultOutputDevice(),
               let original = AudioController.outputVolume(on: out) else { return nil }
-        let stored = UserDefaults.standard.object(forKey: AppStorageKey.soloDuckLevel) as? Double
-        let level = Float32(stored ?? AppStorageKey.soloDuckLevelDefault)
         guard AudioController.setOutputVolume(original * level, on: out) else { return nil }
         // Read back: devices quantize volume (Bluetooth in 1/16 steps).
         let ducked = AudioController.outputVolume(on: out) ?? original * level

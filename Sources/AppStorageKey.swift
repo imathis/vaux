@@ -11,11 +11,10 @@ enum AppStorageKey {
     /// Auto-switch to the highest-priority connected input on device/input changes.
     static let enforcePreferred = "enforcePreferred"
 
-    /// Solo mode: lower speaker output while solo is on, to this fraction of
-    /// its current level (scalar 0.0...1.0).
-    static let soloDuck = "soloDuck"
-    static let soloDuckLevel = "soloDuckLevel"
-    static let soloDuckLevelDefault = 0.3
+    /// Solo mode: speaker volume while solo is on, as a share of its level
+    /// (scalar 0.05...1.0). 1 leaves the speakers alone.
+    static let soloSpeakerLevel = "soloSpeakerLevel"
+    static let soloSpeakerLevelDefault = 1.0
 
     /// Solo mode: pause playing media until solo ends. On unless set.
     static let soloPauseMedia = "soloPauseMedia"

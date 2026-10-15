@@ -7,10 +7,6 @@ extension KeyboardShortcuts.Name {
     /// no permission dialog.
     static let toggleMicMute = Self("toggleMicMute")
 
-    /// Global hotkey for re-asserting the preferred input device (highest
-    /// priority device that's currently connected).
-    static let applyPreferredInput = Self("applyPreferredInput")
-
     /// Global hotkey for solo mode: mute call apps in-app, keep the mic live.
     static let toggleSolo = Self("toggleSolo")
 }

@@ -5,13 +5,12 @@ import SwiftUI
 struct SettingsView: View {
     @AppStorage(AppStorageKey.unmuteVolume) private var unmuteVolume =
         AppStorageKey.unmuteVolumeDefault
-    @AppStorage(AppStorageKey.enforcePreferred) private var enforcePreferred = false
-    @AppStorage(AppStorageKey.soloDuck) private var soloDuck = false
+    @AppStorage(AppStorageKey.enforcePreferred) private var autoSwitch = false
     @AppStorage(AppStorageKey.soloPauseMedia) private var soloPauseMedia = true
+    @AppStorage(AppStorageKey.soloSpeakerLevel) private var soloSpeakerLevel =
+        AppStorageKey.soloSpeakerLevelDefault
     @AppStorage(AppStorageKey.soloFollowApp) private var soloFollowApp = ""
     @State private var followChoices: [FollowChoice] = []
-    @AppStorage(AppStorageKey.soloDuckLevel) private var soloDuckLevel =
-        AppStorageKey.soloDuckLevelDefault
     @State private var accessibilityTrusted = CallMuter.isTrusted
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var priority = InputPriorityModel()
@@ -21,27 +20,6 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
-                KeyboardShortcuts.Recorder("Toggle mute:", name: .toggleMicMute)
-                KeyboardShortcuts.Recorder("Use preferred input:", name: .applyPreferredInput)
-                SoloShortcutRecorder(title: "Toggle solo mode:")
-            } header: {
-                Text("Shortcuts")
-            }
-
-            Section {
-                Picker("Follow dictation app", selection: $soloFollowApp) {
-                    Text("None").tag("")
-                    ForEach(followChoices) { choice in
-                        Label { Text(choice.name) } icon: { Image(nsImage: choice.icon) }
-                            .tag(choice.id)
-                    }
-                }
-                Toggle("Pause playing media", isOn: $soloPauseMedia)
-                Toggle("Lower speakers while solo", isOn: $soloDuck)
-                VolumeSlider(
-                    value: $soloDuckLevel, icons: .speaker, range: 0.05...0.8,
-                    showsPercent: true, isEnabled: soloDuck)
-                    .frame(height: 28)
                 if !accessibilityTrusted {
                     HStack {
                         Text("Solo mode needs Accessibility access.")
@@ -55,52 +33,72 @@ struct SettingsView: View {
                         }
                     }
                 }
-            } header: {
-                Text("Solo Mode")
-            } footer: {
-                Text("For dictating on a call: mutes Slack and Discord in the app and keeps your mic live. Paused media plays again when solo ends. Speakers drop to this share of their level.")
-            }
-
-            Section {
-                VolumeSlider(value: $unmuteVolume, showsPercent: true)
-                    .frame(height: 28)
-            } header: {
-                Text("Default Unmute Volume")
-            } footer: {
-                Text("Inputs are set to this volume when unmuted, unless one has its own below.")
-            }
-
-            Section {
-                Toggle("Auto switch", isOn: $enforcePreferred)
-                    .onChange(of: enforcePreferred) { _, on in
-                        if on { NotificationCenter.default.post(name: .enforcePreferredInput, object: nil) }
+                SoloShortcutRecorder(title: "Shortcut")
+                Picker(selection: $soloFollowApp) {
+                    Text("Off").tag("")
+                    ForEach(followChoices) { choice in
+                        Label { Text(choice.name) } icon: { Image(nsImage: choice.icon) }
+                            .tag(choice.id)
                     }
-
-                if priority.entries.isEmpty {
-                    Text("No input devices seen yet.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    List {
-                        ForEach(priority.entries) { entry in
-                            InputRow(
-                                entry: entry,
-                                connected: priority.isConnected(entry),
-                                unmuteOverride: priority.unmuteOverrides[entry.uid],
-                                defaultUnmute: unmuteVolume
-                            ) { priority.setUnmuteOverride($0, for: entry) }
-                            .frame(height: 22)
-                            .listRowInsets(EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12))
-                        }
-                        .onMove(perform: priority.move)
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .frame(height: CGFloat(min(priority.entries.count, 6)) * rowHeight)
+                } label: {
+                    Text("Turn on automatically")
+                    Text("While this app is using the mic")
+                }
+                Toggle("Pause playing media", isOn: $soloPauseMedia)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Speaker volume")
+                    VolumeSlider(
+                        value: $soloSpeakerLevel, icons: .speaker, range: 0.05...1,
+                        showsPercent: true)
+                        .frame(height: 28)
+                        .padding(.horizontal, -14) // line the icons up with the text
                 }
             } header: {
-                Text("Preferred Inputs")
-            } footer: {
-                Text("Switch to inputs as available in this order.")
+                header("Solo Mode", "While you dictate, mutes you in Slack and Discord calls.")
+            }
+
+            Section {
+                KeyboardShortcuts.Recorder("Shortcut", name: .toggleMicMute)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Unmute volume")
+                    VolumeSlider(value: $unmuteVolume, showsPercent: true)
+                        .frame(height: 28)
+                        .padding(.horizontal, -14)
+                }
+            } header: {
+                header("Mute")
+            }
+
+            Section {
+                Toggle("Auto switch", isOn: $autoSwitch)
+                    .onChange(of: autoSwitch) { _, on in
+                        if on { NotificationCenter.default.post(name: .enforcePreferredInput, object: nil) }
+                    }
+                if autoSwitch {
+                    if priority.entries.isEmpty {
+                        Text("No input devices seen yet.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        List {
+                            ForEach(priority.entries) { entry in
+                                InputRow(
+                                    entry: entry,
+                                    connected: priority.isConnected(entry),
+                                    unmuteOverride: priority.unmuteOverrides[entry.uid],
+                                    defaultUnmute: unmuteVolume
+                                ) { priority.setUnmuteOverride($0, for: entry) }
+                                .frame(height: 22)
+                                .listRowInsets(EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12))
+                            }
+                            .onMove(perform: priority.move)
+                        }
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
+                        .frame(height: CGFloat(min(priority.entries.count, 6)) * rowHeight)
+                    }
+                }
+            } header: {
+                header("Preferred Inputs", "Switches to the highest-ranked mic that's connected.")
             }
 
             Section {
@@ -117,6 +115,19 @@ struct SettingsView: View {
             followChoices = FollowChoice.all(including: soloFollowApp)
         }
         .frame(width: 460)
+    }
+
+    /// A section title with its one-line description under it.
+    private func header(_ title: String, _ description: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+            if let description {
+                Text(description)
+                    .font(.callout)
+                    .fontWeight(.regular)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }
 
@@ -169,7 +180,7 @@ private struct InputRow: View {
                 .padding(.vertical, 2)
                 .background(.quaternary, in: Capsule())
         } else {
-            Image(systemName: "slider.horizontal.3")
+            Image(systemName: "dial.medium")
                 .foregroundStyle(.tertiary)
         }
     }
