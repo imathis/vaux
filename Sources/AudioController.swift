@@ -4,7 +4,7 @@ import Foundation
 
 /// Thin wrapper over the Core Audio HAL property API.
 ///
-/// Hard rule for Hush: we touch audio **only** through HAL property
+/// Hard rule for Vaux: we touch audio **only** through HAL property
 /// reads/writes/listeners. No streams, no I/O procs, no aggregate devices,
 /// no capture. Setting these properties does not trigger TCC, so the app
 /// needs no microphone permission.

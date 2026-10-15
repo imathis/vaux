@@ -59,7 +59,7 @@ final class ModifierTapMonitor {
 
     /// Posted (object: the tapped `Key`) instead of firing while a shortcut
     /// recorder is capturing, so the solo recorder can record the tap.
-    static let recordedTap = Notification.Name("HushModifierTapRecorded")
+    static let recordedTap = Notification.Name("VauxModifierTapRecorded")
 
     /// KeyboardShortcuts' recorders post this (userInfo "isActive": Bool).
     static let recorderStatus = Notification.Name("KeyboardShortcuts_recorderActiveStatusDidChange")

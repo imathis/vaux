@@ -27,5 +27,5 @@ enum AppStorageKey {
 
 extension Notification.Name {
     /// Posted when the user enables enforcement, so AppState applies it immediately.
-    static let hushEnforcePreferred = Notification.Name("hushEnforcePreferred")
+    static let enforcePreferredInput = Notification.Name("enforcePreferredInput")
 }

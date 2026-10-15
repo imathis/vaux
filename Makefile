@@ -1,5 +1,5 @@
-PROJECT := Hush.xcodeproj
-SCHEME  := Hush
+PROJECT := Vaux.xcodeproj
+SCHEME  := Vaux
 
 # Command-line signing override. Xcode (project.yml) uses automatic signing;
 # from the CLI we sign manually with the local dev identity (no Apple ID

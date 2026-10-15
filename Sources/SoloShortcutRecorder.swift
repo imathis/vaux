@@ -26,7 +26,7 @@ struct SoloShortcutRecorder: View {
         func makeCoordinator() -> Coordinator { Coordinator() }
 
         func makeNSView(context: Context) -> KeyboardShortcuts.RecorderCocoa {
-            // Binding mode: Hush stores the shortcut, so the field's text never
+            // Binding mode: Vaux stores the shortcut, so the field's text never
             // gets reset behind our back while it shows a tap key.
             let recorder = KeyboardShortcuts.RecorderCocoa(shortcut: KeyboardShortcuts.getShortcut(for: .toggleSolo)) { shortcut in
                 // A combo was recorded or the field cleared: no tap key either way.

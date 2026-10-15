@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 import os
 
-/// A call app whose own mic toggle Hush can press in solo mode.
+/// A call app whose own mic toggle Vaux can press in solo mode.
 struct CallApp: Sendable, Hashable {
     let name: String
     let bundleID: String
@@ -34,8 +34,8 @@ struct CallApp: Sendable, Hashable {
 /// Every call here is synchronous AX IPC (plus short waits) — run on `queue`,
 /// never the main thread.
 enum CallMuter {
-    static let queue = DispatchQueue(label: "dev.imathis.hush.calls", qos: .userInitiated)
-    private static let log = Logger(subsystem: "dev.imathis.hush", category: "solo")
+    static let queue = DispatchQueue(label: "dev.imathis.vaux.calls", qos: .userInitiated)
+    private static let log = Logger(subsystem: "dev.imathis.vaux", category: "solo")
 
     enum Outcome: Sendable, Equatable {
         /// Not running, not in a call, or (unmuting) the call has ended.
@@ -64,7 +64,7 @@ enum CallMuter {
     /// the old state. Until it catches up, the press is the truth.
     private static let pending = OSAllocatedUnfairLock(initialState: [String: (muted: Bool, press: Int)]())
     private static let presses = OSAllocatedUnfairLock(initialState: 0)
-    private static let watchQueue = DispatchQueue(label: "dev.imathis.hush.calls.watch", attributes: .concurrent)
+    private static let watchQueue = DispatchQueue(label: "dev.imathis.vaux.calls.watch", attributes: .concurrent)
 
     /// The call ended: whatever we pressed no longer says anything about the next one.
     static func forget(_ app: CallApp) {

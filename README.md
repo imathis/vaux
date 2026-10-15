@@ -1,8 +1,10 @@
-# Hush
+# Vaux
 
-Hush is a tiny macOS menu bar app for your microphone. Mute it from the menu bar
-or a global shortcut, keep your mics in priority order, and use solo mode to
-dictate while you're on a call.
+**Talk to your Mac. Not the meeting.**
+
+Vaux is a mic manager for meetings and dictation. One shortcut mutes the call
+while your mic stays live for dictation. Plus mute from anywhere, your mics in
+priority order, and nothing ever recorded.
 
 It never touches your audio stream. There are no virtual or aggregate devices,
 no HAL plugins, and no capture — only Core Audio property changes. That means no
@@ -10,30 +12,13 @@ Bluetooth quality drop, no added latency, and no microphone permission.
 
 ## Features
 
-### Mute
-
-- One click or one shortcut mutes the current input. Unmuting restores a set
-  volume.
-- Devices without a hardware mute are muted by setting their volume to zero.
-- Hush follows the system default input live, and keeps it muted if you switch
-  inputs while muted.
-- The menu bar icon always shows the real state, even when mute is changed in
-  System Settings or another app.
-
-### Preferred inputs
-
-- Rank your mics in Settings. Hush switches to the highest-ranked one that's
-  connected, either automatically when devices come and go or with a shortcut.
-- The menu lists every input, marks the preferred one, and includes an input
-  volume slider.
-
 ### Solo mode
 
 For dictating during a call, on the same mic. Solo mode:
 
 - Mutes **Slack** and **Discord** by pressing their own mute buttons, so the
   call sees you as muted and doesn't hear you dictate.
-- Keeps your mic live for everything else, unmuting it if Hush had it muted.
+- Keeps your mic live for everything else, unmuting it if Vaux had it muted.
 - Optionally lowers your speakers while it's on, so less of the call bleeds into
   the mic.
 - Puts everything back when it ends: it unmutes only the apps it muted and
@@ -46,19 +31,37 @@ macOS can't mute one app's microphone for another app without a virtual audio
 device, so solo works the other way around: it mutes the call apps in their own
 UI. That's why it supports specific apps rather than "everything but X".
 
+### Mute
+
+- One click or one shortcut mutes the current input. Unmuting restores a set
+  volume, per input if you like.
+- Devices without a hardware mute are muted by setting their volume to zero.
+- Vaux follows the system default input live, and keeps it muted if you switch
+  inputs while muted.
+- The menu bar icon always shows the real state, even when mute is changed in
+  System Settings or another app.
+
+### Preferred inputs
+
+- Rank your mics in Settings. Vaux switches to the highest-ranked one that's
+  connected, either automatically when devices come and go or with a shortcut.
+- The menu lists every input, marks the preferred one, and includes an input
+  volume slider.
+
 ## Permissions
 
 - **Mute and inputs:** none. Changing Core Audio properties doesn't trigger
   the microphone permission prompt.
 - **Solo mode:** Accessibility, to press mute in Slack and Discord, and to
-  notice modifier taps. Hush watches only modifier keys, never keystrokes.
-- **Call and dictation detection:** none. Hush reads which apps are using the
+  notice modifier taps. Vaux watches only modifier keys, never keystrokes.
+- **Call and dictation detection:** none. Vaux reads which apps are using the
   mic from Core Audio's process list, without opening the mic itself.
 
 ## Usage
 
-- The menu bar icon shows the state: live, muted (red), or solo (accent color,
-  or orange if something couldn't be muted).
+- The menu bar icon shows the state: voice bars when live, flat dots when
+  muted, and three bars between two dots in solo (orange if something couldn't
+  be muted).
 - **Click** the icon to open the menu. **Shift-, Option- or Control-click** it
   to toggle mute.
 - **Settings:** shortcuts, solo mode, unmute volume, preferred inputs, and
@@ -92,7 +95,7 @@ prefix the command:
 
 ### App Store builds
 
-The App Sandbox entitlements are in `Sources/Hush.entitlements` and are off by
+The App Sandbox entitlements are in `Sources/Vaux.entitlements` and are off by
 default; see the comment in `project.yml`. Mute and inputs work sandboxed, but
 solo mode doesn't, because the sandbox blocks Accessibility control of other
 apps.
@@ -104,7 +107,8 @@ project.yml                  # XcodeGen spec: deployment target, signing, SPM
 Makefile                     # gen / open / build / run / clean
 Sources/
   main.swift                 # entry point
-  AppDelegate.swift          # status item, icon, clicks, Settings window
+  AppDelegate.swift          # status item, clicks, Settings window
+  StatusIcon.swift           # menu bar glyph: live, muted, solo
   MenuPanelController.swift  # the custom glass menu panel
   MenuContentView.swift      # menu: volume, inputs, mute, solo, settings
   SettingsView.swift         # Settings
@@ -121,7 +125,8 @@ Sources/
   Shortcuts.swift            # KeyboardShortcuts names
   AppStorageKey.swift        # shared settings keys
   Info.plist                 # LSUIElement: menu bar only, no Dock icon
-  Hush.entitlements          # App Sandbox (off by default)
+  Vaux.entitlements          # App Sandbox (off by default)
+IconSource/                  # app icon layer art for Icon Composer
 ```
 
 ## Non-goals

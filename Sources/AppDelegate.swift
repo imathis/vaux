@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // bars between two dimmed dots (orange if something couldn't be muted).
         let state: StatusIcon.State = solo ? .solo(problem: !appState.soloProblems.isEmpty) : muted ? .muted : .live
         button.image = StatusIcon.image(state, description: description)
-        button.toolTip = appState.deviceName.map { "Hush — Input: \($0)" } ?? "Hush — no input device"
+        button.toolTip = appState.deviceName.map { "Vaux — Input: \($0)" } ?? "Vaux — no input device"
     }
 
     /// Don't leave call apps muted or speakers ducked behind us.
@@ -74,7 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Size the window to the SwiftUI content (fixed width, intrinsic height).
             controller.sizingOptions = [.preferredContentSize]
             let window = NSWindow(contentViewController: controller)
-            window.title = "Hush Settings"
+            window.title = "Vaux Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             window.center()

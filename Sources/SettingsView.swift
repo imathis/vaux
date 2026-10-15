@@ -71,7 +71,7 @@ struct SettingsView: View {
             Section {
                 Toggle("Auto switch", isOn: $enforcePreferred)
                     .onChange(of: enforcePreferred) { _, on in
-                        if on { NotificationCenter.default.post(name: .hushEnforcePreferred, object: nil) }
+                        if on { NotificationCenter.default.post(name: .enforcePreferredInput, object: nil) }
                     }
 
                 if priority.entries.isEmpty {

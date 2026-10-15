@@ -54,7 +54,7 @@ struct MenuContentView: View {
             soloStatus
             divider()
             textRow("Settings…", trailing: "⌘,") { openSettings(); dismiss() }
-            textRow("Quit Hush", trailing: "⌘Q") { NSApp.terminate(nil) }
+            textRow("Quit Vaux", trailing: "⌘Q") { NSApp.terminate(nil) }
         }
         .padding(.vertical, 5)
         .frame(width: menuWidth)
@@ -250,7 +250,7 @@ private struct MenuRow<Content: View>: View {
 
 /// Serializes input-volume writes off the main thread so dragging stays smooth.
 enum VolumeWriter {
-    private static let queue = DispatchQueue(label: "dev.imathis.hush.volume")
+    private static let queue = DispatchQueue(label: "dev.imathis.vaux.volume")
     static func write(_ value: Float, to device: AudioDeviceID) {
         queue.async { AudioController.setVolume(value, on: device) }
     }

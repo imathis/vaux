@@ -70,7 +70,7 @@ final class AppState {
         lastInputUIDs = Set(AudioController.inputDevices().map(\.uid))
         startDeviceListListener()
         NotificationCenter.default.addObserver(
-            forName: .hushEnforcePreferred, object: nil, queue: .main
+            forName: .enforcePreferredInput, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyPreferredInput() }
         }
@@ -203,7 +203,7 @@ final class AppState {
     private func startSolo() {
         guard CallMuter.isTrusted else {
             CallMuter.requestTrust()
-            soloProblems = ["Allow Hush in Privacy & Security → Accessibility, then try again"]
+            soloProblems = ["Allow Vaux in Privacy & Security → Accessibility, then try again"]
             notify()
             return
         }
@@ -222,7 +222,7 @@ final class AppState {
         let mutedApps = outcomes.filter { $0.outcome == .muted }.map(\.app)
         let failures = outcomes.filter { $0.outcome == .failed }.map { "Couldn't mute \($0.app.name)" }
 
-        // The mic is hushed and a call couldn't be confirmed muted: don't open
+        // The mic is muted and a call couldn't be confirmed muted: don't open
         // the mic to it. Put back what we did mute and stay out of solo.
         if muted, !failures.isEmpty {
             soloProblems = failures + ["Solo not started — mic stays muted"]
@@ -261,7 +261,7 @@ final class AppState {
         soloBusy = true
         notify()
         if let duck = snapshot.duck { restoreOutput(duck) }
-        // Re-hush the mic before the call apps go live again.
+        // Re-mute the mic before the call apps go live again.
         if snapshot.wasMuted { setMuted(true) }
         let apps = snapshot.mutedApps
         CallMuter.queue.async { [weak self] in

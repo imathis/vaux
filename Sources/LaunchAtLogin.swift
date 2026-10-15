@@ -13,7 +13,7 @@ enum LaunchAtLogin {
                     try SMAppService.mainApp.unregister()
                 }
             } catch {
-                NSLog("Hush: launch-at-login \(newValue ? "register" : "unregister") failed: \(error)")
+                NSLog("Vaux: launch-at-login \(newValue ? "register" : "unregister") failed: \(error)")
             }
         }
     }
