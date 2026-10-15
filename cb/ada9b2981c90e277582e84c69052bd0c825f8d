@@ -1,0 +1,29 @@
+Sources/AppState.swift
+  s_7cfcc273794c17::t_bedb3a5b1d233b 67-70,155-156,259-272,284-288,290,292,297-301,304-306,339,343
+Sources/AudioController.swift
+  s_7cfcc273794c17::t_575e9b1f8a6014 178-181,183-191,194-197,201-204,206
+Sources/CaptureWatcher.swift
+  s_7cfcc273794c17::t_575e9b1f8a6014 20-22,49,61,69-74
+Sources/CallMuter.swift
+  s_7cfcc273794c17::t_d2b54edd1d8958 24-25,29,37-50,101-102,143,153-155,164,196,242-280,282-294,307,317-319,321,326,368-372
+  s_7cfcc273794c17::t_4631bba7110096 281
+  s_7cfcc273794c17::t_965d08f72a3d98 373
+Sources/AppDelegate.swift
+  s_7cfcc273794c17::t_bedb3a5b1d233b 61-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cbada9b2981c90e277582e84c69052bd0c825f8d",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
