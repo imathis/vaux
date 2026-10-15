@@ -4,9 +4,18 @@
 
 **Talk to your Mac. Not the meeting.**
 
-A microphone manager for the dictation era. One shortcut mutes the call while
-your mic stays live for dictation. Plus mute from anywhere, your mics in
-priority order, and nothing ever recorded.
+If you dictate instead of typing, a call shouldn't take that away. But it does.
+Start to speak a prompt to your agent, or a quick note, and the meeting hears
+it. So you stop and find what to mute, pause what you were listening to, and
+hope the call doesn't bleed into your mic. By then the thought is gone.
+
+Vaux solos your voice to your dictation app, the way you'd solo one track on a
+mixer, and the rest of the Mac makes room: your calls mute, your media pauses,
+and if you like, your speakers come down. When you stop, it all goes back.
+Dictation works on a call the way it does anywhere else.
+
+Around that, Vaux manages your mic: one key mutes it everywhere, your mics
+switch in the order you rank them, and each comes back at the volume you set.
 
 It never touches your audio stream. There are no virtual or aggregate devices,
 no HAL plugins, and no capture — only Core Audio property changes. That means no
@@ -28,8 +37,8 @@ Vaux lives in the menu bar. To update: `brew upgrade --cask vaux`.
 
 ### Solo mode
 
-For dictating during a call, on the same mic. The call stops hearing you; your
-dictation app doesn't.
+Solo is for dictating while you're on a call, on the same mic: your dictation
+app hears you, and nothing else does.
 
 Works with **Zoom**, **Google Meet** (in any browser), **FaceTime**, **Slack**
 and **Discord**. Solo mode:
