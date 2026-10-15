@@ -140,11 +140,13 @@ prefix the command:
 ```sh
 make install    # Release build signed with Developer ID, into /Applications
 make notarize   # notarize and staple it, zipped in dist/ with its SHA-256
+make publish    # tag, GitHub release with the zip, and update the Homebrew cask
 ```
 
 `RELEASE` in the `Makefile` names the release (tag, zip, cask); the app's own
-version is `MARKETING_VERSION` in `project.yml`. Notarizing needs a stored
-`notarytool` profile, `vaux` by default (`NOTARY_PROFILE`).
+version is `MARKETING_VERSION` in `project.yml`. Notarizing needs the developer
+account's `notarytool` login stored in the Keychain, `notarytool-profile` by
+default (`NOTARY_PROFILE`).
 
 ### App Store builds
 
