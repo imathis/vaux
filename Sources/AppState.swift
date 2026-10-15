@@ -24,7 +24,7 @@ final class AppState {
 
     @ObservationIgnored private var currentDevice: AudioDeviceID?
     @ObservationIgnored private var defaultDeviceListener: AudioPropertyListener?
-    @ObservationIgnored private var muteListener: AudioPropertyListener?
+    @ObservationIgnored private var muteListeners: [AudioPropertyListener] = []
 
     /// Unmute level for a device as a scalar 0.0...1.0: its own level if set
     /// in Settings, else the default. Read fresh from `UserDefaults`.
@@ -33,6 +33,10 @@ final class AppState {
     }
 
     @ObservationIgnored private var muteIntentInitialized = false
+    /// Just after switching inputs: the new device's own mute and volume
+    /// changes are it settling, not someone changing them, so they don't
+    /// overwrite the intent.
+    @ObservationIgnored private var settlingUntil = Date.distantPast
 
     @ObservationIgnored private var deviceListListener: AudioPropertyListener?
     @ObservationIgnored private var enforceScheduled = false
@@ -103,10 +107,14 @@ final class AppState {
         setMuted(AudioController.supportsMute(dev) ? !AudioController.isMuted(dev) : !muted)
     }
 
-    /// Set the mute intent and write it to the current input, if any.
+    /// Set the mute intent and write it to the current input, if any. A
+    /// device that won't take it (no mute and no settable volume) keeps its
+    /// state, and the icon shows that rather than the intent.
     private func setMuted(_ next: Bool) {
         muted = next
-        if let dev = currentDevice ?? AudioController.defaultInputDevice() { writeMuteIntent(to: dev) }
+        if let dev = currentDevice ?? AudioController.defaultInputDevice(), !writeMuteIntent(to: dev) {
+            muted = currentMutedState(dev)
+        }
         notify()
     }
 
@@ -134,6 +142,10 @@ final class AppState {
     /// trigger shared with a dictation app must never be skipped, or the two
     /// fall out of step.
     @ObservationIgnored private var pendingSoloToggle = false
+    /// Whether the queued toggle came from the key shared with dictation.
+    @ObservationIgnored private var pendingToggleByKey = false
+    /// Quitting: once the transition in flight lands, end solo and call this.
+    @ObservationIgnored private var quitWhenSettled: (@MainActor @Sendable () -> Void)?
     @ObservationIgnored private var keyMonitor: SoloKeyMonitor?
     @ObservationIgnored private let callWatcher = CaptureWatcher()
     /// Watches the app solo follows (e.g. a dictation app): solo turns on
@@ -173,7 +185,11 @@ final class AppState {
     /// `byKey`: from the key shared with dictation, rather than the menu or a
     /// key combo of Vaux's own.
     func toggleSolo(byKey: Bool = false) {
-        guard !soloBusy else { pendingSoloToggle.toggle(); return }
+        guard !soloBusy else {
+            pendingSoloToggle.toggle()
+            pendingToggleByKey = byKey
+            return
+        }
         if soloActive {
             endSolo()
         } else {
@@ -200,6 +216,7 @@ final class AppState {
         guard !soloBusy else { pendingFollow = capturing; return }
         if capturing, !soloActive {
             soloStartedByFollow = true
+            soloStartedByKey = false
             startSolo()
         } else if !capturing, soloActive, soloStartedByFollow {
             endSolo()
@@ -209,9 +226,14 @@ final class AppState {
     private func finishSoloTransition() {
         soloBusy = false
         notify()
-        if pendingSoloToggle {
+        if let done = quitWhenSettled {
+            quitWhenSettled = nil
             pendingSoloToggle = false
-            toggleSolo()
+            pendingFollow = nil
+            endSolo(completion: done)
+        } else if pendingSoloToggle {
+            pendingSoloToggle = false
+            toggleSolo(byKey: pendingToggleByKey)
         } else if let capturing = pendingFollow {
             pendingFollow = nil
             followAppChanged(capturing: capturing)
@@ -232,21 +254,27 @@ final class AppState {
         guard CallMuter.isTrusted else {
             CallMuter.requestTrust()
             soloProblems = ["Allow Vaux in Privacy & Security → Accessibility, then try again"]
+            soloStartedByKey = false
             notify()
             return
         }
         soloBusy = true
         soloProblems = []
         notify()
+        // Apps on the mic that solo can't mute. Read now, before a dictation
+        // app sharing the trigger starts listening too.
+        let mine = Set(CallApp.all.map(\.bundleID)).union(Self.followApp).union([Bundle.main.bundleIdentifier ?? ""])
+        let unmutable = AudioController.appsCapturingInput(ignoring: mine)
         CallMuter.queue.async { [weak self] in
             let outcomes = CallApp.all.map { (app: $0, outcome: CallMuter.mute($0)) }
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { self?.finishStartingSolo(outcomes) }
+                MainActor.assumeIsolated { self?.finishStartingSolo(outcomes, unmutable: unmutable) }
             }
         }
     }
 
-    private func finishStartingSolo(_ outcomes: [(app: CallApp, outcome: CallMuter.Outcome)]) {
+    /// `unmutable`: other apps using the mic, which still hear you.
+    private func finishStartingSolo(_ outcomes: [(app: CallApp, outcome: CallMuter.Outcome)], unmutable: [String]) {
         let mutedApps = outcomes.filter { $0.outcome == .muted }.map(\.app)
         let failures = outcomes.filter { $0.outcome == .failed }.map { "Couldn't mute \($0.app.name)" }
 
@@ -262,8 +290,7 @@ final class AppState {
                         self?.pendingSoloToggle = false
                         self?.pendingFollow = nil
                         self?.soloStartedByKey = false
-                        self?.soloBusy = false
-                        self?.notify()
+                        self?.finishSoloTransition()
                     }
                 }
             }
@@ -277,6 +304,8 @@ final class AppState {
         let dictationKey = soloStartedByKey && SoloKeyMonitor.Key.current == .dictation
         if pauseMedia, !dictationKey {
             mediaPauser.pause(ignoring: Set(CallApp.all.map(\.bundleID)).union(Self.followApp))
+        } else {
+            mediaPauser.hold()
         }
         soloSnapshot = SoloSnapshot(wasMuted: muted, mutedApps: mutedApps, duck: duck)
         if muted { setMuted(false) }
@@ -284,9 +313,19 @@ final class AppState {
             .filter { $0.outcome == .muted || $0.outcome == .alreadyMuted }
             .map(\.app.name)
         soloDuckedTo = duck?.ducked
-        soloProblems = failures
+        soloProblems = failures + unmutable.map { "\($0) can still hear you" }
         soloActive = true
         finishSoloTransition()
+    }
+
+    /// For quitting: end solo, waiting first for a transition in flight, and
+    /// call `done` once the call apps are unmuted.
+    func endSoloForQuit(_ done: @escaping @MainActor @Sendable () -> Void) {
+        if soloBusy {
+            quitWhenSettled = done
+        } else {
+            endSolo(completion: done)
+        }
     }
 
     /// Restore everything solo changed. `completion` runs once the call apps
@@ -398,7 +437,7 @@ final class AppState {
         guard let dev else {
             deviceName = nil
             supportsMute = false
-            muteListener = nil
+            muteListeners = []
             // Keep `muted` as the standing intent so it re-applies when a
             // device returns.
             notify()
@@ -428,6 +467,7 @@ final class AppState {
 
     /// Re-assert the current mute intent (`muted`) onto a device, then verify.
     private func applyMuteIntent(to dev: AudioDeviceID) {
+        settlingUntil = Date().addingTimeInterval(1)
         writeMuteIntent(to: dev)
         // A just-switched or hot-plugged device may not accept the write
         // immediately; re-check after a short delay and re-apply once if the
@@ -443,13 +483,19 @@ final class AppState {
         }
     }
 
-    private func writeMuteIntent(to dev: AudioDeviceID) {
+    /// Write the mute intent. Unmuting restores the unmute volume; a device
+    /// that's live already keeps its own level. False if the write failed.
+    @discardableResult
+    private func writeMuteIntent(to dev: AudioDeviceID) -> Bool {
         if AudioController.supportsMute(dev) {
-            AudioController.setMuted(muted, on: dev)
-            if !muted { AudioController.setVolume(unmuteVolume(for: dev), on: dev) }
-        } else {
-            AudioController.setVolume(muted ? 0 : unmuteVolume(for: dev), on: dev)
+            if muted { return AudioController.setMuted(true, on: dev) }
+            guard AudioController.isMuted(dev) else { return true }
+            AudioController.setVolume(unmuteVolume(for: dev), on: dev)
+            return AudioController.setMuted(false, on: dev)
         }
+        if muted { return AudioController.setVolume(0, on: dev) }
+        guard (AudioController.volume(on: dev) ?? 1) <= 0.0001 else { return true }
+        return AudioController.setVolume(unmuteVolume(for: dev), on: dev)
     }
 
     private func muteIntentSatisfied(on dev: AudioDeviceID) -> Bool {
@@ -465,17 +511,26 @@ final class AppState {
     private func startMuteListener(for dev: AudioDeviceID) {
         let selector: AudioObjectPropertySelector =
             supportsMute ? kAudioDevicePropertyMute : kAudioDevicePropertyVolumeScalar
-        muteListener = AudioPropertyListener(
-            objectID: dev,
-            selector: selector,
-            scope: kAudioObjectPropertyScopeInput
-        ) { [weak self] in
-            MainActor.assumeIsolated { self?.resyncMutedState() }
+        // Volume can live on the main element or only on the channels.
+        let elements = supportsMute ? [kAudioObjectPropertyElementMain] : AudioController.volumeElements(on: dev)
+        muteListeners = elements.compactMap { element in
+            AudioPropertyListener(
+                objectID: dev,
+                selector: selector,
+                scope: kAudioObjectPropertyScopeInput,
+                element: element
+            ) { [weak self] in
+                MainActor.assumeIsolated { self?.resyncMutedState() }
+            }
         }
     }
 
     private func resyncMutedState() {
         guard let dev = currentDevice else { return }
+        if Date() < settlingUntil {
+            if !muteIntentSatisfied(on: dev) { writeMuteIntent(to: dev) }
+            return
+        }
         muted = currentMutedState(dev)
         notify()
     }

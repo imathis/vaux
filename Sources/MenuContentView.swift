@@ -18,6 +18,7 @@ struct MenuContentView: View {
     @Bindable var appState: AppState
     let openSettings: () -> Void
     let dismiss: () -> Void
+    let resized: (CGSize) -> Void
 
     @State private var inputs: [MenuInputDevice] = []
     @State private var volume: Double = 0
@@ -25,10 +26,12 @@ struct MenuContentView: View {
     @State private var currentDeviceID: AudioDeviceID?
     @AppStorage(AppStorageKey.enforcePreferred) private var autoSwitch = false
 
-    init(appState: AppState, openSettings: @escaping () -> Void, dismiss: @escaping () -> Void) {
+    init(appState: AppState, openSettings: @escaping () -> Void, dismiss: @escaping () -> Void,
+         resized: @escaping (CGSize) -> Void) {
         _appState = Bindable(wrappedValue: appState)
         self.openSettings = openSettings
         self.dismiss = dismiss
+        self.resized = resized
         // Seed the slider with the real value so it doesn't animate up from 0.
         let current = AudioController.defaultInputDevice()
         _currentDeviceID = State(initialValue: current)
@@ -60,6 +63,8 @@ struct MenuContentView: View {
         }
         .padding(.vertical, 5)
         .frame(width: menuWidth)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGSize.self, of: \.size) { resized($0) }
         .onAppear(perform: reload)
     }
 

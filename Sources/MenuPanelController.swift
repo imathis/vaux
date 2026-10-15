@@ -41,7 +41,8 @@ final class MenuPanelController {
         let content = MenuContentView(
             appState: appState,
             openSettings: openSettings,
-            dismiss: { [weak self] in self?.close() })
+            dismiss: { [weak self] in self?.close() },
+            resized: { [weak self] size in self?.resize(to: size) })
         let controller = NSHostingController(rootView: content)
         controller.sizingOptions = [.preferredContentSize]
         controller.view.autoresizingMask = [.width, .height]
@@ -100,10 +101,34 @@ final class MenuPanelController {
             }
         }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            guard event.keyCode == 53 else { return event } // Escape
-            MainActor.assumeIsolated { self?.close() }
+            // The menu's own keys: there's no main menu to handle ⌘, and ⌘Q.
+            let command = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
+            switch (command, event.charactersIgnoringModifiers) {
+            case (true, "q"):
+                MainActor.assumeIsolated { NSApp.terminate(nil) }
+            case (true, ","):
+                MainActor.assumeIsolated {
+                    self?.openSettings()
+                    self?.close()
+                }
+            case (false, _) where event.keyCode == 53: // Escape
+                MainActor.assumeIsolated { self?.close() }
+            default:
+                return event
+            }
             return nil
         }
+    }
+
+    /// The content grew or shrank (solo status lines come and go): keep the
+    /// top edge where it is.
+    private func resize(to size: NSSize) {
+        guard let panel, abs(panel.frame.height - size.height) > 0.5 else { return }
+        var frame = panel.frame
+        frame.origin.y += frame.height - size.height
+        frame.size.height = size.height
+        panel.setFrame(frame, display: true)
+        panel.invalidateShadow()
     }
 
     func close() {

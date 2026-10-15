@@ -61,7 +61,8 @@ struct SettingsView: View {
                 KeyboardShortcuts.Recorder("Shortcut", name: .toggleMicMute)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Unmute volume")
-                    VolumeSlider(value: $unmuteVolume, showsPercent: true)
+                    // Never 0%: unmuting to silence would look live and hear nothing.
+                    VolumeSlider(value: $unmuteVolume, range: 0.05...1, showsPercent: true)
                         .frame(height: 28)
                         .padding(.horizontal, -14)
                 }
@@ -193,6 +194,7 @@ private struct InputRow: View {
                 .foregroundStyle(.secondary)
             VolumeSlider(
                 value: Binding(get: { unmuteOverride ?? defaultUnmute }, set: { setUnmuteOverride($0) }),
+                range: 0.05...1,
                 showsPercent: true)
                 .frame(width: 300, height: 28)
                 .padding(.horizontal, -14) // line the icons up with the text

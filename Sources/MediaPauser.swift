@@ -18,6 +18,8 @@ final class MediaPauser {
     private static let log = Logger(subsystem: "dev.imathis.vaux", category: "media")
     /// After solo ends, how long a pause still has to show before play is skipped.
     private static let grace: TimeInterval = 2
+    /// How long a pause has to show at all; after that it reached nothing.
+    private static let patience: TimeInterval = 5
 
     /// Playback assertions held when solo paused. One going away shows the
     /// pause took; until then nothing is resumed, so a pause that reached
@@ -28,19 +30,31 @@ final class MediaPauser {
     private var resumeDeadline: Date?
     /// Polls assertions while a pause hasn't shown yet.
     private var timer: Timer?
+    private var pausedAt = Date.distantPast
 
     /// Pause what's playing, leaving out `apps` (and their helpers) and any
     /// app using the mic: a call, or the dictation app.
     func pause(ignoring apps: Set<String>) {
+        guard !hold() else { return }
         reset()
         let playing = Self.playback(ignoring: apps)
         guard !playing.isEmpty else { return }
         paused = Set(playing.keys)
         Self.log.notice("pausing \(Set(playing.values).sorted().joined(separator: ", "), privacy: .public)")
         Self.send(.pause)
+        pausedAt = Date()
         timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.check() }
         }
+    }
+
+    /// A new solo began while the last one's media is still paused: keep it
+    /// paused for this one, to resume when this one ends. True if there was.
+    @discardableResult
+    func hold() -> Bool {
+        guard !paused.isEmpty else { return false }
+        resumeDeadline = nil
+        return true
     }
 
     /// Play again if the pause took. Explicit play: a no-op on anything
@@ -67,6 +81,9 @@ final class MediaPauser {
         } else if let resumeDeadline, Date() >= resumeDeadline {
             Self.log.notice("not resuming: the pause didn't take")
             reset()
+        } else if resumeDeadline == nil, Date().timeIntervalSince(pausedAt) > Self.patience {
+            Self.log.notice("the pause didn't take")
+            reset()
         }
     }
 
@@ -92,7 +109,7 @@ final class MediaPauser {
     private static func playback(ignoring apps: Set<String>) -> [UInt64: String] {
         let onMic = Set(AudioController.processObjects()
             .filter(AudioController.isRunningInput)
-            .map { responsiblePID(AudioController.pid(ofProcess: $0)) })
+            .map { AudioController.responsiblePID(AudioController.pid(ofProcess: $0)) })
         var playing: [UInt64: String] = [:]
         for assertion in assertions() where isPlayback(assertion.name) && !onMic.contains(assertion.app) {
             let bundle = NSRunningApplication(processIdentifier: assertion.app)?.bundleIdentifier ?? ""
@@ -110,7 +127,7 @@ final class MediaPauser {
             list.compactMap { info -> Assertion? in
                 guard let id = (info["GlobalUniqueID"] as? NSNumber)?.uint64Value else { return nil }
                 let pid = (info["AssertionOnBehalfOfPID"] as? NSNumber)?.int32Value ?? owner.int32Value
-                return Assertion(id: id, app: responsiblePID(pid), name: info["AssertName"] as? String ?? "")
+                return Assertion(id: id, app: AudioController.responsiblePID(pid), name: info["AssertName"] as? String ?? "")
             }
         }
     }
@@ -118,21 +135,6 @@ final class MediaPauser {
     /// "…playback" or "Playing …" as a word ("displaying" doesn't count).
     private static func isPlayback(_ name: String) -> Bool {
         name.range(of: #"\bplay(back|ing)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
-    }
-
-    private typealias ResponsiblePID = @convention(c) (pid_t) -> pid_t
-
-    /// The app a process works for (Safari for its WebKit processes), from a
-    /// private libsystem call; the process itself if that's missing.
-    private static let responsibleFor: ResponsiblePID? = {
-        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") else { return nil }
-        return unsafeBitCast(symbol, to: ResponsiblePID.self)
-    }()
-
-    private static func responsiblePID(_ pid: pid_t) -> pid_t {
-        guard let responsibleFor else { return pid }
-        let app = responsibleFor(pid)
-        return app > 0 ? app : pid
     }
 
     // MARK: MediaRemote

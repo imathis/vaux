@@ -53,7 +53,12 @@ final class CaptureWatcher {
             }
         }
         inputListeners = listeners // dropped listeners unregister on deinit
-        capturing.formIntersection(bundleIDs) // unwatched apps are dropped silently
+        // An app no longer watched has stopped, as far as anyone here knows:
+        // a solo it started ends with it.
+        for id in capturing.subtracting(bundleIDs) {
+            capturing.remove(id)
+            onChange?(id, false)
+        }
         evaluate()
     }
 

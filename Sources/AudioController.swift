@@ -1,6 +1,6 @@
+import AppKit
 import AudioToolbox
 import CoreAudio
-import Foundation
 
 /// Thin wrapper over the Core Audio HAL property API.
 ///
@@ -105,10 +105,18 @@ enum AudioController {
             if AudioObjectSetPropertyData(id, &a, 0, nil, UInt32(MemoryLayout<Float32>.size), &v) == noErr {
                 didSet = true
             }
-            // Prefer the Main element alone when it exists.
-            if element == kAudioObjectPropertyElementMain { return didSet }
+            // The Main element alone is enough when it takes the write.
+            if element == kAudioObjectPropertyElementMain, didSet { return true }
         }
         return didSet
+    }
+
+    /// The elements that carry the device's input volume.
+    static func volumeElements(on id: AudioDeviceID) -> [UInt32] {
+        volumeElements.filter { element in
+            var a = volumeAddress(element: element)
+            return AudioObjectHasProperty(id, &a)
+        }
     }
 
     /// Whether the device exposes a *settable* input volume control. Many USB
@@ -172,6 +180,37 @@ enum AudioController {
     /// in `com.tinyspeck.slackmacgap.helper`).
     static func isCapturingInput(_ app: String) -> Bool {
         processObjects().contains { isRunningInput($0) && bundle(bundleID(ofProcess: $0), belongsTo: app) }
+    }
+
+    /// Apps using the mic right now, by name, leaving out `apps` (and their
+    /// helpers). A helper or web process counts as the app it works for.
+    static func appsCapturingInput(ignoring apps: Set<String>) -> [String] {
+        var names: [String] = []
+        for process in processObjects() where isRunningInput(process) {
+            let bundle = bundleID(ofProcess: process)
+            guard !apps.contains(where: { self.bundle(bundle, belongsTo: $0) }) else { continue }
+            let app = NSRunningApplication(processIdentifier: responsiblePID(pid(ofProcess: process)))
+            if let id = app?.bundleIdentifier, apps.contains(where: { self.bundle(id, belongsTo: $0) }) { continue }
+            let name = app?.localizedName ?? bundle
+            if !name.isEmpty, !names.contains(name) { names.append(name) }
+        }
+        return names
+    }
+
+    private typealias ResponsiblePID = @convention(c) (pid_t) -> pid_t
+
+    /// The app a process works for (Safari for its WebKit processes, Slack for
+    /// its helpers), from a private libsystem call; the process itself if
+    /// that's missing.
+    private static let responsibleFor: ResponsiblePID? = {
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") else { return nil }
+        return unsafeBitCast(symbol, to: ResponsiblePID.self)
+    }()
+
+    static func responsiblePID(_ pid: pid_t) -> pid_t {
+        guard let responsibleFor else { return pid }
+        let app = responsibleFor(pid)
+        return app > 0 ? app : pid
     }
 
     /// The app itself or one of its helpers (`<app id>.helper…`).

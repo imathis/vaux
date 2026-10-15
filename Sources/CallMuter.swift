@@ -11,6 +11,9 @@ struct CallApp: Sendable, Hashable {
     /// mic is currently muted.
     let muteLabels: Set<String>
     let unmuteLabels: Set<String>
+    /// Roles the toggle can have. Narrower is safer: a plain "Mute" button
+    /// could be a video's.
+    var roles: Set<String> = [kAXButtonRole, kAXCheckBoxRole]
 
     static let all: [CallApp] = [
         CallApp(
@@ -20,7 +23,7 @@ struct CallApp: Sendable, Hashable {
         // Discord's user-panel mic button: an AXSwitch described "Mute", AXValue 1 = muted.
         CallApp(
             name: "Discord", bundleID: "com.hnc.Discord",
-            muteLabels: ["mute"], unmuteLabels: ["unmute"]),
+            muteLabels: ["mute"], unmuteLabels: ["unmute"], roles: [kAXCheckBoxRole]),
     ]
 }
 
@@ -211,8 +214,7 @@ enum CallMuter {
             visited += 1
             guard visited < 20_000, depth < 80 else { return nil }
             let role = string(element, kAXRoleAttribute)
-            if role == kAXButtonRole || role == kAXCheckBoxRole,
-               let state = micState(element, role: role, app) {
+            if app.roles.contains(role), let state = micState(element, role: role, app) {
                 return (element, state)
             }
             for child in children(element) {

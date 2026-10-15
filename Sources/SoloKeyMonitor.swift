@@ -89,6 +89,7 @@ final class SoloKeyMonitor {
     private var eventTap: CFMachPort?
     /// The events the tap was created for; 0 when there's no tap.
     private var tapMask: CGEventMask = 0
+    private var relay: TapRelay?
     private var detector = ModifierTapDetector()
     private var recording = false
 
@@ -141,12 +142,21 @@ final class SoloKeyMonitor {
             CGEvent.tapEnable(tap: eventTap, enable: false)
             CFMachPortInvalidate(eventTap)
         }
+        if let relay {
+            // Let go of it on the tap thread, after any callback in progress.
+            CFRunLoopPerformBlock(TapRelay.runLoop, CFRunLoopMode.commonModes.rawValue) { withExtendedLifetime(relay) {} }
+            CFRunLoopWakeUp(TapRelay.runLoop)
+        }
         eventTap = nil
+        relay = nil
         tapMask = 0
         detector = ModifierTapDetector()
     }
 
     private func startTap(_ mask: CGEventMask) {
+        let relay = TapRelay { [weak self] type, keyCode, flags, isRepeat in
+            self?.handle(type, keyCode: keyCode, flags: flags, isRepeat: isRepeat)
+        }
         // Listen-only is preferred; it can need Input Monitoring, so fall back
         // to a pass-through tap, which Accessibility alone allows.
         var tap: CFMachPort?
@@ -156,34 +166,26 @@ final class SoloKeyMonitor {
                 place: .headInsertEventTap,
                 options: options,
                 eventsOfInterest: mask,
-                callback: { _, type, event, refcon in
-                    if let refcon {
-                        let monitor = Unmanaged<SoloKeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
-                        MainActor.assumeIsolated { monitor.handle(type, event) }
-                    }
-                    return Unmanaged.passUnretained(event)
-                },
-                userInfo: Unmanaged.passUnretained(self).toOpaque()
+                callback: TapRelay.callback,
+                userInfo: Unmanaged.passUnretained(relay).toOpaque()
             )
         }
         guard let tap else { return } // no Accessibility yet; retried when it's granted
-        CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(nil, tap, 0), .commonModes)
+        relay.tap = tap
+        CFRunLoopAddSource(TapRelay.runLoop, CFMachPortCreateRunLoopSource(nil, tap, 0), .commonModes)
         eventTap = tap
+        self.relay = relay
         tapMask = mask
     }
 
-    private func handle(_ type: CGEventType, _ event: CGEvent) {
+    private func handle(_ type: CGEventType, keyCode: Int, flags: UInt64, isRepeat: Bool) {
         switch type {
-        case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
         case .flagsChanged:
-            let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
-            guard let key = detector.tap(keyCode: keyCode, flags: event.flags.rawValue) else { return }
+            guard let key = detector.tap(keyCode: keyCode, flags: flags) else { return }
             fire(key)
         case .keyDown:
             // Only the key code is read, and only two values mean anything.
-            let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
-            if keyCode == Self.dictationKeyCode, event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
+            if keyCode == Self.dictationKeyCode, !isRepeat {
                 fire(.dictation)
             } else if keyCode == kVK_Escape, watchesEscape {
                 onEscape()
@@ -200,6 +202,63 @@ final class SoloKeyMonitor {
             onKey()
         }
     }
+}
+
+/// Runs the event tap on a thread of its own and hands the keys it cares
+/// about to the main thread. The fallback tap is active: every keystroke in
+/// the system waits for its callback, so that must never wait on main-thread
+/// work.
+private final class TapRelay: @unchecked Sendable {
+    typealias Handler = @MainActor (_ type: CGEventType, _ keyCode: Int, _ flags: UInt64, _ isRepeat: Bool) -> Void
+
+    private let handler: Handler
+    /// Set once, before the tap is added to the run loop.
+    var tap: CFMachPort?
+
+    init(handler: @escaping Handler) {
+        self.handler = handler
+    }
+
+    static let callback: CGEventTapCallBack = { _, type, event, refcon in
+        guard let refcon else { return Unmanaged.passUnretained(event) }
+        let relay = Unmanaged<TapRelay>.fromOpaque(refcon).takeUnretainedValue()
+        switch type {
+        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            if let tap = relay.tap { CGEvent.tapEnable(tap: tap, enable: true) }
+        default:
+            let raw = type.rawValue
+            let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+            let flags = event.flags.rawValue
+            let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let type = CGEventType(rawValue: raw) else { return }
+                    relay.handler(type, keyCode, flags, isRepeat)
+                }
+            }
+        }
+        return Unmanaged.passUnretained(event)
+    }
+
+    /// The tap thread's run loop, started on first use. Adding and removing
+    /// sources and waking a run loop are safe from any thread.
+    nonisolated(unsafe) static let runLoop: CFRunLoop = {
+        final class Box: @unchecked Sendable { var loop: CFRunLoop? }
+        let box = Box()
+        let ready = DispatchSemaphore(value: 0)
+        let thread = Thread {
+            box.loop = CFRunLoopGetCurrent()
+            // A port keeps the run loop alive while no tap is installed.
+            RunLoop.current.add(NSMachPort(), forMode: .default)
+            ready.signal()
+            RunLoop.current.run()
+        }
+        thread.name = "dev.imathis.vaux.keys"
+        thread.qualityOfService = .userInteractive
+        thread.start()
+        ready.wait()
+        return box.loop!
+    }()
 }
 
 /// Picks lone right-modifier taps out of a stream of modifier changes: pressed
