@@ -1,0 +1,20 @@
+Sources/SoloKeyMonitor.swift
+  s_7cfcc273794c17::t_5b7574e9449509 145,241-245
+  s_7cfcc273794c17::t_4a36ec0d93459d 246-247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "83806ac71d82e56df0417843c56a66f92bbe8abe",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
