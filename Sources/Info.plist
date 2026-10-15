@@ -25,6 +25,8 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>Vaux — mic manager for meetings and dictation.</string>
+	<string>© 2026 Brandon Mathis</string>
+	<key>VauxRelease</key>
+	<string>$(VAUX_RELEASE)</string>
 </dict>
 </plist>

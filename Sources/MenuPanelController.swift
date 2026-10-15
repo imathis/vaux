@@ -7,10 +7,11 @@ final class MenuPanel: NSPanel {
 }
 
 /// Shows the custom menu in a borderless panel under the status item and
-/// dismisses it on outside-click, Escape, or selecting Settings/Quit.
+/// dismisses it on outside-click, Escape, or selecting About/Settings/Quit.
 @MainActor
 final class MenuPanelController {
     private let appState: AppState
+    private let openAbout: () -> Void
     private let openSettings: () -> Void
     private var panel: NSPanel?
     private var hostingController: NSHostingController<MenuContentView>?
@@ -19,8 +20,9 @@ final class MenuPanelController {
     private var localMonitor: Any?
     private var lastOutsideCloseAt: Date?
 
-    init(appState: AppState, openSettings: @escaping () -> Void) {
+    init(appState: AppState, openAbout: @escaping () -> Void, openSettings: @escaping () -> Void) {
         self.appState = appState
+        self.openAbout = openAbout
         self.openSettings = openSettings
     }
 
@@ -40,6 +42,7 @@ final class MenuPanelController {
     func show(relativeTo button: NSStatusBarButton) {
         let content = MenuContentView(
             appState: appState,
+            openAbout: openAbout,
             openSettings: openSettings,
             dismiss: { [weak self] in self?.close() },
             resized: { [weak self] size in self?.resize(to: size) })

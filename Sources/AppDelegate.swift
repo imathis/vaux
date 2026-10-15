@@ -27,7 +27,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             iconAnimator = StatusIconAnimator(button: button)
         }
         statusItem = item
-        menuController = MenuPanelController(appState: appState) { [weak self] in self?.openSettings() }
+        menuController = MenuPanelController(
+            appState: appState,
+            openAbout: { [weak self] in self?.openAbout() },
+            openSettings: { [weak self] in self?.openSettings() })
 
         appState.onStateChange = { [weak self] in self?.updateButton() }
         updateButton()
@@ -77,7 +80,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: Settings
+    // MARK: About and Settings
+
+    /// The standard About panel, with the release's name as its version
+    /// (1.0.0-alpha.1, not the bare 1.0.0) and a line and link of credits.
+    private func openAbout() {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let release = info["VauxRelease"] as? String ?? info["CFBundleShortVersionString"] as? String ?? ""
+        let centered = NSMutableParagraphStyle()
+        centered.alignment = .center
+        let small: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .paragraphStyle: centered,
+        ]
+        let credits = NSMutableAttributedString(string: "Talk to your Mac. Not the meeting.\n", attributes: small)
+        var link = small
+        link[.link] = URL(string: "https://github.com/imathis/vaux")
+        credits.append(NSAttributedString(string: "github.com/imathis/vaux", attributes: link))
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [.applicationVersion: release, .credits: credits])
+    }
 
     @objc private func openSettings() {
         if settingsWindow == nil {

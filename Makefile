@@ -11,9 +11,8 @@ SIGN := CODE_SIGN_STYLE=Manual \
         DEVELOPMENT_TEAM=$(TEAM)
 
 # Release: Developer ID-signed and notarized, zipped for GitHub releases and
-# the Homebrew cask (imathis/homebrew-tap). The app's own version is in
-# project.yml; this names the release.
-RELEASE := 1.0.0-alpha.1
+# the Homebrew cask (imathis/homebrew-tap). Named by VAUX_RELEASE in project.yml.
+RELEASE := $(shell awk -F'"' '/VAUX_RELEASE:/ {print $$2; exit}' project.yml)
 RELEASE_APP := build/Build/Products/Release/Vaux.app
 DIST := dist
 ZIP := $(DIST)/Vaux-$(RELEASE).zip

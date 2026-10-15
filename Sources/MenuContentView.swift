@@ -17,6 +17,7 @@ struct MenuInputDevice: Identifiable {
 /// standard NSMenu (accent-blue highlight) can't do.
 struct MenuContentView: View {
     @Bindable var appState: AppState
+    let openAbout: () -> Void
     let openSettings: () -> Void
     let dismiss: () -> Void
     let resized: (CGSize) -> Void
@@ -27,9 +28,10 @@ struct MenuContentView: View {
     @State private var currentDeviceID: AudioDeviceID?
     @AppStorage(AppStorageKey.enforcePreferred) private var autoSwitch = false
 
-    init(appState: AppState, openSettings: @escaping () -> Void, dismiss: @escaping () -> Void,
-         resized: @escaping (CGSize) -> Void) {
+    init(appState: AppState, openAbout: @escaping () -> Void, openSettings: @escaping () -> Void,
+         dismiss: @escaping () -> Void, resized: @escaping (CGSize) -> Void) {
         _appState = Bindable(wrappedValue: appState)
+        self.openAbout = openAbout
         self.openSettings = openSettings
         self.dismiss = dismiss
         self.resized = resized
@@ -65,6 +67,7 @@ struct MenuContentView: View {
             }
             soloStatus
             divider()
+            textRow("About Vaux", trailing: nil) { openAbout(); dismiss() }
             textRow("Settings…", trailing: "⌘,") { openSettings(); dismiss() }
             textRow("Quit Vaux", trailing: "⌘Q") { NSApp.terminate(nil) }
         }
