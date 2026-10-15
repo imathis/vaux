@@ -1,0 +1,23 @@
+IconSource/Vaux/side-bars.svg
+  s_7cfcc273794c17::t_1993160f89fc5e 1-4
+IconSource/Vaux/README.md
+  s_7cfcc273794c17::t_8ce69bfead7887 1-33
+IconSource/Vaux/bars.svg
+  s_7cfcc273794c17::t_1993160f89fc5e 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "15e4a621f4d3f6b782b69937642216686dd25cc4",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
