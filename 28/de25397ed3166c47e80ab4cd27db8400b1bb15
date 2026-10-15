@@ -1,0 +1,27 @@
+scripts/update-cask.sh
+  s_7cfcc273794c17::t_7c67e20d106f1f 1-40
+README.md
+  s_7cfcc273794c17::t_c359f5fdd322af 147-149
+  s_7cfcc273794c17::t_7c67e20d106f1f 143
+Makefile
+  s_7cfcc273794c17::t_7c67e20d106f1f 30,64-72
+  s_7cfcc273794c17::t_c359f5fdd322af 19-21
+  s_7cfcc273794c17::t_abb20a45934aa5 44-46
+  s_7cfcc273794c17::t_f8a7f44a143426 73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "28de25397ed3166c47e80ab4cd27db8400b1bb15",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
