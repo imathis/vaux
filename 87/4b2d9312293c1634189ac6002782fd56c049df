@@ -1,0 +1,26 @@
+README.md
+  s_7cfcc273794c17::t_ec231675c16f3b 92-93
+  s_7cfcc273794c17::t_472b0ea213771e 149-151
+  s_7cfcc273794c17::t_d0a15c15cde44e 116-119
+  s_7cfcc273794c17::t_dab7a760bca19d 1-2,7-8,15-25
+  s_7cfcc273794c17::t_105295f1ce3dfb 26
+  s_7cfcc273794c17::t_3548da50764f7d 94
+project.yml
+  s_7cfcc273794c17::t_d56a3f2930af7a 43-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "874b2d9312293c1634189ac6002782fd56c049df",
+  "prompts": {},
+  "sessions": {
+    "s_7cfcc273794c17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea9ade56-a258-43c0-b560-9dad0d9f584f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
