@@ -3,7 +3,13 @@ import Foundation
 
 /// Reports when apps start or stop capturing input — a call app joining or
 /// leaving a call, a dictation app starting to listen — from Core Audio
-/// process objects: property listeners only, no streams, no mic permission.
+/// process objects: no streams, no mic permission.
+///
+/// The process "running input" flag never notifies its listeners; the
+/// "running any IO" flag does. So that's what's listened to, and input is
+/// read when it fires. Input can also start while the app is already
+/// playing sound, which changes nothing there, so while a watched app has
+/// any IO running its input is checked twice a second as well.
 @MainActor
 final class CaptureWatcher {
     /// Apps to watch. Their helpers count too (Slack captures in
@@ -15,8 +21,9 @@ final class CaptureWatcher {
     private var onChange: ((_ bundleID: String, _ capturing: Bool) -> Void)?
     private var capturing: Set<String> = []
     private var listListener: AudioPropertyListener?
-    /// IsRunningInput listeners on the watched apps' process objects.
+    /// IsRunning listeners on the watched apps' process objects.
     private var inputListeners: [AudioObjectID: AudioPropertyListener] = [:]
+    private var poll: Timer?
 
     /// Reports current state right away (apps already capturing), then changes.
     func start(onChange: @escaping (_ bundleID: String, _ capturing: Bool) -> Void) {
@@ -39,7 +46,7 @@ final class CaptureWatcher {
             guard bundleIDs.contains(where: { AudioController.bundle(bundle, belongsTo: $0) }) else { continue }
             listeners[process] = inputListeners[process] ?? AudioPropertyListener(
                 objectID: process,
-                selector: kAudioProcessPropertyIsRunningInput,
+                selector: kAudioProcessPropertyIsRunning,
                 scope: kAudioObjectPropertyScopeGlobal
             ) { [weak self] in
                 MainActor.assumeIsolated { self?.evaluate() }
@@ -56,6 +63,17 @@ final class CaptureWatcher {
             guard now != capturing.contains(id) else { continue }
             if now { capturing.insert(id) } else { capturing.remove(id) }
             onChange?(id, now)
+        }
+        let busy = inputListeners.keys.contains(where: AudioController.isRunning)
+        if busy, poll == nil {
+            let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.evaluate() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            poll = timer
+        } else if !busy {
+            poll?.invalidate()
+            poll = nil
         }
     }
 }

@@ -199,6 +199,18 @@ enum AudioController {
         return processes
     }
 
+    /// Any IO at all. Unlike the input and output flags, this one notifies
+    /// its listeners when it changes.
+    static func isRunning(_ process: AudioObjectID) -> Bool {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyIsRunning,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var running = UInt32(0)
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        return AudioObjectGetPropertyData(process, &addr, 0, nil, &size, &running) == noErr && running == 1
+    }
+
     static func isRunningInput(_ process: AudioObjectID) -> Bool {
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioProcessPropertyIsRunningInput,

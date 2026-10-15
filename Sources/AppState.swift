@@ -2,6 +2,7 @@ import CoreAudio
 import Foundation
 import KeyboardShortcuts
 import Observation
+import os
 
 /// Single source of truth for the mute action and the menu bar state.
 ///
@@ -60,7 +61,10 @@ final class AppState {
             self?.callStateChanged(app, inCall: inCall)
         }
         followWatcher.bundleIDs = Self.followApp
-        followWatcher.start { [weak self] _, capturing in self?.followAppChanged(capturing: capturing) }
+        followWatcher.start { [weak self] id, capturing in
+            Self.log.notice("follow: \(id, privacy: .public) \(capturing ? "listening" : "stopped", privacy: .public)")
+            self?.followAppChanged(capturing: capturing)
+        }
         NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -122,6 +126,8 @@ final class AppState {
     private(set) var soloDuckedTo: Float32?
     /// Anything that didn't go to plan, for the menu.
     private(set) var soloProblems: [String] = []
+
+    private static let log = Logger(subsystem: "dev.imathis.vaux", category: "solo")
 
     @ObservationIgnored private var soloSnapshot: SoloSnapshot?
     /// A toggle that arrived mid-transition. Queued rather than dropped: a
