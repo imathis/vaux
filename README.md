@@ -2,7 +2,7 @@
 
 # Vaux
 
-**Talk to your Mac. Not the meeting.**
+**Microphone control for the dictation age.**
 
 If you dictate instead of typing, a call shouldn't take that away. But it does.
 Start to speak a prompt to your agent, or a quick note, and the meeting hears

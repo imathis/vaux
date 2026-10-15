@@ -94,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .foregroundColor: NSColor.secondaryLabelColor,
             .paragraphStyle: centered,
         ]
-        let credits = NSMutableAttributedString(string: "Talk to your Mac. Not the meeting.\n", attributes: small)
+        let credits = NSMutableAttributedString(string: "Microphone control for the dictation age\n", attributes: small)
         var link = small
         link[.link] = URL(string: "https://github.com/imathis/vaux")
         credits.append(NSAttributedString(string: "github.com/imathis/vaux", attributes: link))

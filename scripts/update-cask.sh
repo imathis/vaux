@@ -17,7 +17,7 @@ cask "vaux" do
 
   url "https://github.com/imathis/vaux/releases/download/v#{version}/Vaux-#{version}.zip"
   name "Vaux"
-  desc "Microphone manager for the dictation era"
+  desc "Microphone control for the dictation age"
   homepage "https://github.com/imathis/vaux"
 
   depends_on macos: ">= :tahoe"
