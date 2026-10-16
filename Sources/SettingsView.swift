@@ -52,7 +52,7 @@ struct SettingsView: View {
                         .padding(.horizontal, -14) // line the icons up with the text
                 }
             } header: {
-                header("Solo Mode", "While you dictate, mutes your calls in Zoom, Google Meet, FaceTime, Slack and Discord.")
+                header("Solo Mode", "Mute your mic in calls while you dictate.")
             }
 
             Section {
