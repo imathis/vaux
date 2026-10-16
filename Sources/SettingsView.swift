@@ -33,7 +33,6 @@ struct SettingsView: View {
                         }
                     }
                 }
-                SoloShortcutRecorder(title: "Shortcut")
                 Picker(selection: $soloFollowApp) {
                     Text("Off").tag("")
                     ForEach(followChoices) { choice in
@@ -42,8 +41,9 @@ struct SettingsView: View {
                     }
                 } label: {
                     Text("Turn on automatically")
-                    Text("While this app is using the mic")
+                    Text("While your dictation app is listening")
                 }
+                SoloShortcutRecorder(title: "Shortcut")
                 Toggle("Pause playing media", isOn: $soloPauseMedia)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Speaker volume")
@@ -109,8 +109,15 @@ struct SettingsView: View {
             accessibilityTrusted = CallMuter.isTrusted
             followChoices = FollowChoice.all(including: soloFollowApp)
         }
+        // Accessibility granted or revoked in System Settings, which stays in
+        // front. The new state lands a moment after the notification.
+        .onReceive(DistributedNotificationCenter.default().publisher(for: Self.accessibilityChanged)) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { accessibilityTrusted = CallMuter.isTrusted }
+        }
         .frame(width: 460)
     }
+
+    private static let accessibilityChanged = Notification.Name("com.apple.accessibility.api")
 
     /// A section title with its one-line description under it.
     private func header(_ title: String, _ description: String? = nil) -> some View {

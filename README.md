@@ -125,6 +125,10 @@ make open      # generate the project and open it in Xcode, then ⌘R
 make run       # build and launch from the command line
 ```
 
+Development builds are "Vaux Dev" (`dev.imathis.vaux.debug`), a separate app
+to macOS with its own permissions and settings, so they never knock out the
+installed Vaux's Accessibility grant.
+
 On first build, Xcode resolves the one dependency,
 [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts), via SPM.
 
