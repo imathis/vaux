@@ -82,7 +82,9 @@ enum Snapshot {
                     write(frame, to: base.appendingPathExtension("window-\(item.label.lowercased()).png"))
                 }
             }
-            NSApp.terminate(nil)
+            // Not terminate: Vaux's quit steps (ending solo, switching off
+            // browsers' accessibility trees) belong to the real Vaux.
+            exit(0)
         }
     }
 

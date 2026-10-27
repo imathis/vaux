@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// A look in the list, one line: on (one at a time), its name, its Quick
-/// Menu key, and edit.
+/// A look in the list, one line: its name, its Quick Menu key, on or off
+/// (one at a time), and edit.
 struct LookRow: View {
     let look: Look
     let key: String?
@@ -11,17 +11,21 @@ struct LookRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Button(action: toggle) {
-                Image(systemName: isOn ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(isOn ? Color.accentColor : .secondary)
-                    .frame(width: 20)
-            }
-            .buttonStyle(.borderless)
-            .help(isOn ? "Turn off" : "Turn on")
+            Image(systemName: "camera.filters")
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
             Text(look.name)
                 .lineLimit(1)
             Spacer(minLength: 8)
             if let key { KeyCap(key: key, muted: true) }
+            Button(action: toggle) {
+                Image(systemName: isOn ? "eye.fill" : "eye")
+                    .foregroundStyle(isOn ? Color.accentColor : .secondary)
+                    .frame(width: 24, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(isOn ? "Turn off" : "Turn on")
             Button(action: edit) {
                 Image(systemName: "chevron.right")
                     .foregroundStyle(.tertiary)
@@ -49,6 +53,7 @@ struct LookEditor: View {
         VStack(spacing: 0) {
             if let index = library.looks.firstIndex(where: { $0.id == id }) {
                 let look = $library.looks[index]
+                let defaults = look.wrappedValue.defaults
                 Form {
                     Section {
                         TextField("Name", text: look.name)
@@ -60,17 +65,17 @@ struct LookEditor: View {
                             .wraps()
                     }
                     Section {
-                        LookSlider(title: "Saturation", value: look.saturation, range: Look.saturationRange, format: .percent)
-                        LookSlider(title: "Contrast", value: look.contrast, range: Look.contrastRange, format: .percent)
-                        LookSlider(title: "Brightness", value: look.brightness, range: Look.brightnessRange, format: .signedPercent)
-                        LookSlider(title: "Warmth", value: look.warmth, range: Look.warmthRange, format: .signedPercent)
+                        LookSlider(title: "Saturation", value: look.saturation, defaultValue: defaults.saturation, range: Look.saturationRange, format: .percent)
+                        LookSlider(title: "Contrast", value: look.contrast, defaultValue: defaults.contrast, range: Look.contrastRange, format: .percent)
+                        LookSlider(title: "Brightness", value: look.brightness, defaultValue: defaults.brightness, range: Look.brightnessRange, format: .signedPercent)
+                        LookSlider(title: "Warmth", value: look.warmth, defaultValue: defaults.warmth, range: Look.warmthRange, format: .signedPercent)
                     } header: {
                         SettingsHeader("Color")
                     }
                     Section {
-                        LookSlider(title: "Fade", value: look.fade, range: Look.amountRange, format: .percent)
-                        LookSlider(title: "Vignette", value: look.vignette, range: Look.amountRange, format: .percent)
-                        LookSlider(title: "Grain", value: look.grain, range: Look.amountRange, format: .percent)
+                        LookSlider(title: "Fade", value: look.fade, defaultValue: defaults.fade, range: Look.amountRange, format: .percent)
+                        LookSlider(title: "Vignette", value: look.vignette, defaultValue: defaults.vignette, range: Look.amountRange, format: .percent)
+                        LookSlider(title: "Grain", value: look.grain, defaultValue: defaults.grain, range: Look.amountRange, format: .percent)
                     } header: {
                         SettingsHeader("Texture", "Fade lifts the blacks with a soft glow, for smoke and haze.")
                     }
@@ -84,6 +89,16 @@ struct LookEditor: View {
                     library.remove(id)
                 }
                 Spacer()
+                if let look = library.look(id) {
+                    // A preset goes back to how it came; one made from
+                    // scratch, to plain.
+                    Button(look.preset == nil ? "Reset" : "Reset to Default") {
+                        if let index = library.looks.firstIndex(where: { $0.id == id }) {
+                            library.looks[index] = look.defaults
+                        }
+                    }
+                    .disabled(look.isDefault)
+                }
                 Button(library.active == id ? "Turn Off" : "Turn On") { effects.triggers.trigger(.look(id)) }
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
@@ -105,26 +120,37 @@ private struct LookSlider: View {
 
     let title: String
     @Binding var value: Double
+    /// Its preset's (or plain): a reset arrow shows once it's moved away.
+    let defaultValue: Double
     let range: ClosedRange<Double>
     let format: Format
 
     var body: some View {
         LabeledContent(title) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 // Rounded rather than stepped: a stepped slider draws a tick
                 // per step.
                 Slider(value: Binding(get: { value }, set: { value = ($0 * 100).rounded() / 100 }), in: range)
                     .controlSize(.small)
-                    .frame(width: 200)
+                    .frame(width: 190)
                 Text(text)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
-                    .frame(width: 48, alignment: .trailing)
+                    .frame(width: 44, alignment: .trailing)
+                Button { value = defaultValue } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("Back to \(Self.text(defaultValue, format))")
+                .opacity(value == defaultValue ? 0 : 1)
+                .disabled(value == defaultValue)
             }
         }
     }
 
-    private var text: String {
+    private var text: String { Self.text(value, format) }
+
+    private static func text(_ value: Double, _ format: Format) -> String {
         let percent = Int((value * 100).rounded())
         return switch format {
         case .percent: "\(percent)%"

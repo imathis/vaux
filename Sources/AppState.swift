@@ -51,6 +51,13 @@ final class AppState {
     }
 
     init() {
+        // A snapshot only reads, to draw: it runs beside the real Vaux, so
+        // following dictation, keys or devices would act twice (pressing
+        // call apps' mute buttons, switching inputs).
+        guard !Snapshot.isRunning else {
+            refreshDevice()
+            return
+        }
         KeyboardShortcuts.onKeyDown(for: .toggleMicMute) { [weak self] in
             self?.toggle()
         }

@@ -37,15 +37,15 @@ struct EffectsPage: View {
                     }
                 }
                 .onMove { library.overlays.move(fromOffsets: $0, toOffset: $1) }
+                // Under its list, at the trailing edge, as in System
+                // Settings; a menu where there's a choice to make.
                 HStack {
+                    Spacer()
                     Menu("Add Overlay") {
                         Button("Text") { editing = Editing(id: library.add(.text).id) }
                         Button("Graphic") { editing = Editing(id: library.add(.graphic).id) }
                     }
                     .fixedSize()
-                    Spacer()
-                    Button("Clear All") { library.clearAll() }
-                        .disabled(library.showing.isEmpty)
                 }
             } header: {
                 SettingsHeader("Overlays", "Over your video, one per spot: a new one replaces what's there.")
@@ -72,7 +72,20 @@ struct EffectsPage: View {
                     }
                 }
                 .onMove { effects.looks.looks.move(fromOffsets: $0, toOffset: $1) }
-                Button("Add Look") { editingLook = Editing(id: effects.looks.add().id) }
+                HStack {
+                    Spacer()
+                    // The presets again: one deleted, or a fresh copy beside
+                    // one that's been changed.
+                    Menu("Add Look") {
+                        Button("New Look") { editingLook = Editing(id: effects.looks.add().id) }
+                        Section("Presets") {
+                            ForEach(Look.presets) { preset in
+                                Button(preset.name) { editingLook = Editing(id: effects.looks.add(preset).id) }
+                            }
+                        }
+                    }
+                    .fixedSize()
+                }
             } header: {
                 SettingsHeader("Looks", "Color over the whole picture, one at a time.")
             }
@@ -94,7 +107,10 @@ struct EffectsPage: View {
                         Button("Delete", role: .destructive) { effects.combos.remove(combo.id) }
                     }
                 }
-                Button("Add Combo") { editingCombo = Editing(id: effects.combos.add().id) }
+                HStack {
+                    Spacer()
+                    Button("Add Combo") { editingCombo = Editing(id: effects.combos.add().id) }
+                }
             } header: {
                 SettingsHeader("Combos", "Several overlays, a push-in and a look, on one key.")
             }
@@ -283,13 +299,11 @@ private struct PushInLevels: View {
 
     var body: some View {
         ForEach(shortcuts.levels) { level in
+            let on = shortcuts.active == level.id
             HStack(spacing: 8) {
-                Button { shortcuts.toggle(level.id) } label: {
-                    Image(systemName: shortcuts.active == level.id ? "largecircle.fill.circle" : "circle")
-                        .foregroundStyle(shortcuts.active == level.id ? Color.accentColor : .secondary)
-                }
-                .buttonStyle(.borderless)
-                .help(shortcuts.active == level.id ? "Come back" : "Push in")
+                Image(systemName: "plus.magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
                 // Pushed in, the camera follows the slider as it moves.
                 // Rounded to 0.05× here rather than stepped, which draws a
                 // tick mark for every step.
@@ -304,14 +318,29 @@ private struct PushInLevels: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 44, alignment: .trailing)
                 if let key = keys[level.name.rawValue] { KeyCap(key: key, muted: true) }
+                // On now, as for the other effects.
+                Button { shortcuts.toggle(level.id) } label: {
+                    Image(systemName: on ? "eye.fill" : "eye")
+                        .foregroundStyle(on ? Color.accentColor : .secondary)
+                        .frame(width: 24, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(on ? "Come back" : "Push in")
                 Button { shortcuts.remove(level) } label: {
                     Image(systemName: "minus.circle")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20, height: 22)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.plain)
                 .help("Remove")
             }
         }
-        Button("Add Push-In Level") { shortcuts.add() }
+        HStack {
+            Spacer()
+            Button("Add Push-In") { shortcuts.add() }
+        }
     }
 }
 

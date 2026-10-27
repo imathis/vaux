@@ -8,6 +8,9 @@ import Observation
 struct Look: Codable, Identifiable, Hashable, Sendable {
     var id = UUID()
     var name: String
+    /// The preset it started as, which Reset goes back to; none for a look
+    /// made from scratch, which resets to plain.
+    var preset: String?
     /// 0 is black and white, 1 as the camera sees it, 2 doubled.
     var saturation = 1.0
     var contrast = 1.0
@@ -27,15 +30,27 @@ struct Look: Codable, Identifiable, Hashable, Sendable {
     static let warmthRange = -1.0...1.0
     static let amountRange = 0.0...1.0
 
-    /// The looks a first run starts with.
+    /// The looks a first run starts with, and Add Look offers again.
     static let presets = [
         // Silvery black and white: cool, with smoke in the shadows.
-        Look(name: "Noir", saturation: 0, contrast: 1.25, brightness: 0.02, warmth: -0.15, fade: 0.45, vignette: 0.45, grain: 0.3),
-        Look(name: "Black & White", saturation: 0, contrast: 1.1),
-        Look(name: "Warm", saturation: 1.1, warmth: 0.5),
-        Look(name: "Vivid", saturation: 1.45, contrast: 1.1),
-        Look(name: "Faded", saturation: 0.75, contrast: 0.85, fade: 0.4),
+        Look(name: "Noir", preset: "noir", saturation: 0, contrast: 1.25, brightness: 0.02, warmth: -0.15, fade: 0.45, vignette: 0.45, grain: 0.3),
+        Look(name: "Black & White", preset: "blackAndWhite", saturation: 0, contrast: 1.1),
+        Look(name: "Warm", preset: "warm", saturation: 1.1, warmth: 0.5),
+        Look(name: "Vivid", preset: "vivid", saturation: 1.45, contrast: 1.1),
+        Look(name: "Faded", preset: "faded", saturation: 0.75, contrast: 0.85, fade: 0.4),
     ]
+
+    /// What Reset goes back to: its preset's settings, or plain, keeping its
+    /// own name and identity.
+    var defaults: Look {
+        var reset = Self.presets.first { $0.preset == preset } ?? Look(name: name)
+        reset.id = id
+        reset.name = name
+        reset.preset = preset
+        return reset
+    }
+
+    var isDefault: Bool { self == defaults }
 }
 
 /// The user's looks, and which one is on. Stored in UserDefaults.
@@ -70,7 +85,13 @@ final class LookLibrary {
 
     init() {
         let stored = UserDefaults.standard.data(forKey: Self.key).flatMap { try? JSONDecoder().decode([Look].self, from: $0) }
-        looks = stored ?? Look.presets
+        // Saved before looks knew their preset: matched by name.
+        looks = stored?.map { look in
+            guard look.preset == nil, let preset = Look.presets.first(where: { $0.name == look.name }) else { return look }
+            var matched = look
+            matched.preset = preset.preset
+            return matched
+        } ?? Look.presets
         liveLook = UserDefaults.standard.string(forKey: Self.liveKey).flatMap(UUID.init)
         if stored == nil { save() }
     }
@@ -99,9 +120,17 @@ final class LookLibrary {
         }
     }
 
+    /// A new plain look, or a fresh copy of a preset (named apart from one
+    /// already in the list).
     @discardableResult
-    func add() -> Look {
-        let look = Look(name: "New Look")
+    func add(_ preset: Look? = nil) -> Look {
+        var look = preset ?? Look(name: "New Look")
+        look.id = UUID()
+        let names = Set(looks.map(\.name))
+        if names.contains(look.name) {
+            let base = look.name
+            look.name = (2...).lazy.map { "\(base) \($0)" }.first { !names.contains($0) }!
+        }
         looks.append(look)
         return look
     }
