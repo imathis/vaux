@@ -257,18 +257,19 @@ private struct PushInLevels: View {
                 }
                 .buttonStyle(.borderless)
                 .help(shortcuts.active == level.id ? "Come back" : "Push in")
-                Text("Push in \(level.zoom.zoomText)")
-                    .monospacedDigit()
-                // In a form a labeled stepper spreads across the row; this
-                // one sits beside its value.
-                Stepper(
-                    "Push in",
-                    value: Binding(get: { level.zoom }, set: { shortcuts.setZoom($0, for: level) }),
-                    in: ZoomShortcuts.range,
-                    step: 0.1
+                // Pushed in, the camera follows the slider as it moves.
+                // Rounded to 0.05× here rather than stepped, which draws a
+                // tick mark for every step.
+                Slider(
+                    value: Binding(get: { level.zoom }, set: { shortcuts.setZoom(($0 * 20).rounded() / 20, for: level) }),
+                    in: ZoomShortcuts.range
                 )
                 .labelsHidden()
-                Spacer(minLength: 8)
+                .controlSize(.small)
+                Text(level.zoom.zoomText)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, alignment: .trailing)
                 if let key = keys[level.name.rawValue] { KeyCap(key: key, muted: true) }
                 Button { shortcuts.remove(level) } label: {
                     Image(systemName: "minus.circle")
