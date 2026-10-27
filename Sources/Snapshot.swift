@@ -43,7 +43,7 @@ enum Snapshot {
             pages.append(("overlay-large", AnyView(OverlayForm(overlay: .constant(coffee), previewVariant: .constant(0)) { _ in [] }.frame(width: 540))))
             pages.append(("quickmenu", AnyView(QuickMenuView(triggers: effects.triggers) { _ in }.padding(20))))
             if let look = effects.looks.looks.first {
-                pages.append(("look-editor", AnyView(LookEditor(effects: effects, id: look.id) {})))
+                pages.append(("look-editor", AnyView(LookEditor(effects: effects, id: look.id, delete: {}, height: 1180))))
             }
             pages.append(("live", AnyView(LiveView(library: effects.overlays, zoom: effects.zoomShortcuts, looks: effects.looks))))
             pages.append(("system-effects", AnyView(
