@@ -1,0 +1,34 @@
+Sources/Camera/LookEditor.swift
+  s_c9cb9133d40bef::t_45565444f70fc6 7-8,20-27
+  s_c9cb9133d40bef::t_5ad18cbd5854f0 56-57,60-61,67-68,72-97,100-103,148-149,152-165
+Sources/Camera/OverlayLibrary.swift
+  s_c9cb9133d40bef::t_45565444f70fc6 190-194,197-198
+Sources/Snapshot.swift
+  s_c9cb9133d40bef::t_45565444f70fc6 32,46
+Sources/Camera/Combo.swift
+  s_c9cb9133d40bef::t_45565444f70fc6 38-42,45-46
+Sources/Camera/EditorSheet.swift
+  s_c9cb9133d40bef::t_8d388edcc2949e 1-58
+Sources/Camera/Look.swift
+  s_c9cb9133d40bef::t_ad433375eb08b5 113-114,120-121,126-152,159,166-167,170,182,192,195-218,222-223,226-228,231,250-254,257-258
+Sources/Camera/EffectsSettings.swift
+  s_c9cb9133d40bef::t_45565444f70fc6 17-18,47-48,64,71-73,80-86,92,95,102,123,142-144,147-149,152-154,217-218,221-222,224-225,229-241,244-245,248-260,436-437,440-441,444-445,448-461,468-469,472-484
+Sources/Camera/Triggers.swift
+  s_c9cb9133d40bef::t_ad433375eb08b5 63,225,240-241,258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7218447509d55561a1aac5af7408ebc885c20ea9",
+  "prompts": {},
+  "sessions": {
+    "s_c9cb9133d40bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46d79b12-ab26-4b09-8d76-66163839d16b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
