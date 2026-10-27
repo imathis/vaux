@@ -64,6 +64,9 @@ final class ExtensionInstaller: NSObject {
     @ObservationIgnored private var statusRequest: OSSystemExtensionRequest?
     /// Called once an uninstall ends: true if it went (or goes at restart).
     @ObservationIgnored private var uninstalled: ((Bool) -> Void)?
+    /// The pending activation brings an older build up to date only so it
+    /// can be removed.
+    @ObservationIgnored private var replacingToRemove = false
 
     override init() {
         super.init()
@@ -88,9 +91,24 @@ final class ExtensionInstaller: NSObject {
         )
     }
 
-    /// Removes Vaux Camera; `done` hears whether it went.
+    /// Removes Vaux Camera; `done` hears whether it went. macOS removes only
+    /// the build inside this app, so an older one installed (an update not
+    /// taken) is replaced with it first; replacing needs no approval.
     func uninstall(then done: @escaping (Bool) -> Void) {
         uninstalled = done
+        if needsUpdate {
+            replacingToRemove = true
+            submit(
+                .activationRequest(forExtensionWithIdentifier: Self.extensionID, queue: .main),
+                "Uninstalling \(CameraSpec.name)…",
+                activation: true
+            )
+        } else {
+            submitRemoval()
+        }
+    }
+
+    private func submitRemoval() {
         submit(
             .deactivationRequest(forExtensionWithIdentifier: Self.extensionID, queue: .main),
             "Uninstalling \(CameraSpec.name)…",
@@ -178,6 +196,11 @@ extension ExtensionInstaller: @preconcurrency OSSystemExtensionRequestDelegate {
         // Status checks finish here too; only installs and uninstalls matter.
         guard request === pending else { return }
         pending = nil
+        if replacingToRemove {
+            replacingToRemove = false
+            submitRemoval()
+            return
+        }
         if !pendingIsActivation, let uninstalled {
             self.uninstalled = nil
             uninstalled(true)
@@ -201,6 +224,13 @@ extension ExtensionInstaller: @preconcurrency OSSystemExtensionRequestDelegate {
         guard request === pending else { return }
         pending = nil
         log.error("Request failed: \(error)")
+        if replacingToRemove, let uninstalled {
+            replacingToRemove = false
+            self.uninstalled = nil
+            uninstalled(false)
+            refresh()
+            return
+        }
         if !pendingIsActivation, let uninstalled {
             // Not installed after all: as good as uninstalled.
             let gone = (error as? OSSystemExtensionError)?.code == .extensionNotFound
