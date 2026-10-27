@@ -47,7 +47,7 @@ struct EffectsPage: View {
                         .disabled(library.showing.isEmpty)
                 }
             } header: {
-                SettingsHeader("Overlays", "Shown over your video, one per spot: a new one replaces what's in its spot. Click one to edit it; keys are in Shortcuts.")
+                SettingsHeader("Overlays", "Over your video, one per spot: a new one replaces what's there.")
             }
             Section {
                 PushInLevels(shortcuts: effects.zoomShortcuts, keys: keys)
@@ -74,7 +74,7 @@ struct EffectsPage: View {
                 }
                 Button("Add Combo") { editingCombo = Editing(id: effects.combos.add().id) }
             } header: {
-                SettingsHeader("Combos", "Several effects on one key: overlays together, plus a push-in. Tap or hold it like any other.")
+                SettingsHeader("Combos", "Several overlays, and a push-in, on one key.")
             }
             Section {
                 Picker("While dictating, show", selection: $library.dictationOverlay) {
@@ -84,7 +84,7 @@ struct EffectsPage: View {
                     }
                 }
             } header: {
-                SettingsHeader("Dictating", "Shows when solo mode starts, and goes when it ends, so people on the call know why you're talking but muted.")
+                SettingsHeader("Dictating", "Shows while solo mode is on, so the call knows why you're muted.")
             }
         }
         .formStyle(.grouped)
@@ -107,7 +107,8 @@ struct EffectsPage: View {
     }
 }
 
-/// A combo in the list: what's in it, its Quick Menu key, and show or hide.
+/// A combo in the list, one line: its name (what's in it on hover), its
+/// Quick Menu key, and show or hide.
 private struct ComboRow: View {
     let combo: Combo
     let summary: String
@@ -121,13 +122,9 @@ private struct ComboRow: View {
             Image(systemName: "square.stack.3d.up")
                 .foregroundStyle(.secondary)
                 .frame(width: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(combo.name)
-                Text(summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            Text(combo.name)
+                .lineLimit(1)
+                .help(summary)
             Spacer(minLength: 8)
             if let key { KeyCap(key: key, muted: true) }
             Button(action: toggle) {
@@ -284,8 +281,8 @@ private struct PushInLevels: View {
     }
 }
 
-/// An overlay in the list: what it is, where, its Quick Menu key, and show
-/// or hide.
+/// An overlay in the list, one line: its name (what and where on hover),
+/// its Quick Menu key, and show or hide.
 private struct OverlayRow: View {
     let overlay: Overlay
     let key: String?
@@ -298,13 +295,9 @@ private struct OverlayRow: View {
             Image(systemName: overlay.kind == .text ? "textformat" : "photo")
                 .foregroundStyle(.secondary)
                 .frame(width: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(overlay.name)
-                Text(summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            Text(overlay.name)
+                .lineLimit(1)
+                .help(summary)
             Spacer(minLength: 8)
             if let key { KeyCap(key: key, muted: true) }
             Button(action: toggle) {
@@ -329,6 +322,7 @@ private struct OverlayRow: View {
         .onTapGesture(perform: edit)
     }
 
+    /// What it is, on hover: the name says enough in the list.
     private var summary: String {
         let content = switch overlay.kind {
         case .text: overlay.lines.count == 1 ? "1 line" : "\(overlay.lines.count) lines"
