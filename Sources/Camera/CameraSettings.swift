@@ -162,7 +162,7 @@ private struct TurnOnView: View {
             } icon: {
                 Image(systemName: "video").foregroundStyle(Color.accentColor)
             }
-            Text("A camera for your video calls: your real camera, with overlays and push-ins on your keys, and a sign while you dictate so nobody wonders why you're talking but muted.")
+            Text("A camera for your video calls: your real camera, with overlays, looks and push-ins on your keys, and a sign while you dictate so nobody wonders why you're talking but muted.")
                 .wraps()
             Text("Turning it on installs \(CameraSpec.name), which macOS asks you to approve in System Settings, then asks for camera access. Your camera turns on only while an app is using \(CameraSpec.name).")
                 .foregroundStyle(.secondary)

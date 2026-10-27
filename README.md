@@ -102,17 +102,28 @@ with effects on your keys. Off until you turn it on in Settings → Camera.
 
 - **While dictating:** an overlay ("Dictating", or lines of your own) shows
   while solo mode is on, so the call knows why you're talking but muted.
-- **Overlays:** text or graphics (PNG, PDF, SVG), one per spot, fading in and
-  out. **Push in:** zoom levels on top of each camera's own zoom. **Combos:**
-  several on one key.
+- **Overlays:** text (or just an icon) or graphics (PNG, PDF, SVG), one per
+  spot, fading in and out. **Push in:** zoom levels on top of each camera's
+  own zoom. **Combos:** overlays, a push-in and a look on one key.
+- **Looks:** color over the whole picture, one at a time: white balance,
+  saturation, tone (brightness, contrast, highlights, shadows), a three-way
+  color grade (hue, saturation and luminance for shadows, midtones and
+  highlights), and texture (fade, vignette, film grain). Starts with Noir,
+  Black & White, Warm, Vivid, Faded and Teal & Orange; any can be reset.
+- **Live:** a small panel for effects on the spot: type a line, pick its
+  look and spot, a zoom and a look, and Show puts it all up at once.
 - **Keys:** a shortcut per effect, and the **Quick Menu** (⌥. by default): a
   small menu over everything, one more key picks. Tap a key to toggle; hold it
-  to show the effect only while held. Mute is in the Quick Menu too (M).
+  to show the effect only while held. Mute is in the Quick Menu too (M), and
+  Live (L).
 - **Cameras:** ranked like mics; Vaux sends the highest-ranked one that's
   connected, or an iPhone set up as a camera ahead of them. Each camera has
   its own zoom.
 - Your camera runs only while an app is using Vaux Camera. Video apps see it
-  as one camera that never switches.
+  as one camera that never switches, and a vintage test card (PLEASE STAND
+  BY) while Vaux isn't sending a camera.
+- macOS's own video effects (Portrait, Studio Light…) are best set for Vaux,
+  not the call app: they then apply under Vaux's overlays, which stay sharp.
 
 ## Permissions
 
@@ -140,7 +151,9 @@ with effects on your keys. Off until you turn it on in Settings → Camera.
   mute and preferred inputs; **Camera** turns Vaux Camera on and ranks your
   cameras; **Effects** has overlays, push-ins and combos; **Shortcuts** has
   every Vaux key. Launch at Login is a switch in the menu.
-- While the camera is on, the menu lists your effects to toggle.
+- While the camera is on, the menu has two tabs: **Devices** (mics and
+  cameras; clicking a camera puts it first) and **Effects** (Live, overlays,
+  push-in, looks, combos). Deleting an effect in Settings can be undone (⌘Z).
 
 ## Build and run
 
@@ -155,6 +168,7 @@ make open      # generate the project and open it in Xcode, then ⌘R
 make run       # build Vaux Dev, install it to /Applications and launch it
 make check     # compile without signing
 make snapshot  # draw Settings and the menu to build/snapshot.*.png
+make snapshot-live  # the running Vaux Dev draws its pages as they are (camera live)
 make status    # installed system extensions (Vaux Camera)
 make logs      # stream Vaux's logs
 ```
@@ -242,6 +256,9 @@ Sources/
     Compositor.swift         #   crop and scale in hardware, draw overlays
     Overlay*.swift           #   overlays: model, drawing, library
     Combo.swift              #   several effects on one key
+    Look.swift               #   looks: model, presets, grading and rendering
+    LookEditor.swift         #   a look's editor
+    LivePanel.swift          #   the Live panel
     ZoomShortcuts.swift      #   push-in levels
     Triggers.swift           #   every effect's keys, tap and hold
     QuickMenu.swift          #   the Quick Menu panel

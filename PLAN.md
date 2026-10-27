@@ -129,27 +129,36 @@ end solo; old settings migrate; Settings acts as an app while open.
 Done when: everything Frames does works from Vaux, Frames is gone, and a
 user who never turns on the camera sees no prompt and no extension.
 
-**Status (2026-10-27):** built; compiles without warnings; every page
-checked in snapshots. As built:
+**Status (2026-10-27): done, but for the live checks below.** As built:
 
 - `VauxCamera` owns on/off. Turn On imports Frames' setup (once), installs
   the extension, relaunches after approval with `-continueCameraSetup`
   (Settings reopens on Camera, camera access is asked). Turn Off uninstalls
   and relaunches clean (simplest way to drop the effect hotkeys).
-- `Effects` (overlays, push-ins, combos, Triggers, Quick Menu) touches no
-  camera API, so it runs as soon as the camera is on; `CameraSide` (access,
-  ranking, device, feed) starts once the extension is ready and current.
+- `Effects` (overlays, push-ins, looks, combos, Triggers, Quick Menu, Live)
+  touches no camera API, so it runs as soon as the camera is on;
+  `CameraSide` (access, ranking, device, feed) starts once the extension is
+  ready and current. Verified: with the camera off, none of it starts.
 - Mute is a Triggers item (M), tap only; its global shortcut stays AppState's.
 - `SoloBroadcast` is gone: `Effects` observes `AppState.soloActive`.
+- Grown past Frames: looks with color grading (one LUT per setting),
+  Live, icon-only overlays, undo for deletes, the menu's Devices and
+  Effects tabs, a test card placeholder, a status-line Camera tab.
 - Dev builds sign automatically and `make run` installs Vaux Dev to
-  /Applications. **xcodebuild sees no Apple ID account on this Mac:** the
-  profiles have to be made by building once in Xcode (`make open`, ⌘B).
+  /Applications. **xcodebuild sees no Apple ID account on this Mac:**
+  profiles are made by building once in Xcode (`make open`, ⌘B).
 - **`make release`/`make install` are broken on this branch** until phase 3:
   Developer ID signing has no profile for the install entitlement, so the
   app wouldn't launch. Don't install a release from here yet.
+- Snapshots only read (no solo, keys or auto switch), so they can run beside
+  Vaux Dev; `make snapshot-live` has the running Vaux Dev draw itself.
 
-Not yet verified live: install and approval, relaunch, camera access, the
-feed, Quick Menu, Turn Off, the Frames import.
+Verified live: install and approval, relaunch, camera access, the feed,
+solo's overlay, the Frames import, Live, looks, the menu.
+
+Left (the user's hands): the Quick Menu, holding a key, Turn Off then Turn
+On again, and retiring Frames (Uninstall Frames Camera in Frames, then
+delete Frames.app).
 
 ## Phase 3: shipping
 
