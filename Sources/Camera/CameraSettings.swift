@@ -378,9 +378,9 @@ private struct CameraList: View {
     }
 }
 
-/// A camera row: drag handle, connection dot, name, whether it's a docked
-/// iPhone, whether it's the one being sent, and its zoom: a faint control
-/// at 1×, its level when zoomed. Either opens a popover to set it.
+/// A camera row: drag handle, connection dot, name, tagged if it's the one
+/// being sent, disconnected or a docked iPhone, and its zoom: a faint
+/// control at 1×, its level when zoomed. Either opens a popover to set it.
 private struct CameraRow: View {
     let entry: CameraEntry
     let connected: Bool
@@ -400,24 +400,27 @@ private struct CameraRow: View {
                 .frame(width: 7, height: 7)
             Text(entry.name)
                 .foregroundStyle(connected ? .primary : .secondary)
-            Spacer()
-            if docked {
-                Text("docked")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+                .lineLimit(1)
+            // Tags follow the name they describe; the trailing column is the
+            // zoom control's alone.
             if live {
                 Text("Live")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 1)
                     .background(.red, in: Capsule())
             } else if !connected {
                 Text("disconnected")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
+            if docked {
+                Text("docked")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
             Button { editing = true } label: {
                 // A fixed, fully hittable target either way; the popover
                 // points at the icon or pill.
