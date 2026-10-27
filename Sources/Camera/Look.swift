@@ -124,11 +124,11 @@ final class LookLibrary {
     }
 
     /// On whenever no other look is: under everything else, kept between
-    /// launches.
+    /// launches. Choosing one puts it on now, over whatever was turned on.
     var defaultLook: UUID? {
         didSet {
             UserDefaults.standard.set(defaultLook?.uuidString, forKey: Self.defaultKey)
-            if case .look(let id) = override, id == defaultLook { override = nil }
+            if defaultLook != oldValue, override != nil { set(nil) }
         }
     }
 
