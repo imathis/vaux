@@ -69,6 +69,14 @@ final class CameraPriorityModel {
         PreferredCamera.order = entries
     }
 
+    /// Puts a camera at the top: Vaux sends it from now on (a docked iPhone
+    /// still goes ahead while docking is followed).
+    func makeFirst(_ entry: CameraEntry) {
+        guard let index = entries.firstIndex(where: { $0.uid == entry.uid }), index > 0 else { return }
+        entries.move(fromOffsets: [index], toOffset: 0)
+        PreferredCamera.order = entries
+    }
+
     /// Drops a disconnected camera from the list. It's added back, last, if
     /// it connects again.
     func forget(_ entry: CameraEntry) {

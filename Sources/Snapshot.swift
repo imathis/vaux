@@ -60,13 +60,10 @@ enum Snapshot {
             // The menu with an overlay and a push-in on, in this process only.
             if let overlay = effects.overlays.overlays.first { effects.overlays.show(overlay.id) }
             if let level = effects.zoomShortcuts.levels.first { effects.zoomShortcuts.activate(level.id) }
-            await render(menu(), to: base.appendingPathExtension("menu-camera-on.png"))
-            // Collapsed: the stored choice, flipped for a moment.
-            let key = AppStorageKey.menuCameraExpanded
-            let stored = UserDefaults.standard.object(forKey: key)
-            UserDefaults.standard.set(false, forKey: key)
-            await render(menu(), to: base.appendingPathExtension("menu-camera-collapsed.png"))
-            UserDefaults.standard.set(stored, forKey: key)
+            await render(
+                AnyView(MenuContentView(appState: appState, camera: preview, openAbout: {}, openSettings: {}, dismiss: {}, resized: { _ in }, tab: .effects)),
+                to: base.appendingPathExtension("menu-camera-on.png")
+            )
             effects.overlays.clearAll()
             effects.zoomShortcuts.activate(nil)
             openSettings()
@@ -105,7 +102,8 @@ enum Snapshot {
                         ("camera", AnyView(CameraSettings(camera: camera))),
                         ("effects", AnyView(EffectsSettings(camera: camera) {})),
                         ("shortcuts", AnyView(ShortcutsSettings(camera: camera))),
-                        ("menu", AnyView(MenuContentView(appState: appState, camera: camera, openAbout: {}, openSettings: {}, dismiss: {}, resized: { _ in }))),
+                        ("menu-devices", AnyView(MenuContentView(appState: appState, camera: camera, openAbout: {}, openSettings: {}, dismiss: {}, resized: { _ in }, tab: .devices))),
+                        ("menu-effects", AnyView(MenuContentView(appState: appState, camera: camera, openAbout: {}, openSettings: {}, dismiss: {}, resized: { _ in }, tab: .effects))),
                     ]
                     for (name, page) in pages {
                         await render(page, to: base.appendingPathExtension("live-\(name).png"))

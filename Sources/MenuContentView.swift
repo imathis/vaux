@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import CoreAudio
 import KeyboardShortcuts
 import os
@@ -29,13 +30,20 @@ struct MenuContentView: View {
     @State private var currentDeviceID: AudioDeviceID?
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @AppStorage(AppStorageKey.enforcePreferred) private var autoSwitch = false
-    /// The camera section shows every effect; collapsed, only what's on.
-    @AppStorage(AppStorageKey.menuCameraExpanded) private var cameraExpanded = true
+    /// While the camera is on, the menu has two tabs; it opens on the last.
+    @AppStorage(AppStorageKey.menuTab) private var storedTab = Tab.devices
+    /// Snapshots draw a tab without changing the stored one.
+    private let forcedTab: Tab?
+
+    enum Tab: String {
+        case devices, effects
+    }
 
     init(appState: AppState, camera: VauxCamera, openAbout: @escaping () -> Void, openSettings: @escaping () -> Void,
-         dismiss: @escaping () -> Void, resized: @escaping (CGSize) -> Void) {
+         dismiss: @escaping () -> Void, resized: @escaping (CGSize) -> Void, tab: Tab? = nil) {
         _appState = Bindable(wrappedValue: appState)
         self.camera = camera
+        forcedTab = tab
         self.openAbout = openAbout
         self.openSettings = openSettings
         self.dismiss = dismiss
@@ -59,22 +67,23 @@ struct MenuContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Volume", color: .primary, trailing: canSetVolume ? nil : "managed by device")
-            volumeRow
-            divider()
-            header("Input", color: .secondary)
-            ForEach(inputs) { inputRow($0) }
-            autoSwitchRow
+            if let effects = camera.effects {
+                tabPicker
+                if tab == .effects {
+                    effectsTab(effects)
+                } else {
+                    devicesTab
+                }
+            } else {
+                devicesTab
+            }
+            // Vaux's own actions, whichever tab is showing.
             divider()
             textRow(appState.muted ? "Unmute" : "Mute", trailing: muteShortcut) { appState.toggle() }
             textRow(appState.soloActive ? "End Solo Mode" : "Solo Mode", trailing: nil, trailingSymbol: soloKeySymbol) {
                 appState.toggleSolo()
             }
             soloStatus
-            if let effects = camera.effects {
-                divider()
-                cameraSection(effects)
-            }
             divider()
             launchAtLoginRow
             textRow("About Vaux", trailing: nil) { openAbout(); dismiss() }
@@ -86,6 +95,80 @@ struct MenuContentView: View {
         .fixedSize(horizontal: false, vertical: true)
         .onGeometryChange(for: CGSize.self, of: \.size) { resized($0) }
         .onAppear(perform: reload)
+    }
+
+    // MARK: Tabs
+
+    private var tab: Tab { forcedTab ?? storedTab }
+
+    /// Two equal halves across the menu (a segmented picker only takes
+    /// its labels' width), in the menu's own grays.
+    private var tabPicker: some View {
+        HStack(spacing: 2) {
+            ForEach([(Tab.devices, "Devices"), (Tab.effects, "Effects")], id: \.0) { option, title in
+                Button { storedTab = option } label: {
+                    Text(title)
+                        .font(.system(size: 12, weight: tab == option ? .semibold : .regular))
+                        .foregroundStyle(tab == option ? .primary : .secondary)
+                        .frame(maxWidth: .infinity, minHeight: 22)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(tab == option ? Color.primary.opacity(0.14) : .clear)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.06)))
+        .padding(.horizontal, contentInset)
+        .padding(.top, 5)
+        .padding(.bottom, 4)
+    }
+
+    /// The mic's volume, the mics, and while the camera is on, the cameras.
+    @ViewBuilder private var devicesTab: some View {
+        header("Volume", color: .primary, trailing: canSetVolume ? nil : "managed by device")
+        volumeRow
+        divider()
+        header("Input", color: .secondary)
+        ForEach(inputs) { inputRow($0) }
+        autoSwitchRow
+        if let side = camera.side, side.access.isAuthorized {
+            divider()
+            header("Camera", color: .secondary)
+            ForEach(side.priority.entries.filter(side.priority.isConnected)) { cameraRow($0, side) }
+        }
+    }
+
+    /// A camera, in Vaux's ranking: the one it sends is marked, Live while
+    /// a video app is using it. Clicking one puts it at the top.
+    private func cameraRow(_ entry: CameraEntry, _ side: CameraSide) -> some View {
+        let sent = side.priority.preferred?.uid == entry.uid
+        let live = if case .sending(let camera, _) = side.feeder.status { camera.uid == entry.uid } else { false }
+        return MenuRow(height: 32, edgeInset: edgeInset, contentInset: contentInset) {
+            side.priority.makeFirst(entry)
+        } content: {
+            HStack(spacing: 9) {
+                deviceIcon(symbol: Self.cameraSymbol(entry.uid), current: sent)
+                Text(entry.name).font(.system(size: 13)).lineLimit(1)
+                Spacer(minLength: 6)
+                if live {
+                    badge("Live", fill: .red, text: .white)
+                } else if sent {
+                    preferredBadge
+                }
+            }
+        }
+    }
+
+    /// The laptop's, an iPhone (which reports itself as external), or a
+    /// webcam.
+    private static func cameraSymbol(_ uid: String) -> String {
+        guard let device = AVCaptureDevice(uniqueID: uid) else { return "web.camera" }
+        if device.isContinuityCamera { return "iphone" }
+        return device.deviceType == .builtInWideAngleCamera ? "laptopcomputer" : "web.camera"
     }
 
     // MARK: Sections
@@ -123,7 +206,7 @@ struct MenuContentView: View {
             select(device)
         } content: {
             HStack(spacing: 9) {
-                deviceIcon(device)
+                deviceIcon(symbol: device.symbol, current: device.isCurrent)
                 Text(device.name).font(.system(size: 13))
                 Spacer(minLength: 6)
                 if device.isPreferred, autoSwitch { preferredBadge }
@@ -181,10 +264,10 @@ struct MenuContentView: View {
         }
     }
 
-    /// Overlays, looks and combos, each a list (names can repeat across
-    /// them), and push-ins as one choice, since one level is on at a time.
-    /// Collapsed, only what's on shows. Keys live in the Quick Menu.
-    @ViewBuilder private func cameraSection(_ effects: Effects) -> some View {
+    /// Live, then overlays, looks and combos, each a list (names can repeat
+    /// across them), and push-ins as one choice, since one level is on at a
+    /// time. Keys live in the Quick Menu.
+    @ViewBuilder private func effectsTab(_ effects: Effects) -> some View {
         let items = effects.triggers.items
         let overlays = items.filter { if case .overlay = $0.action { true } else { false } }
         let combos = items.filter { if case .combo = $0.action { true } else { false } }
@@ -199,21 +282,15 @@ struct MenuContentView: View {
                 effects.live.show()
             }
         }
-        effectList("Overlays", cameraExpanded ? overlays : overlays.filter(\.isOn), effects)
-        if !levels.isEmpty, cameraExpanded || pushedIn != nil || effects.zoomShortcuts.liveZoom != nil {
-            pushInRow(levels, active: pushedIn, effects)
-        }
-        effectList("Looks", cameraExpanded ? looks : looks.filter(\.isOn), effects)
-        effectList("Combos", cameraExpanded ? combos : combos.filter(\.isOn), effects)
+        effectList("Overlays", overlays, effects)
+        if !levels.isEmpty { pushInRow(levels, active: pushedIn, effects) }
+        effectList("Looks", looks, effects)
+        effectList("Combos", combos, effects)
     }
 
-    /// Camera, its state, Clear while overlays show, and the chevron; the
-    /// row expands and collapses the section.
+    /// Camera, its state, and Clear while overlays show.
     private func cameraHeader(showingOverlays: Bool, clear: @escaping () -> Void) -> some View {
-        MenuRow(height: 26, edgeInset: edgeInset, contentInset: contentInset) {
-            withAnimation(.easeInOut(duration: 0.15)) { cameraExpanded.toggle() }
-        } content: {
-            HStack(spacing: 6) {
+        HStack(spacing: 6) {
                 Text("Camera").font(.system(size: 13, weight: .semibold))
                 Text(cameraStatus).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 6)
@@ -228,19 +305,15 @@ struct MenuContentView: View {
                     .buttonStyle(.plain)
                     .help("Hide every overlay")
                 }
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(cameraExpanded ? 90 : 0))
-            }
         }
+        .padding(.horizontal, contentInset)
+        .frame(height: 26)
     }
 
-    /// A titled list of effects, checked while on; the title only when
-    /// expanded (collapsed, the checks say enough).
+    /// A titled list of effects, checked while on.
     @ViewBuilder private func effectList(_ title: String, _ items: [Triggers.Item], _ effects: Effects) -> some View {
         if !items.isEmpty {
-            if cameraExpanded { subheader(title) }
+            subheader(title)
             ForEach(items) { item in
                 effectRow(item) { effects.triggers.trigger(item.action) }
             }
@@ -360,26 +433,31 @@ struct MenuContentView: View {
         return lines + appState.soloProblems.map { ($0, true) }
     }
 
-    private func deviceIcon(_ device: MenuInputDevice) -> some View {
+    /// A mic's or camera's icon, filled in for the one in use.
+    private func deviceIcon(symbol: String, current: Bool) -> some View {
         ZStack {
             Circle()
-                .fill(device.isCurrent ? Color.accentColor : Color(nsColor: .tertiaryLabelColor))
-            Image(systemName: device.symbol)
+                .fill(current ? Color.accentColor : Color(nsColor: .tertiaryLabelColor))
+            Image(systemName: symbol)
                 .symbolRenderingMode(.hierarchical)
                 .font(.system(size: 14))
-                .foregroundStyle(device.isCurrent ? Color.white : Color(nsColor: .secondaryLabelColor))
+                .foregroundStyle(current ? Color.white : Color(nsColor: .secondaryLabelColor))
                 .frame(width: 19, height: 19)
         }
         .frame(width: 26, height: 26)
     }
 
     private var preferredBadge: some View {
-        Text("Preferred")
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
+        badge("Preferred", fill: Color(nsColor: .quaternaryLabelColor), text: .secondary)
+    }
+
+    private func badge(_ title: String, fill: Color, text: Color) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: title == "Live" ? .semibold : .regular))
+            .foregroundStyle(text)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(Capsule().fill(Color(nsColor: .quaternaryLabelColor)))
+            .background(Capsule().fill(fill))
     }
 
     private func divider() -> some View {

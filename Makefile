@@ -75,7 +75,7 @@ snapshot: build ## Draw Vaux Dev's Settings tabs, menu and Settings window to $(
 snapshot-live: ## Have the running Vaux Dev draw its pages as they are now (camera live) to $(SNAPSHOT)-named PNGs
 	@rm -f $(basename $(SNAPSHOT)).live-*.png
 	xcrun swift -e 'import Foundation; DistributedNotificationCenter.default().postNotificationName(.init("dev.imathis.vaux.debug.snapshot"), object: "$(abspath $(SNAPSHOT))", userInfo: nil, deliverImmediately: true)'
-	@for i in $$(seq 1 40); do [ -f $(basename $(SNAPSHOT)).live-menu.png ] && break; sleep 0.25; done
+	@for i in $$(seq 1 40); do [ -f $(basename $(SNAPSHOT)).live-menu-effects.png ] && break; sleep 0.25; done
 	@ls $(basename $(SNAPSHOT)).live-*.png
 
 release: gen ## Build Release (Apple silicon and Intel), signed with Developer ID
