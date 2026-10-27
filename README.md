@@ -99,33 +99,81 @@ to be the visible tab in its window, since browsers only expose that one.
 
 ### Vaux Camera (opt-in)
 
-A camera for your video calls: your real camera, passed through in hardware,
-with effects on your keys. Off until you turn it on in Settings → Camera.
+A camera for your calls: your real camera, passed through Vaux, with effects
+on your keys. Video apps see one camera, **Vaux Camera**, that never switches,
+while Vaux decides what goes into it. It's off until you turn it on in
+Settings → Camera.
 
-- **While dictating:** an overlay ("Dictating", or lines of your own) shows
-  while solo mode is on, so the call knows why you're talking but muted.
-- **Overlays:** text (or just an icon) or graphics (PNG, PDF, SVG), one per
-  spot, fading in and out. **Push in:** zoom levels on top of each camera's
-  own zoom. **Combos:** overlays, a push-in and a look on one key.
-- **Looks:** color over the whole picture, one at a time: white balance,
-  saturation, tone (brightness, contrast, highlights, shadows), a three-way
-  color grade (hue, saturation and luminance for shadows, midtones and
-  highlights), and texture (fade, vignette, film grain). Starts with Noir,
-  Black & White, Warm, Vivid, Faded and Teal & Orange; any can be reset.
-- **Live:** a small panel for effects on the spot: type a line, pick its
-  style and spot, a zoom and a look, and Show puts it all up at once.
-- **Keys:** a shortcut per effect, and the **Quick Menu** (⌥. by default): a
-  small menu over everything, one more key picks. Tap a key to toggle; hold it
-  to show the effect only while held. Mute is in the Quick Menu too (M), and
-  Live (L).
-- **Cameras:** ranked like mics; Vaux sends the highest-ranked one that's
-  connected, or an iPhone set up as a camera ahead of them. Each camera has
-  its own zoom.
-- Your camera runs only while an app is using Vaux Camera. Video apps see it
-  as one camera that never switches, and a vintage test card (PLEASE STAND
-  BY) while Vaux isn't sending a camera.
-- macOS's own video effects (Portrait, Studio Light…) are best set for Vaux,
-  not the call app: they then apply under Vaux's overlays, which stay sharp.
+**The dictation sign.** While solo mode is on, Vaux Camera shows an overlay
+("Dictating", or lines of your own, picked at random), so the call can see why
+you're talking but muted. It goes when solo ends.
+
+#### Effects
+
+- **Overlays:** text in a pill, a lower-third bar or plain, with an icon or as
+  just an icon (a coffee cup for a break), or graphics (PNG, PDF, SVG, even
+  full frame). Seven spots, kept inside the middle that apps keep when they
+  crop; one per spot, so a new one replaces what's there. They fade in and
+  out, and can hide on their own after a few seconds.
+- **Push in:** zoom levels on top of each camera's own zoom, up to 2×, eased
+  in and out.
+- **Looks:** a color grade over the whole picture, one at a time:
+  - white balance (temperature, tint) and saturation
+  - tone: brightness, contrast, highlights and shadows
+  - a three-way color grade: hue, saturation and luminance for the shadows,
+    midtones and highlights apart
+  - texture: fade (lifted blacks and a soft glow, for smoke and haze),
+    vignette and film grain
+
+  Starts with Noir, Black & White, Warm, Vivid, Faded and Teal & Orange. Set
+  one as the **default look** and it's always on, under everything else; any
+  other look takes its place while it's on, and it comes back after.
+- **Combos:** several overlays, a push-in and a look on one key.
+- **Live:** a small panel for the moment: type a line, pick its style, spot,
+  zoom and look, and Show puts it all up at once; Hide takes it all down.
+
+Editors show their changes on your camera as you make them; Cancel puts it
+all back. Deletes can be undone.
+
+#### Triggering them
+
+- **Shortcuts:** each effect can have a global shortcut, which a Stream Deck
+  button can press.
+- **The Quick Menu:** one key (⌥. by default) opens a small menu over
+  everything, and a second key picks: numbers for overlays, Q W E for looks,
+  Z X for push-ins, A S for combos, L for Live, M for Mute. Your call app
+  keeps focus.
+- **Tap or hold:** tap a key to turn its effect on or off; hold it to show the
+  effect only while it's held, then whatever it replaced comes back.
+- **The menu bar:** while the camera is on, the menu has an **Effects** tab
+  with everything to click.
+
+#### Cameras
+
+- Ranked like mics: Vaux sends the highest-ranked camera that's connected and
+  switches as cameras come and go. Click one in the menu's **Devices** tab to
+  put it first.
+- Each camera has its own zoom (a center crop), shown with how far it stays
+  sharp.
+- An iPhone set up as a camera (propped up in landscape and locked) can go
+  ahead of the list, and back when you pick it up.
+- Up to 60 fps, in 720p or 1080p, as the video app asks.
+- While Vaux isn't sending a camera, Vaux Camera shows a vintage test card:
+  PLEASE STAND BY.
+
+#### How it works, and what that means
+
+Vaux Camera is a camera extension inside Vaux. Turning the camera on installs
+it, which macOS asks you to approve in System Settings, and then Vaux asks for
+camera access; turning it off removes it again. Your real camera runs only
+while a video app is using Vaux Camera, and frames go through in hardware, so
+an idle Vaux Camera costs nothing. Effects are drawn only while they show.
+
+- macOS's own video effects (Portrait, Studio Light, backgrounds) are best
+  set for Vaux in Control Center rather than for the call app: then they apply
+  under Vaux's overlays, which stay sharp, instead of over them.
+- Updating Vaux Camera restarts it, and video apps that are open lose it
+  until they're reopened, so updates wait for you to click Update.
 
 ## Permissions
 
