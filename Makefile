@@ -29,19 +29,18 @@ DEV_APP := /Applications/Vaux Dev.app
 # Release: Developer ID-signed and notarized, zipped for GitHub releases and
 # the Homebrew cask (imathis/homebrew-tap). Named by VAUX_RELEASE in project.yml.
 RELEASE := $(shell awk -F'"' '/VAUX_RELEASE:/ {print $$2; exit}' project.yml)
-RELEASE_APP := build/Build/Products/Release/Vaux.app
+RELEASE_APP := build/export/Vaux.app
 DIST := dist
 ZIP := $(DIST)/Vaux-$(RELEASE).zip
 # The developer account's notarytool login, stored in the Keychain once with
 # xcrun notarytool store-credentials notarytool-profile --apple-id <id> --team-id $(TEAM)
 NOTARY_PROFILE ?= notarytool-profile
-# No debugger entitlement (notarization rejects it), a secure timestamp.
-RELEASE_SIGN := CODE_SIGN_STYLE=Manual \
-                CODE_SIGN_IDENTITY="Developer ID Application" \
-                PROVISIONING_PROFILE_SPECIFIER="" \
-                DEVELOPMENT_TEAM=$(TEAM) \
-                OTHER_CODE_SIGN_FLAGS=--timestamp \
-                CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
+# Releases are archived, then exported for Developer ID (ExportOptions.plist):
+# the export signs Vaux with the Developer ID profile that allows installing
+# Vaux Camera. Xcode made that profile, distributing an archive once, and
+# manages it, so it can't be named in a manual signing setup; the export
+# finds it on disk without an Apple ID session.
+ARCHIVE := build/Vaux.xcarchive
 
 .PHONY: gen open check build run snapshot snapshot-live status logs clean release install notarize publish
 
@@ -79,12 +78,17 @@ snapshot-live: ## Have the running Vaux Dev draw its pages as they are now (came
 	@ls $(basename $(SNAPSHOT)).live-*.png
 
 release: gen ## Build Release (Apple silicon and Intel), signed with Developer ID
-	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -derivedDataPath build \
-	  -destination 'generic/platform=macOS' $(RELEASE_SIGN) build
+	rm -rf $(ARCHIVE) build/export
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -archivePath $(ARCHIVE) \
+	  -allowProvisioningUpdates DEVELOPMENT_TEAM=$(TEAM) VAUX_CAMERA_BUILD=$(call camera_build,Release) archive
+	xcodebuild -exportArchive -archivePath $(ARCHIVE) -exportPath build/export \
+	  -exportOptionsPlist ExportOptions.plist -allowProvisioningUpdates
 	codesign --verify --strict --deep $(RELEASE_APP)
 
 install: release ## Install the Release build to /Applications and launch it
-	-pkill -x Vaux
+	@# Only the installed Vaux: Vaux Dev's process is named Vaux too.
+	-pkill -f "/Applications/Vaux.app/Contents/MacOS/Vaux"
+	@while pgrep -f "/Applications/Vaux.app/Contents/MacOS/Vaux" >/dev/null; do sleep 0.1; done
 	rm -rf /Applications/Vaux.app
 	ditto $(RELEASE_APP) /Applications/Vaux.app
 	open /Applications/Vaux.app
