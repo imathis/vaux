@@ -66,6 +66,11 @@ final class AppState {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.settingsChanged() }
         }
+        DistributedNotificationCenter.default().addObserver(
+            forName: SoloBroadcast.request, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { SoloBroadcast.post(self?.soloActive ?? false) }
+        }
         startDefaultDeviceListener()
         lastInputUIDs = Set(AudioController.inputDevices().map(\.uid))
         startDeviceListListener()
@@ -125,7 +130,9 @@ final class AppState {
     // so less of the call bleeds into the mic. Everything solo changes is
     // recorded and put back on exit.
 
-    private(set) var soloActive = false
+    private(set) var soloActive = false {
+        didSet { if soloActive != oldValue { SoloBroadcast.post(soloActive) } }
+    }
     /// A solo transition is in flight (the Accessibility work runs off main).
     private(set) var soloBusy = false
     /// Call apps muted while solo is on, for the menu.

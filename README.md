@@ -179,6 +179,7 @@ Sources/
   CaptureWatcher.swift       # which apps are using the mic
   MediaPauser.swift          # pauses playing media during solo
   SoloKeyMonitor.swift       # solo key shared with dictation, and Escape
+  SoloBroadcast.swift        # tells other apps (Frames) when solo starts and ends
   SoloShortcutRecorder.swift # solo shortcut field (combos and modifier taps)
   InputVolumeView.swift      # volume slider
   InputPriorityModel.swift   # preferred-input list (Settings)
