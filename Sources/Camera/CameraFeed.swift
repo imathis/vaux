@@ -247,10 +247,10 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         return max(largest, 1)
     }
 
-    /// Modes that run at 30 fps or better.
+    /// Modes that run at 30 fps or better (29.97 included).
     private static func usableModes(of device: AVCaptureDevice) -> [AVCaptureDevice.Format] {
         let slowest = 1 / CameraSpec.slowestFrameDuration.seconds
-        return device.formats.filter { fastest(of: $0) >= slowest }
+        return device.formats.filter { fastest(of: $0) * nearly >= slowest }
     }
 
     private static func fastest(of mode: AVCaptureDevice.Format) -> Double {
@@ -287,18 +287,24 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         device.unlockForConfiguration()
     }
 
-    /// The mode's fastest frame duration, held to Vaux Camera's 60 fps: an
-    /// exact value from its own ranges, or nil if none fits.
+    /// The mode's fastest frame duration, held to Vaux Camera's 60 fps, or
+    /// nil if every rate it has is faster. Past either end of a range, the
+    /// range's own value: cameras say 60.00024 or 59.94 where they mean 60,
+    /// and plain 1/60 against those is out of range.
     private static func frameDuration(of mode: AVCaptureDevice.Format) -> CMTime? {
         mode.videoSupportedFrameRateRanges
-            .map { range in CMTimeMaximum(range.minFrameDuration, CameraSpec.frameDuration) }
-            .filter { duration in
-                mode.videoSupportedFrameRateRanges.contains { range in
-                    CMTimeCompare(duration, range.minFrameDuration) >= 0 && CMTimeCompare(duration, range.maxFrameDuration) <= 0
-                }
+            .map { range in
+                if CMTimeCompare(CameraSpec.frameDuration, range.minFrameDuration) < 0 { return range.minFrameDuration }
+                if CMTimeCompare(CameraSpec.frameDuration, range.maxFrameDuration) > 0 { return range.maxFrameDuration }
+                return CameraSpec.frameDuration
             }
+            .filter { 1 / $0.seconds <= Double(CameraSpec.fps) * nearly }
             .min { CMTimeCompare($0, $1) < 0 }
     }
+
+    /// How far off a camera's rate can be and still count: 60.00024 is 60,
+    /// 29.97 is 30.
+    private static let nearly = 1.01
 
     /// Its fastest rate, up to Vaux Camera's.
     private static func rate(_ mode: AVCaptureDevice.Format) -> Double {
