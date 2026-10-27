@@ -78,6 +78,12 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         sessionQueue.async { [self] in
             if input?.device.uniqueID != cameraID || configuredFor != format || configuredZoom != modeZoom {
                 use(cameraID, for: format, zoom: modeZoom)
+            } else if !session.isRunning, let device = input?.device {
+                // Starting again: while stopped, the camera may have been
+                // used by another app in its own mode (or reset to its
+                // default, 30 fps), so set Vaux's again.
+                configure(device, for: format, zoom: modeZoom)
+                logMode(of: device, for: format)
             }
             let previous = videoQueue.sync {
                 defer {
