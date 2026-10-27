@@ -15,8 +15,8 @@ settings:
     # Numbers only (macOS expects it). Bump the build each release.
     MARKETING_VERSION: "1.0.0"
     # The release's name: tag, zip, cask, and the version About shows.
-    VAUX_RELEASE: "1.0.0-alpha.2"
-    CURRENT_PROJECT_VERSION: "2"
+    VAUX_RELEASE: "1.0.0-alpha.3"
+    CURRENT_PROJECT_VERSION: "3"
     DEVELOPMENT_TEAM: Q2573QH43F
     CODE_SIGN_STYLE: Automatic
     # Xcode's recommended settings.
