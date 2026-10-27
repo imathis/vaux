@@ -43,6 +43,11 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     private var dropped = 0
     private var latency = 0.0
     private var countingSince = CMClockGetTime(CMClockGetHostTimeClock())
+    /// The last frame taken: ones closer together than Vaux Camera's rate
+    /// are skipped. Cameras can run faster than asked: macOS resets their
+    /// rate when its video effects change (a Facecam went back to 60 fps
+    /// when Portrait was turned off, doubling the work).
+    private var lastTaken = CMTime.invalid
 
     /// Overlays fade in and out over a quarter second.
     private static let fadeStep = 1 / (0.25 * Double(CameraSpec.fps))
@@ -306,6 +311,9 @@ final class CameraFeed: NSObject, @unchecked Sendable {
 
 extension CameraFeed: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        let captured = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        if lastTaken.isValid, (captured - lastTaken).seconds < CameraSpec.frameDuration.seconds * 0.75 { return }
+        lastTaken = captured
         fadeOverlays()
         fadeLooks()
         easeZoom()
@@ -318,7 +326,6 @@ extension CameraFeed: AVCaptureVideoDataOutputSampleBufferDelegate {
             count(sent: false)
             return
         }
-        let captured = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         guard sink.enqueue(frame, presentationTime: captured) else {
             count(sent: false)
             return
