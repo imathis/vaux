@@ -47,6 +47,14 @@ final class ExtensionInstaller: NSObject {
 
     var needsUpdate: Bool { installedBuild.map { $0 != Self.bundledBuild } ?? false }
 
+    /// Asking macOS, or installing, updating or uninstalling.
+    var isBusy: Bool {
+        switch state {
+        case .checking, .working: true
+        default: false
+        }
+    }
+
     @ObservationIgnored private let log = Logger(subsystem: "dev.imathis.vaux", category: "installer")
     /// The install or uninstall in flight. Its callbacks own the state until
     /// it ends; status checks in the meantime only note the installed build.

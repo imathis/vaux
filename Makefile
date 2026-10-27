@@ -43,7 +43,7 @@ RELEASE_SIGN := CODE_SIGN_STYLE=Manual \
                 OTHER_CODE_SIGN_FLAGS=--timestamp \
                 CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
 
-.PHONY: gen open check build run snapshot status logs clean release install notarize publish
+.PHONY: gen open check build run snapshot snapshot-live status logs clean release install notarize publish
 
 gen: ## Generate the Xcode project from project.yml
 	xcodegen generate
@@ -71,6 +71,12 @@ snapshot: build ## Draw Vaux Dev's Settings tabs, menu and Settings window to $(
 	@mkdir -p $(dir $(SNAPSHOT))
 	"$$(xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Debug $(SIGN) -showBuildSettings 2>/dev/null | awk '/ BUILT_PRODUCTS_DIR/ {d=$$3} / EXECUTABLE_PATH/ {e=$$3} END {print d"/"e}')" -snapshot $(abspath $(SNAPSHOT))
 	@ls $(basename $(SNAPSHOT)).*.png
+
+snapshot-live: ## Have the running Vaux Dev draw its pages as they are now (camera live) to $(SNAPSHOT)-named PNGs
+	@rm -f $(basename $(SNAPSHOT)).live-*.png
+	xcrun swift -e 'import Foundation; DistributedNotificationCenter.default().postNotificationName(.init("dev.imathis.vaux.debug.snapshot"), object: "$(abspath $(SNAPSHOT))", userInfo: nil, deliverImmediately: true)'
+	@for i in $$(seq 1 40); do [ -f $(basename $(SNAPSHOT)).live-menu.png ] && break; sleep 0.25; done
+	@ls $(basename $(SNAPSHOT)).live-*.png
 
 release: gen ## Build Release (Apple silicon and Intel), signed with Developer ID
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -derivedDataPath build \

@@ -2,8 +2,9 @@ import AVFoundation
 import KeyboardShortcuts
 import SwiftUI
 
-/// Vaux Camera: turning it on, then setup, what's being sent, the cameras
-/// with their zoom, and turning it off.
+/// Vaux Camera: turning it on; then a line saying whether it's working,
+/// with Turn Off beside it, cards only when there's something to do, and
+/// the cameras with their zoom.
 struct CameraSettings: View {
     let camera: VauxCamera
 
@@ -13,54 +14,28 @@ struct CameraSettings: View {
         Form {
             if let installer = camera.installer {
                 Section {
-                    CameraStatusView(installer: installer, cameras: camera.side?.priority)
-                } header: {
-                    SettingsHeader(CameraSpec.name)
-                }
-                if installer.state == .ready, let side = camera.side {
-                    if side.access.isAuthorized {
-                        Section {
-                            FeedStatusView(feeder: side.feeder)
-                        } header: {
-                            SettingsHeader("Now")
-                        }
-                        Section {
-                            CameraList(cameras: side.priority, feeder: side.feeder)
-                        } header: {
-                            SettingsHeader("Cameras", "\(VauxCamera.appName) sends the highest-ranked camera that's connected. Drag to reorder.")
-                        }
-                    } else {
-                        Section {
-                            CameraAccessView(access: side.access)
-                        } header: {
-                            SettingsHeader("Camera Access")
-                        }
-                    }
-                }
-                #if DEBUG
-                Section {
-                    LabeledContent("\(CameraSpec.name) in this app", value: ExtensionInstaller.bundledBuild)
-                    LabeledContent("Installed", value: installer.installedBuild ?? "None")
-                } header: {
-                    SettingsHeader("Build")
-                }
-                #endif
-                Section {
-                    HStack {
-                        Button("Turn Off Camera…", role: .destructive) { confirmingTurnOff = true }
-                            .disabled(camera.turningOff)
-                        if camera.turningOff { ProgressView().controlSize(.small) }
-                    }
+                    CameraStatusLine(camera: camera, installer: installer) { confirmingTurnOff = true }
+                    CameraAttention(installer: installer, side: camera.side)
                     if camera.turnOffFailed {
                         Text("\(CameraSpec.name) is still installed. Try again, or remove it in System Settings → General → Login Items & Extensions → Camera Extensions.")
                             .foregroundStyle(.orange)
                             .wraps()
                     }
-                } footer: {
-                    Text("Removes \(CameraSpec.name) from your video apps; \(VauxCamera.appName) reopens after. Your effects and camera order are kept.")
-                        .foregroundStyle(.secondary)
-                        .wraps()
                 }
+                if installer.state == .ready, let side = camera.side, side.access.isAuthorized {
+                    Section {
+                        CameraList(cameras: side.priority, feeder: side.feeder)
+                        // Its panel lists only apps using a camera.
+                        if case .sending = side.feeder.status {
+                            SystemEffectsRow(effects: side.feeder.systemEffects)
+                        }
+                    } header: {
+                        SettingsHeader("Cameras", "\(VauxCamera.appName) sends the highest-ranked camera that's connected. Drag to reorder.")
+                    }
+                }
+                #if DEBUG
+                Diagnostics(installer: installer, feeder: camera.side?.feeder)
+                #endif
             } else {
                 Section {
                     TurnOnView(camera: camera)
@@ -76,6 +51,105 @@ struct CameraSettings: View {
         }
     }
 }
+
+/// Whether Vaux Camera is working, in a line, and Turn Off.
+private struct CameraStatusLine: View {
+    let camera: VauxCamera
+    let installer: ExtensionInstaller
+    let turnOff: () -> Void
+
+    var body: some View {
+        let (text, tint) = status
+        HStack(spacing: 10) {
+            Image(systemName: "video.fill")
+                .foregroundStyle(tint)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(CameraSpec.name).font(.headline)
+                Text(text)
+                    .foregroundStyle(.secondary)
+                    .wraps()
+            }
+            .help("A video app that was already open may need reopening to list \(CameraSpec.name).")
+            Spacer(minLength: 8)
+            if camera.turningOff || installer.isBusy { ProgressView().controlSize(.small) }
+            Button("Turn Off…", action: turnOff)
+                .disabled(camera.turningOff)
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// What's happening, and its color: red while an app is using it (like
+    /// a camera's light), green when ready, orange when it needs you.
+    private var status: (String, Color) {
+        switch installer.state {
+        case .checking: return ("Checking…", .secondary)
+        case .working(let message): return (message, .secondary)
+        case .notInstalled: return ("Not installed", .orange)
+        case .awaitingApproval: return ("Waiting for your approval", .orange)
+        case .disabled: return ("Turned off in System Settings", .orange)
+        case .restartNeeded: return ("Restart your Mac to finish", .orange)
+        case .failed: return ("Couldn't install", .red)
+        case .ready: break
+        }
+        guard let side = camera.side else { return ("Starting…", .secondary) }
+        guard side.access.isAuthorized else { return ("Needs camera access", .orange) }
+        return switch side.feeder.status {
+        case .sending(let source, _): ("In use: sending \(source.name)", .red)
+        case .standingBy: ("Ready. Choose \(CameraSpec.name) in your video app.", .green)
+        case .noCamera: ("No camera connected", .orange)
+        case .waitingForDevice, .notReady: ("Starting…", .secondary)
+        case .needsRelaunch: ("Needs a relaunch", .orange)
+        }
+    }
+}
+
+/// The one thing to do, when there is one: approve, install, update, allow
+/// camera access, relaunch.
+private struct CameraAttention: View {
+    let installer: ExtensionInstaller
+    let side: CameraSide?
+
+    var body: some View {
+        CameraStatusView(installer: installer)
+        if installer.state == .ready, let side {
+            if !side.access.isAuthorized {
+                CameraAccessView(access: side.access)
+            } else if side.feeder.status == .needsRelaunch {
+                StatusRow(
+                    symbol: "arrow.clockwise.circle.fill",
+                    tint: .orange,
+                    title: "Relaunch \(VauxCamera.appName) to reconnect",
+                    detail: "\(CameraSpec.name) restarted, and macOS only shows it again to apps opened afterward. Video apps that were already open need reopening too.",
+                    action: .init(title: "Relaunch \(VauxCamera.appName)") { VauxCamera.relaunch(continuingSetup: false) }
+                )
+            }
+        }
+    }
+}
+
+#if DEBUG
+/// For development: what's being sent and how well, and the extension's
+/// builds.
+private struct Diagnostics: View {
+    let installer: ExtensionInstaller
+    let feeder: Feeder?
+
+    var body: some View {
+        Section {
+            if let feeder, case .sending(_, let format) = feeder.status {
+                LabeledContent("Sending", value: "\(format)\(feeder.zoom > 1 ? " at \(feeder.zoom.zoomText)" : "")")
+                LabeledContent("Frame rate", value: "\(feeder.stats.fps) fps, \(feeder.stats.dropped) dropped")
+                LabeledContent("Capture to \(CameraSpec.name)", value: "\(feeder.stats.latencyMS.formatted(.number.precision(.fractionLength(1)))) ms")
+            }
+            LabeledContent("\(CameraSpec.name) in this app", value: ExtensionInstaller.bundledBuild)
+            LabeledContent("Installed", value: installer.installedBuild ?? "None")
+        } header: {
+            SettingsHeader("Diagnostics", "Development builds only.")
+        }
+    }
+}
+#endif
 
 /// The camera, before it's on: what it is, what turning it on does.
 private struct TurnOnView: View {
@@ -152,17 +226,16 @@ private struct StatusRow: View {
     }
 }
 
-/// Where Vaux Camera's setup stands.
+/// Setup, when it needs you: install, approve, turn back on, update,
+/// restart, try again. Nothing while it's ready or busy (the status line
+/// says so).
 private struct CameraStatusView: View {
     let installer: ExtensionInstaller
-    let cameras: CameraPriorityModel?
 
     var body: some View {
         switch installer.state {
-        case .checking:
-            StatusRow(busy: true, title: "Checking…")
-        case .working(let message):
-            StatusRow(busy: true, title: message)
+        case .checking, .working:
+            EmptyView()
         case .notInstalled:
             StatusRow(
                 symbol: "camera",
@@ -189,14 +262,6 @@ private struct CameraStatusView: View {
                 action: openSettings
             )
         case .ready:
-            StatusRow(
-                symbol: "checkmark.circle.fill",
-                tint: .green,
-                title: "Ready",
-                detail: cameras?.listsVauxCamera ?? false
-                    ? "Choose \(CameraSpec.name) in your video app. An app that was already open may need to be reopened to list it."
-                    : "Approved. \(CameraSpec.name) appears in the camera list as soon as macOS starts it."
-            )
             if installer.needsUpdate {
                 StatusRow(
                     symbol: "arrow.down.circle.fill",
@@ -303,7 +368,7 @@ private struct CameraList: View {
         }
         Toggle(isOn: $cameras.followsDocking) {
             Text("Use iPhone when it's set up as a camera")
-            Text("Propped up near your Mac in landscape, still and locked, your iPhone goes ahead of this list, and back when you pick it up. Apps stay on \(CameraSpec.name).")
+            Text("Propped up in landscape and locked, it goes ahead of this list until you pick it up.")
                 .wraps()
         }
     }
@@ -427,48 +492,6 @@ private struct ZoomPopover: View {
 }
 
 
-/// What Vaux is doing with the camera right now, and how well.
-private struct FeedStatusView: View {
-    let feeder: Feeder
-
-    var body: some View {
-        switch feeder.status {
-        case .notReady:
-            EmptyView()
-        case .noCamera:
-            StatusRow(
-                symbol: "video.slash",
-                title: "No camera connected",
-                detail: "\(CameraSpec.name) shows a placeholder until a camera is connected."
-            )
-        case .waitingForDevice:
-            StatusRow(busy: true, title: "Waiting for \(CameraSpec.name) to start…")
-        case .needsRelaunch:
-            StatusRow(
-                symbol: "arrow.clockwise.circle.fill",
-                tint: .orange,
-                title: "Relaunch \(VauxCamera.appName) to reconnect",
-                detail: "\(CameraSpec.name) restarted, and macOS only shows it again to apps opened afterward. Video apps that were already open need reopening too.",
-                action: .init(title: "Relaunch \(VauxCamera.appName)") { VauxCamera.relaunch(continuingSetup: false) }
-            )
-        case .standingBy:
-            StatusRow(
-                symbol: "moon.circle",
-                title: "Standing by",
-                detail: "Your camera turns on when an app uses \(CameraSpec.name)."
-            )
-        case .sending(let camera, let format):
-            StatusRow(
-                symbol: "video.circle.fill",
-                tint: .red,
-                title: "Sending \(camera.name)",
-                detail: "\(format)\(feeder.zoom > 1 ? " at \(feeder.zoom.zoomText)" : "") · \(feeder.stats.fps) fps · \(feeder.stats.dropped) dropped · capture to \(CameraSpec.name) ≈ \(feeder.stats.latencyMS.formatted(.number.precision(.fractionLength(1)))) ms"
-            )
-            SystemEffectsRow(effects: feeder.systemEffects)
-        }
-    }
-}
-
 /// macOS's video effects as they apply to Vaux's camera, and the way to
 /// change them. Only open while Vaux is using a camera: the panel lists
 /// apps that are.
@@ -476,18 +499,18 @@ struct SystemEffectsRow: View {
     let effects: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("macOS video effects")
-                Spacer()
-                Text(effects.isEmpty ? "Off" : effects.joined(separator: ", "))
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Video effects")
+                Text("Set them for \(VauxCamera.appName), not your call app, so overlays stay sharp.")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
-                Button("Video Effects…") { AVCaptureDevice.showSystemUserInterface(.videoEffects) }
+                    .wraps()
             }
-            Text("Set them for \(VauxCamera.appName) in the panel: they apply before overlays, which stay sharp. Keep them off in your call app, or they apply twice and blur overlays.")
-                .font(.callout)
+            Spacer(minLength: 8)
+            Text(effects.isEmpty ? "Off" : effects.joined(separator: ", "))
                 .foregroundStyle(.secondary)
-                .wraps()
+            Button("Video Effects…") { AVCaptureDevice.showSystemUserInterface(.videoEffects) }
         }
     }
 }

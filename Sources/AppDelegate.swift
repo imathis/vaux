@@ -44,6 +44,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openSettings(tab: .camera)
         }
         Snapshot.runIfAsked(appState: appState, camera: camera) { [weak self] in self?.openSettings() }
+        #if DEBUG
+        if !Snapshot.isRunning { Snapshot.listenForLive(appState: appState, camera: camera) }
+        #endif
     }
 
     // MARK: Icon

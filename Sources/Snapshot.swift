@@ -88,6 +88,34 @@ enum Snapshot {
         }
     }
 
+    #if DEBUG
+    private static let liveRequest = Notification.Name("dev.imathis.vaux.debug.snapshot")
+
+    /// Development: the running Vaux Dev draws its pages as they are now
+    /// (camera running, effects on), which a separate snapshot process can't
+    /// show, when asked by a distributed notification naming the path.
+    /// `make snapshot-live` asks.
+    static func listenForLive(appState: AppState, camera: VauxCamera) {
+        DistributedNotificationCenter.default().addObserver(forName: liveRequest, object: nil, queue: .main) { note in
+            guard let path = note.object as? String else { return }
+            MainActor.assumeIsolated {
+                let base = URL(fileURLWithPath: path).deletingPathExtension()
+                Task {
+                    let pages: [(String, AnyView)] = [
+                        ("camera", AnyView(CameraSettings(camera: camera))),
+                        ("effects", AnyView(EffectsSettings(camera: camera) {})),
+                        ("shortcuts", AnyView(ShortcutsSettings(camera: camera))),
+                        ("menu", AnyView(MenuContentView(appState: appState, camera: camera, openAbout: {}, openSettings: {}, dismiss: {}, resized: { _ in }))),
+                    ]
+                    for (name, page) in pages {
+                        await render(page, to: base.appendingPathExtension("live-\(name).png"))
+                    }
+                }
+            }
+        }
+    }
+    #endif
+
     /// In a tall offscreen window, so nothing scrolls out of view. On the
     /// window's color: the menu's material and a bare page draw nothing.
     /// Measured again once `onAppear` has loaded the view's state.

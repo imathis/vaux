@@ -197,11 +197,12 @@ extension Look {
             ])
         }
         if grain > 0 {
-            // Gray noise around middle gray, soft-lit over the picture: no
-            // change at middle gray, grain either side. Sized to the frame
-            // and moved each frame.
-            let strength = 0.25 * grain
-            let scale = extent.height / 720
+            // Gray noise around middle gray, overlaid on the picture: no
+            // change at middle gray, grain either side. Coarser as it gets
+            // stronger, as film's does, sized to the frame, and moved each
+            // frame.
+            let strength = 0.6 * grain
+            let scale = extent.height / 720 * (1 + grain)
             let tile = CIFilter.affineTile()
             tile.inputImage = Self.noise
             tile.transform = CGAffineTransform(scaleX: scale, y: scale)
@@ -219,7 +220,7 @@ extension Look {
                     "inputBiasVector": CIVector(x: 0.5 - strength / 2, y: 0.5 - strength / 2, z: 0.5 - strength / 2, w: 1),
                 ])
                 .cropped(to: extent)
-            out = grainImage.applyingFilter("CISoftLightBlendMode", parameters: [kCIInputBackgroundImageKey: out])
+            out = grainImage.applyingFilter("CIOverlayBlendMode", parameters: [kCIInputBackgroundImageKey: out])
         }
         return out.cropped(to: extent)
     }
