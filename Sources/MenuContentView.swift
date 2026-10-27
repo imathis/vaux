@@ -294,7 +294,7 @@ struct MenuContentView: View {
     }
 
     private func select(_ device: MenuInputDevice) {
-        AudioController.setDefaultInputDevice(device.id)
+        appState.selectInput(device.id)
         reload()
     }
 
