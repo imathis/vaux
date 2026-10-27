@@ -1,4 +1,5 @@
 import AppKit
+import KeyboardShortcuts
 import Observation
 import os
 
@@ -146,6 +147,52 @@ final class Effects {
         live = LivePanel(overlays: overlays, zoom: zoomShortcuts, looks: looks)
         triggers.openLive = { [live] in live.show() }
         followSolo()
+    }
+
+    /// Deletes an overlay, push-in, look or combo, undoably: undo puts it
+    /// back in its place with its shortcut and Quick Menu key. Combos keep
+    /// pointing at what they hold, so they pick it back up.
+    func remove(_ action: Triggers.Item.Action, undo: UndoManager?) {
+        let id = Triggers.id(of: action)
+        let name = KeyboardShortcuts.Name(id)
+        let shortcut = KeyboardShortcuts.getShortcut(for: name)
+        let key = triggers.customKeys[id]
+        let title = triggers.items.first { $0.action == action }?.title ?? "Effect"
+        let restore: () -> Void
+        switch action {
+        case .overlay(let overlayID):
+            guard let index = overlays.overlays.firstIndex(where: { $0.id == overlayID }) else { return }
+            let overlay = overlays.overlays[index]
+            let dictation = overlays.dictationOverlay == overlayID
+            overlays.remove(overlayID)
+            restore = { [overlays] in overlays.restore(overlay, at: index, dictation: dictation) }
+        case .pushIn(let levelID):
+            guard let index = zoomShortcuts.levels.firstIndex(where: { $0.id == levelID }) else { return }
+            let level = zoomShortcuts.levels[index]
+            zoomShortcuts.remove(level)
+            restore = { [zoomShortcuts] in zoomShortcuts.restore(level, at: index, assigned: shortcut != nil) }
+        case .look(let lookID):
+            guard let index = looks.looks.firstIndex(where: { $0.id == lookID }) else { return }
+            let look = looks.looks[index]
+            looks.remove(lookID)
+            restore = { [looks] in looks.looks.insert(look, at: min(index, looks.looks.count)) }
+        case .combo(let comboID):
+            guard let index = combos.combos.firstIndex(where: { $0.id == comboID }) else { return }
+            let combo = combos.combos[index]
+            combos.remove(comboID)
+            restore = { [combos] in combos.combos.insert(combo, at: min(index, combos.combos.count)) }
+        case .mute, .live, .clearAll:
+            return
+        }
+        undo?.registerUndo(withTarget: self) { effects in
+            restore()
+            if let shortcut { KeyboardShortcuts.setShortcut(shortcut, for: name) }
+            if let key { effects.triggers.setKey(key, for: id) }
+            // Redo.
+            undo?.registerUndo(withTarget: effects) { $0.remove(action, undo: undo) }
+            undo?.setActionName("Delete \(title)")
+        }
+        undo?.setActionName("Delete \(title)")
     }
 
     /// Solo mode is dictating: the "while dictating" overlay shows while it's

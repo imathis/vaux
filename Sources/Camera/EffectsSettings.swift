@@ -9,6 +9,8 @@ struct EffectsPage: View {
     @State private var editing: Editing?
     @State private var editingCombo: Editing?
     @State private var editingLook: Editing?
+    /// The Settings window's: deleting an effect can be undone.
+    @Environment(\.undoManager) private var undoManager
 
     private struct Editing: Identifiable {
         let id: UUID
@@ -18,13 +20,11 @@ struct EffectsPage: View {
 
     var body: some View {
         @Bindable var library = library
-        let keys = effects.triggers.keys
         Form {
             Section {
                 ForEach(library.overlays) { overlay in
                     OverlayRow(
                         overlay: overlay,
-                        key: keys["overlay-\(overlay.id)"],
                         showing: library.isShowing(overlay.id),
                         toggle: { library.toggle(overlay.id) },
                         edit: { editing = Editing(id: overlay.id) }
@@ -33,7 +33,7 @@ struct EffectsPage: View {
                         Button("Edit…") { editing = Editing(id: overlay.id) }
                         Button("Duplicate") { library.duplicate(overlay.id) }
                         Divider()
-                        Button("Delete", role: .destructive) { library.remove(overlay.id) }
+                        Button("Delete", role: .destructive) { remove(.overlay(overlay.id)) }
                     }
                 }
                 .onMove { library.overlays.move(fromOffsets: $0, toOffset: $1) }
@@ -51,7 +51,7 @@ struct EffectsPage: View {
                 SettingsHeader("Overlays", "Over your video, one per spot: a new one replaces what's there.")
             }
             Section {
-                PushInLevels(shortcuts: effects.zoomShortcuts, keys: keys)
+                PushInLevels(shortcuts: effects.zoomShortcuts) { remove(.pushIn($0.id)) }
             } header: {
                 SettingsHeader("Push In", "Zoom further, and back. On top of each camera's zoom, up to 2×.")
             }
@@ -59,7 +59,6 @@ struct EffectsPage: View {
                 ForEach(effects.looks.looks) { look in
                     LookRow(
                         look: look,
-                        key: keys["look-\(look.id)"],
                         isOn: effects.looks.active == look.id,
                         toggle: { effects.triggers.trigger(.look(look.id)) },
                         edit: { editingLook = Editing(id: look.id) }
@@ -68,7 +67,7 @@ struct EffectsPage: View {
                         Button("Edit…") { editingLook = Editing(id: look.id) }
                         Button("Duplicate") { effects.looks.duplicate(look.id) }
                         Divider()
-                        Button("Delete", role: .destructive) { effects.looks.remove(look.id) }
+                        Button("Delete", role: .destructive) { remove(.look(look.id)) }
                     }
                 }
                 .onMove { effects.looks.looks.move(fromOffsets: $0, toOffset: $1) }
@@ -95,7 +94,6 @@ struct EffectsPage: View {
                     ComboRow(
                         combo: combo,
                         summary: summary(of: combo),
-                        key: keys["combo-\(combo.id)"],
                         isOn: items.first { $0.action == .combo(combo.id) }?.isOn ?? false,
                         toggle: { effects.triggers.trigger(.combo(combo.id)) },
                         edit: { editingCombo = Editing(id: combo.id) }
@@ -104,7 +102,7 @@ struct EffectsPage: View {
                         Button("Edit…") { editingCombo = Editing(id: combo.id) }
                         Button("Duplicate") { effects.combos.duplicate(combo.id) }
                         Divider()
-                        Button("Delete", role: .destructive) { effects.combos.remove(combo.id) }
+                        Button("Delete", role: .destructive) { remove(.combo(combo.id)) }
                     }
                 }
                 HStack {
@@ -128,14 +126,18 @@ struct EffectsPage: View {
         .formStyle(.grouped)
         .frame(width: SettingsHeader.pageWidth)
         .sheet(item: $editing) { editing in
-            OverlayEditor(library: library, id: editing.id)
+            OverlayEditor(library: library, id: editing.id) { remove(.overlay(editing.id)) }
         }
         .sheet(item: $editingCombo) { editing in
-            ComboEditor(effects: effects, id: editing.id)
+            ComboEditor(effects: effects, id: editing.id) { remove(.combo(editing.id)) }
         }
         .sheet(item: $editingLook) { editing in
-            LookEditor(effects: effects, id: editing.id)
+            LookEditor(effects: effects, id: editing.id) { remove(.look(editing.id)) }
         }
+    }
+
+    private func remove(_ action: Triggers.Item.Action) {
+        effects.remove(action, undo: undoManager)
     }
 
     /// Its overlays' names, its push-in, and its look.
@@ -149,12 +151,11 @@ struct EffectsPage: View {
     }
 }
 
-/// A combo in the list, one line: its name (what's in it on hover), its
-/// Quick Menu key, and show or hide.
+/// A combo in the list, one line: its name (what's in it on hover), and
+/// show or hide.
 private struct ComboRow: View {
     let combo: Combo
     let summary: String
-    let key: String?
     let isOn: Bool
     let toggle: () -> Void
     let edit: () -> Void
@@ -168,7 +169,6 @@ private struct ComboRow: View {
                 .lineLimit(1)
                 .help(summary)
             Spacer(minLength: 8)
-            if let key { KeyCap(key: key, muted: true) }
             Button(action: toggle) {
                 Image(systemName: isOn ? "eye.fill" : "eye")
                     .foregroundStyle(isOn ? Color.accentColor : .secondary)
@@ -195,6 +195,8 @@ private struct ComboRow: View {
 struct ComboEditor: View {
     let effects: Effects
     let id: UUID
+    /// Undoably, by the page that opened it.
+    let delete: () -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -208,7 +210,7 @@ struct ComboEditor: View {
             HStack {
                 Button("Delete", role: .destructive) {
                     dismiss()
-                    effects.combos.remove(id)
+                    delete()
                 }
                 Spacer()
                 let isOn = effects.triggers.items.first { $0.action == .combo(id) }?.isOn ?? false
@@ -295,7 +297,7 @@ struct ComboForm: View {
 /// too, to try one without a key.
 private struct PushInLevels: View {
     let shortcuts: ZoomShortcuts
-    let keys: [String: String]
+    let remove: (ZoomShortcuts.Level) -> Void
 
     var body: some View {
         ForEach(shortcuts.levels) { level in
@@ -317,7 +319,6 @@ private struct PushInLevels: View {
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .frame(width: 44, alignment: .trailing)
-                if let key = keys[level.name.rawValue] { KeyCap(key: key, muted: true) }
                 // On now, as for the other effects.
                 Button { shortcuts.toggle(level.id) } label: {
                     Image(systemName: on ? "eye.fill" : "eye")
@@ -327,7 +328,7 @@ private struct PushInLevels: View {
                 }
                 .buttonStyle(.plain)
                 .help(on ? "Come back" : "Push in")
-                Button { shortcuts.remove(level) } label: {
+                Button { remove(level) } label: {
                     Image(systemName: "minus.circle")
                         .foregroundStyle(.secondary)
                         .frame(width: 20, height: 22)
@@ -345,10 +346,9 @@ private struct PushInLevels: View {
 }
 
 /// An overlay in the list, one line: its name (what and where on hover),
-/// its Quick Menu key, and show or hide.
+/// and show or hide.
 private struct OverlayRow: View {
     let overlay: Overlay
-    let key: String?
     let showing: Bool
     let toggle: () -> Void
     let edit: () -> Void
@@ -362,7 +362,6 @@ private struct OverlayRow: View {
                 .lineLimit(1)
                 .help(summary)
             Spacer(minLength: 8)
-            if let key { KeyCap(key: key, muted: true) }
             Button(action: toggle) {
                 Image(systemName: showing ? "eye.fill" : "eye")
                     .foregroundStyle(showing ? Color.accentColor : .secondary)
@@ -400,6 +399,8 @@ private struct OverlayRow: View {
 struct OverlayEditor: View {
     @Bindable var library: OverlayLibrary
     let id: UUID
+    /// Undoably, by the page that opened it.
+    let delete: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var previewVariant = 0
@@ -417,7 +418,7 @@ struct OverlayEditor: View {
             HStack {
                 Button("Delete", role: .destructive) {
                     dismiss()
-                    library.remove(id)
+                    delete()
                 }
                 Spacer()
                 Button(library.isShowing(id) ? "Hide" : "Show Now") { library.toggle(id) }

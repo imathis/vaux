@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// A look in the list, one line: its name, its Quick Menu key, on or off
-/// (one at a time), and edit.
+/// A look in the list, one line: its name, on or off (one at a time), and
+/// edit.
 struct LookRow: View {
     let look: Look
-    let key: String?
     let isOn: Bool
     let toggle: () -> Void
     let edit: () -> Void
@@ -17,7 +16,6 @@ struct LookRow: View {
             Text(look.name)
                 .lineLimit(1)
             Spacer(minLength: 8)
-            if let key { KeyCap(key: key, muted: true) }
             Button(action: toggle) {
                 Image(systemName: isOn ? "eye.fill" : "eye")
                     .foregroundStyle(isOn ? Color.accentColor : .secondary)
@@ -45,6 +43,8 @@ struct LookRow: View {
 struct LookEditor: View {
     let effects: Effects
     let id: UUID
+    /// Undoably, by the page that opened it.
+    let delete: () -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -86,7 +86,7 @@ struct LookEditor: View {
             HStack {
                 Button("Delete", role: .destructive) {
                     dismiss()
-                    library.remove(id)
+                    delete()
                 }
                 Spacer()
                 if let look = library.look(id) {

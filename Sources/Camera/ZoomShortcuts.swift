@@ -96,6 +96,13 @@ final class ZoomShortcuts {
         save()
     }
 
+    /// Undoing a remove: back in its place, its key in play if it had one.
+    func restore(_ level: Level, at index: Int, assigned hasKey: Bool) {
+        levels.insert(level, at: min(index, levels.count))
+        if hasKey { assigned.insert(level.id) }
+        save()
+    }
+
     func setZoom(_ zoom: Double, for level: Level) {
         guard let index = levels.firstIndex(where: { $0.id == level.id }) else { return }
         levels[index].zoom = min(max(zoom, Self.range.lowerBound), Self.range.upperBound)

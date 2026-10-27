@@ -22,8 +22,6 @@ final class OverlayLibrary {
         didSet {
             save()
             reconcile()
-            let graphics = Set(overlays.flatMap(\.images))
-            if !Set(oldValue.flatMap(\.images)).isSubset(of: graphics) { pruneGraphics(keeping: graphics) }
         }
     }
 
@@ -98,6 +96,7 @@ final class OverlayLibrary {
             live = .live
             save()
         }
+        pruneGraphics(keeping: Set(overlays.flatMap(\.images) + live.images))
     }
 
     func overlay(_ id: UUID) -> Overlay? { overlays.first { $0.id == id } ?? (live.id == id ? live : nil) }
@@ -201,6 +200,13 @@ final class OverlayLibrary {
         overlays.removeAll { $0.id == id }
     }
 
+    /// Undoing a delete: back in its place, and shown while dictating if it
+    /// was. Its graphics are still there (see pruneGraphics).
+    func restore(_ overlay: Overlay, at index: Int, dictation: Bool) {
+        overlays.insert(overlay, at: min(index, overlays.count))
+        if dictation { dictationOverlay = overlay.id }
+    }
+
     /// Copies image files in for graphic overlays, keeping their names
     /// readable; returns the names they're kept under.
     func importGraphics(_ urls: [URL]) -> [String] {
@@ -229,7 +235,8 @@ final class OverlayLibrary {
         String(name.drop { $0 != "-" }.dropFirst())
     }
 
-    /// Deletes graphics no overlay uses any more. Duplicated overlays share
+    /// Deletes graphics no overlay uses any more, at launch rather than as
+    /// they go, so undoing a delete finds them. Duplicated overlays share
     /// their files, so a file goes only when nothing points at it.
     private func pruneGraphics(keeping used: Set<String>) {
         let files = (try? FileManager.default.contentsOfDirectory(atPath: Self.graphicsFolder.path)) ?? []

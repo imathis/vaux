@@ -258,7 +258,8 @@ final class Triggers {
         if let look = press.look, looks.active == look { looks.activate(press.previousLook) }
     }
 
-    private static func id(of action: Item.Action) -> String {
+    /// An item's ID, which names its shortcut and its Quick Menu key.
+    static func id(of action: Item.Action) -> String {
         switch action {
         case .mute: KeyboardShortcuts.Name.toggleMicMute.rawValue
         case .live: Item.liveName.rawValue
