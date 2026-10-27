@@ -93,7 +93,7 @@ final class Triggers {
     var items: [Item] {
         [
             Item(id: Self.id(of: .mute), action: .mute, title: "Mute", isOn: appState.muted),
-            Item(id: Self.id(of: .live), action: .live, title: "Live…", isOn: overlays.isShowing(overlays.live.id) || zoom.liveZoom != nil),
+            Item(id: Self.id(of: .live), action: .live, title: "Live…", isOn: overlays.liveOn || zoom.liveZoom != nil),
         ]
         + overlays.overlays.map { overlay in
             Item(id: "overlay-\(overlay.id)", action: .overlay(overlay.id), title: overlay.name, isOn: overlays.isShowing(overlay.id))

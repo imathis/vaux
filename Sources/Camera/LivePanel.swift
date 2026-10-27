@@ -150,7 +150,7 @@ struct LiveView: View {
     }
 
     /// Its text is up, or its zoom.
-    private var showing: Bool { library.isShowing(library.live.id) || zoom.liveZoom != nil }
+    private var showing: Bool { library.liveOn || zoom.liveZoom != nil }
 
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty || library.live.icon != nil }
 
@@ -163,13 +163,13 @@ struct LiveView: View {
     /// Shows all of it, updates the text while it's up, or hides all of it.
     private func primary() {
         if showing, !edited {
-            library.hide(library.live.id)
+            library.setLive(false)
             zoom.applyLive(false)
             return
         }
         library.live.lines = [draft]
         guard !showing else { return }
-        if hasText { library.show(library.live.id) }
+        library.setLive(true)
         zoom.applyLive(true)
     }
 }

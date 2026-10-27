@@ -41,6 +41,11 @@ final class OverlayLibrary {
         }
     }
 
+    /// The Live text is up. It keeps its spot while it's on, even when an
+    /// edit leaves it nothing to draw for a moment (no text, no icon), so
+    /// it's back as soon as there is.
+    private(set) var liveOn = false
+
     /// What's showing, by spot.
     private(set) var showing: [Overlay.Spot: Showing] = [:]
     /// What to draw, full frame first.
@@ -110,6 +115,7 @@ final class OverlayLibrary {
     func show(_ id: UUID) -> Showing? {
         guard let overlay = overlay(id), overlay.canShow else { return nil }
         let replaced = showing[overlay.spot]
+        if replaced?.overlay == live.id { liveOn = false }
         let token = UUID()
         showing[overlay.spot] = Showing(overlay: id, variant: pick(from: overlay), token: token)
         rebuild()
@@ -130,6 +136,16 @@ final class OverlayLibrary {
     func restore(_ shown: Showing) {
         guard let overlay = overlay(shown.overlay), showing[overlay.spot] == nil else { return }
         showing[overlay.spot] = shown
+        if shown.overlay == live.id { liveOn = true }
+        rebuild()
+    }
+
+    /// Puts the Live text up in its spot (replacing what's there), or takes
+    /// it down.
+    func setLive(_ on: Bool) {
+        for (spot, shown) in showing where shown.overlay == live.id { showing[spot] = nil }
+        if on { showing[live.spot] = Showing(overlay: live.id, variant: 0, token: UUID()) }
+        liveOn = on
         rebuild()
     }
 
@@ -149,12 +165,14 @@ final class OverlayLibrary {
 
     func hide(_ id: UUID) {
         for (spot, shown) in showing where shown.overlay == id { showing[spot] = nil }
+        if id == live.id { liveOn = false }
         rebuild()
     }
 
     func clearAll() {
         guard !showing.isEmpty else { return }
         showing = [:]
+        liveOn = false
         rebuild()
     }
 
@@ -233,7 +251,8 @@ final class OverlayLibrary {
     /// with them; one deleted, or emptied, goes.
     private func reconcile() {
         for (spot, shown) in showing {
-            guard let overlay = overlay(shown.overlay), overlay.canShow else {
+            // Live stays while it's on, drawn or not (see liveOn).
+            guard let overlay = overlay(shown.overlay), overlay.canShow || overlay.id == live.id else {
                 showing[spot] = nil
                 continue
             }
