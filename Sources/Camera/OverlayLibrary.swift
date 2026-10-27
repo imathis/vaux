@@ -32,6 +32,15 @@ final class OverlayLibrary {
         didSet { save() }
     }
 
+    /// The Live panel's overlay: one, outside the list, its text typed on
+    /// the spot.
+    var live: Overlay {
+        didSet {
+            save()
+            reconcile()
+        }
+    }
+
     /// What's showing, by spot.
     private(set) var showing: [Overlay.Spot: Showing] = [:]
     /// What to draw, full frame first.
@@ -62,6 +71,7 @@ final class OverlayLibrary {
     private struct Stored: Codable {
         var overlays: [Overlay]
         var dictationOverlay: UUID?
+        var live: Overlay?
     }
 
     init() {
@@ -74,16 +84,18 @@ final class OverlayLibrary {
                 return medium
             }
             dictationOverlay = stored.dictationOverlay
+            live = stored.live ?? .live
         } else {
             // First run: the original badge, shown while dictating.
             let dictating = Overlay.dictating
             overlays = [dictating]
             dictationOverlay = dictating.id
+            live = .live
             save()
         }
     }
 
-    func overlay(_ id: UUID) -> Overlay? { overlays.first { $0.id == id } }
+    func overlay(_ id: UUID) -> Overlay? { overlays.first { $0.id == id } ?? (live.id == id ? live : nil) }
 
     func isShowing(_ id: UUID) -> Bool { showing.values.contains { $0.overlay == id } }
 
@@ -261,7 +273,7 @@ final class OverlayLibrary {
     private func save() {
         do {
             try FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(Stored(overlays: overlays, dictationOverlay: dictationOverlay))
+            let data = try JSONEncoder().encode(Stored(overlays: overlays, dictationOverlay: dictationOverlay, live: live))
             try data.write(to: Self.file, options: .atomic)
         } catch {
             log.error("Couldn't save overlays: \(error)")

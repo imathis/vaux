@@ -92,7 +92,7 @@ struct EffectShortcuts: View {
                 }
             }
             Section {
-                ForEach(items.filter { $0.action == .clearAll }) { item in
+                ForEach(items.filter { $0.action == .live || $0.action == .clearAll }) { item in
                     TriggerRow(item: item, key: keys[item.id] ?? "", triggers: triggers)
                 }
             }

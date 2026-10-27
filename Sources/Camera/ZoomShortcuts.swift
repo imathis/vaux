@@ -24,6 +24,9 @@ final class ZoomShortcuts {
     private(set) var active: UUID?
     /// Levels with a key recorded: only they're in play mid-call.
     private(set) var assigned: Set<UUID> = []
+    /// The Live panel's zoom, while it's set one: in place of the levels
+    /// until a level is pushed in or it's back at 1×.
+    private(set) var liveZoom: Double?
 
     init() {
         let stored = UserDefaults.standard.data(forKey: Self.key).flatMap { try? JSONDecoder().decode([Level].self, from: $0) }
@@ -34,12 +37,21 @@ final class ZoomShortcuts {
         assigned = Set(levels.filter { KeyboardShortcuts.getShortcut(for: $0.name) != nil }.map(\.id))
     }
 
-    /// How far the active level pushes in; 1 with none.
-    var factor: Double { levels.first { $0.id == active }?.zoom ?? 1 }
+    /// How far it's pushed in: the Live zoom, or the active level; 1 with
+    /// neither.
+    var factor: Double { liveZoom ?? levels.first { $0.id == active }?.zoom ?? 1 }
 
-    /// The furthest a level with a key pushes in: the camera runs in a mode
-    /// that keeps it sharp, so pushing in never switches modes mid-call.
-    var furthest: Double { levels.filter { assigned.contains($0.id) }.map(\.zoom).max() ?? 1 }
+    /// The furthest a level with a key (or the Live zoom) pushes in: the
+    /// camera runs in a mode that keeps it sharp, so pushing in never
+    /// switches modes mid-call.
+    var furthest: Double { max(levels.filter { assigned.contains($0.id) }.map(\.zoom).max() ?? 1, liveZoom ?? 1) }
+
+    /// The Live slider: pushes in this far, in place of any level.
+    func setLiveZoom(_ zoom: Double) {
+        let zoom = min(max(zoom, 1), Self.range.upperBound)
+        liveZoom = zoom > 1.001 ? zoom : nil
+        if active != nil { active = nil }
+    }
 
     /// The recorder changed a level's key.
     func shortcutChanged(_ level: Level, to shortcut: KeyboardShortcuts.Shortcut?) {
@@ -48,16 +60,19 @@ final class ZoomShortcuts {
 
     func toggle(_ id: UUID) {
         active = active == id ? nil : id
+        liveZoom = nil
     }
 
     /// Pushes in to a level, or (nil) back to the camera's own zoom.
     func activate(_ id: UUID?) {
         if active != id { active = id }
+        if liveZoom != nil { liveZoom = nil }
     }
 
     /// Back to each camera's own zoom: a new call starts there.
     func reset() {
         if active != nil { active = nil }
+        if liveZoom != nil { liveZoom = nil }
     }
 
     func add() {

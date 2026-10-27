@@ -149,6 +149,9 @@ extension Overlay {
     /// The first overlay: the original dictation badge.
     static let dictating = Overlay(name: "Dictating", lines: ["Dictating"], icon: "waveform")
 
+    /// The Live panel's, until you type: big, at the bottom.
+    static let live = Overlay(name: "Live", lines: [""], size: .large, spot: .bottom)
+
     /// Icons offered for text, kept few.
     static let icons: [(symbol: String?, label: String)] = [
         (nil, "None"),

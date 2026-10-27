@@ -190,9 +190,16 @@ struct MenuContentView: View {
         let combos = items.filter { if case .combo = $0.action { true } else { false } }
         let levels = effects.zoomShortcuts.levels.sorted { $0.zoom < $1.zoom }
         let pushedIn = effects.zoomShortcuts.active
+        let live = items.first { $0.action == .live }
         cameraHeader(showingOverlays: !effects.overlays.showing.isEmpty) { effects.overlays.clearAll() }
+        if let live {
+            effectRow(live) {
+                dismiss()
+                effects.live.show()
+            }
+        }
         effectList("Overlays", cameraExpanded ? overlays : overlays.filter(\.isOn), effects)
-        if !levels.isEmpty, cameraExpanded || pushedIn != nil {
+        if !levels.isEmpty, cameraExpanded || pushedIn != nil || effects.zoomShortcuts.liveZoom != nil {
             pushInRow(levels, active: pushedIn, effects)
         }
         effectList("Combos", cameraExpanded ? combos : combos.filter(\.isOn), effects)
@@ -233,20 +240,26 @@ struct MenuContentView: View {
         if !items.isEmpty {
             if cameraExpanded { subheader(title) }
             ForEach(items) { item in
-                MenuRow(height: 22, edgeInset: edgeInset, contentInset: contentInset) {
-                    effects.triggers.trigger(item.action)
-                } content: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 11, weight: .semibold))
-                            .opacity(item.isOn ? 1 : 0)
-                            .frame(width: 14)
-                        Text(item.title).font(.system(size: 13)).lineLimit(1)
-                    }
-                }
+                effectRow(item) { effects.triggers.trigger(item.action) }
             }
         }
     }
+
+    /// An effect, checked while it's on.
+    private func effectRow(_ item: Triggers.Item, action: @escaping () -> Void) -> some View {
+        MenuRow(height: 22, edgeInset: edgeInset, contentInset: contentInset, action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .opacity(item.isOn ? 1 : 0)
+                    .frame(width: 14)
+                Text(item.title).font(.system(size: 13)).lineLimit(1)
+            }
+        }
+    }
+
+    /// Selected while the Live panel's slider sets the zoom: no segment.
+    private static let liveZoomTag = UUID()
 
     /// Push in: off (1×) or one of the levels.
     private func pushInRow(_ levels: [ZoomShortcuts.Level], active: UUID?, _ effects: Effects) -> some View {
@@ -254,10 +267,16 @@ struct MenuContentView: View {
             Text("Push in").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
             Spacer(minLength: 8)
             Picker("Push in", selection: Binding(
-                get: { active },
+                // The Live slider's zoom is none of these.
+                get: { effects.zoomShortcuts.liveZoom == nil ? active : Self.liveZoomTag },
                 set: { level in
-                    // Toggling the level on, or the one that's on, off.
-                    if let id = level ?? active { effects.triggers.trigger(.pushIn(id)) }
+                    // Toggling the level on, or the one that's on, off; 1×
+                    // also drops a zoom the Live panel set.
+                    if let id = level ?? active {
+                        effects.triggers.trigger(.pushIn(id))
+                    } else {
+                        effects.zoomShortcuts.setLiveZoom(1)
+                    }
                 }
             )) {
                 Text("1×").tag(UUID?.none)

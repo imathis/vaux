@@ -15,6 +15,8 @@ final class Triggers {
     struct Item: Identifiable, Equatable {
         enum Action: Equatable {
             case mute
+            /// Opens the Live panel.
+            case live
             case overlay(UUID)
             case pushIn(UUID)
             case combo(UUID)
@@ -39,6 +41,8 @@ final class Triggers {
     private let combos: ComboLibrary
     /// Quick Menu keys set by hand, by item ID; the rest are given in order.
     private(set) var customKeys: [String: String]
+    /// Opens the Live panel (set by Effects, which owns it).
+    @ObservationIgnored var openLive: (() -> Void)?
     /// Item IDs whose shortcuts are being listened for.
     @ObservationIgnored private var listening: Set<String> = []
     /// Keys down now, by item ID.
@@ -66,6 +70,7 @@ final class Triggers {
         self.combos = combos
         customKeys = UserDefaults.standard.dictionary(forKey: Self.keysKey) as? [String: String] ?? [:]
         KeyboardShortcuts.onKeyDown(for: Item.clearAllName) { [weak self] in self?.press(.clearAll) }
+        KeyboardShortcuts.onKeyDown(for: Item.liveName) { [weak self] in self?.press(.live) }
         followItems()
         // The Quick Menu's default key may already be one of yours: yours wins.
         if let leader = KeyboardShortcuts.getShortcut(for: Self.quickMenu),
@@ -86,7 +91,10 @@ final class Triggers {
     }
 
     var items: [Item] {
-        [Item(id: Self.id(of: .mute), action: .mute, title: "Mute", isOn: appState.muted)]
+        [
+            Item(id: Self.id(of: .mute), action: .mute, title: "Mute", isOn: appState.muted),
+            Item(id: Self.id(of: .live), action: .live, title: "Live…", isOn: overlays.isShowing(overlays.live.id) || zoom.liveZoom != nil),
+        ]
         + overlays.overlays.map { overlay in
             Item(id: "overlay-\(overlay.id)", action: .overlay(overlay.id), title: overlay.name, isOn: overlays.isShowing(overlay.id))
         }
@@ -101,8 +109,8 @@ final class Triggers {
     }
 
     /// Each item's Quick Menu key: set by hand, or given in order. Mute gets
-    /// M, overlays 1–9 then letters, push-ins Z X C V…, combos A S D F…,
-    /// Clear All 0.
+    /// M, Live L, overlays 1–9 then letters, push-ins Z X C V…, combos
+    /// A S D F…, Clear All 0.
     var keys: [String: String] {
         var keys: [String: String] = [:]
         let items = items
@@ -120,6 +128,7 @@ final class Triggers {
         for item in items where keys[item.id] == nil {
             keys[item.id] = switch item.action {
             case .mute: next(from: ["M"] + letters)
+            case .live: next(from: ["L"] + letters)
             case .overlay: next(from: digits + letters)
             case .pushIn: next(from: "ZXCVBNM".map(String.init) + letters)
             case .combo: next(from: "ASDFGHJKL".map(String.init) + letters)
@@ -161,7 +170,7 @@ final class Triggers {
 
     private func effect(of action: Item.Action) -> Effect? {
         switch action {
-        case .mute:
+        case .mute, .live:
             return nil
         case .overlay(let id):
             return Effect(overlays: [id])
@@ -193,6 +202,7 @@ final class Triggers {
         guard let effect = effect(of: action) else {
             if action == .clearAll { overlays.clearAll() }
             if action == .mute { appState.toggle() }
+            if action == .live { openLive?() }
             return
         }
         if isOn(effect) {
@@ -230,6 +240,7 @@ final class Triggers {
     private static func id(of action: Item.Action) -> String {
         switch action {
         case .mute: KeyboardShortcuts.Name.toggleMicMute.rawValue
+        case .live: Item.liveName.rawValue
         case .overlay(let id): "overlay-\(id)"
         case .pushIn(let id): ZoomShortcuts.Level.shortcut(for: id).rawValue
         case .combo(let id): "combo-\(id)"
@@ -266,4 +277,5 @@ final class Triggers {
 
 extension Triggers.Item {
     static let clearAllName = KeyboardShortcuts.Name("clearAll")
+    static let liveName = KeyboardShortcuts.Name("live")
 }
