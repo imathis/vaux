@@ -1,0 +1,132 @@
+CameraExtension/Info.plist
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-7,9-21,23-26,28,30-31,33-34
+  s_c9cb9133d40bef::t_858b84c78e4008 8,22,27,29,32
+Makefile
+  s_c9cb9133d40bef::t_5ba8191083b82f 12-14,16-27,46,51-53,57-58,60-66,105-109
+  s_c9cb9133d40bef::t_64082e2deb4b38 110
+Sources/Camera/Compositor.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-144
+Sources/Camera/CameraSettings.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-4,9,11-13,38,53,58,63,68-70,77-79,83-84,94-95,99,101-170,174-179,181-187,189-196,199-203,207-219,221-246,248-254,256-261,263-268,270-305,307-441,443-444,446-449,453-457,459-464,466-469
+  s_c9cb9133d40bef::t_f3c07fa954107c 5-8,10,14-29,31-37,39-52,54-57,59-62,64-67,71-76,80-82,85-93,96-98,100
+  s_c9cb9133d40bef::t_bf769a14e2ff0b 30,171-173,180,188,197-198,204-206,220,247,255,262,306,442,445,450-451,458,465
+  s_c9cb9133d40bef::t_5824338f8dad23 452
+  s_c9cb9133d40bef::t_8f5211929fb8ee 269
+Sources/Snapshot.swift
+  s_c9cb9133d40bef::t_55f84beb1471bd 40-41
+  s_c9cb9133d40bef::t_706420854287d6 15,20,22-25,27-29,31-39
+  s_c9cb9133d40bef::t_2181afd8aa69b7 11-14,30
+Sources/Camera/Combo.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-50
+CameraExtension/CameraExtension.entitlements
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-10,12-14
+  s_c9cb9133d40bef::t_858b84c78e4008 11
+CameraExtension/SinkSource.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-76
+CameraExtension/ProviderSource.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-35
+Sources/Camera/Overlay.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-155
+Sources/Info.plist
+  s_c9cb9133d40bef::t_2247131ddd5a07 27-28
+Sources/Camera/EffectsSettings.swift
+  s_c9cb9133d40bef::t_1337c365a6a4de 5-6,50,55,77,87,91,210,406,426,458
+  s_c9cb9133d40bef::t_010381b441eb86 7,16,20,53,58-59,65,70,72,75,96,103,157,163,166,172,175-176
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-4,8-15,17-19,21-49,51-52,54,56-57,60-64,66-69,71,73-74,76,78-86,88-90,92-95,97-102,104-156,158-162,164-165,167-171,173-174,177-209,211-405,407-425,427-457,459-691
+Sources/SettingsWindow.swift
+  s_c9cb9133d40bef::t_ba85745af59eae 9-13,19-25
+PLAN.md
+  s_c9cb9133d40bef::t_a839d8d2b9b83e 132-153,170-171,173,175-176
+project.yml
+  s_c9cb9133d40bef::t_ab790f17f2107c 36,38-40,54-56,69-101
+Sources/Camera/PreferredCamera.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-42
+Sources/Camera/CameraFeed.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-55,57-301
+  s_c9cb9133d40bef::t_6b6354a389a356 56
+Sources/AppDelegate.swift
+  s_c9cb9133d40bef::t_d9396c3b0eb979 160
+  s_c9cb9133d40bef::t_2f122798386690 12-13,34,42-46,123-126,128,138
+CameraExtension/Placeholder.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-67
+Sources/Camera/CameraAccess.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-4,6-41
+  s_c9cb9133d40bef::t_1b0db54b035e84 5
+Sources/Camera/ExtensionInstaller.swift
+  s_c9cb9133d40bef::t_2247131ddd5a07 25-26,57-58,83-85,173-176,196-203
+  s_c9cb9133d40bef::t_bf769a14e2ff0b 78,88,116,124-125
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-24,27-56,59-77,79-82,86-87,89-115,117-123,126-172,177-195,204-235
+Sources/MenuPanelController.swift
+  s_c9cb9133d40bef::t_2f122798386690 14,24,26,47
+Sources/Camera/ShortcutsSettings.swift
+  s_c9cb9133d40bef::t_e499e1cd9c81fe 1-33,35-208
+  s_c9cb9133d40bef::t_2181afd8aa69b7 34
+Sources/VauxCamera.entitlements
+  s_c9cb9133d40bef::t_858b84c78e4008 1-14
+CameraExtension/DeviceSource.swift
+  s_c9cb9133d40bef::t_1b0db54b035e84 36,42,165,195
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-30,32-35,37-41,43-164,166-194,196-259
+  s_c9cb9133d40bef::t_8f5211929fb8ee 31
+Sources/Camera/QuickMenu.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-8,11-135,137-209
+  s_c9cb9133d40bef::t_00eccd3aee482f 9-10
+  s_c9cb9133d40bef::t_1337c365a6a4de 136
+Sources/Camera/OverlayLibrary.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-29,31-52,54,56-263
+  s_c9cb9133d40bef::t_8d66cc58be8683 30,53,55
+Shared/CameraSpec.swift
+  s_c9cb9133d40bef::t_f66abe56bf627c 7-11,13,24-32
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-6,12,14-23,33-47
+Sources/Camera/CameraDevice.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-277
+Sources/Camera/ZoomShortcuts.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-85
+Sources/Camera/VauxCamera.swift
+  s_c9cb9133d40bef::t_c87094e6784e8f 1-41,49-73,80-119,121-181,183-200,202-218
+  s_c9cb9133d40bef::t_55f84beb1471bd 42-48
+  s_c9cb9133d40bef::t_c40b331f725e9b 74-79
+  s_c9cb9133d40bef::t_2181afd8aa69b7 120
+  s_c9cb9133d40bef::t_afafc381f61e04 182
+  s_c9cb9133d40bef::t_8d66cc58be8683 201
+CameraExtension/main.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-6
+README.md
+  s_c9cb9133d40bef::t_2d4efc221de338 98-116,128-130,140-143,155-156,158-159,162-166,206,230,233-252
+Sources/AppStorageKey.swift
+  s_c9cb9133d40bef::t_706420854287d6 24-27
+Sources/Camera/CameraPriorityModel.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-131
+Sources/Camera/OverlayRendering.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-139
+CameraExtension/StreamSource.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-50
+Sources/Camera/Feeder.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-136
+Sources/Camera/Triggers.swift
+  s_c9cb9133d40bef::t_f2704df8ffc99b 1-4,8-10,13-16,18-35,37-61,64-88,91-102,106-121,123-163,166-194,196-231,233-269
+  s_c9cb9133d40bef::t_00eccd3aee482f 5-7,11-12,17,36,62-63,89-90,103-105,122,164-165,195,232
+Sources/MenuContentView.swift
+  s_c9cb9133d40bef::t_f88c6e16116796 20,33,36,72-79,186-205,214-222,224
+  s_c9cb9133d40bef::t_c40b331f725e9b 206-213,223
+  s_c9cb9133d40bef::t_b4fe4ba5f4a7ab 225
+Sources/SettingsView.swift
+  s_c9cb9133d40bef::t_e499e1cd9c81fe 122,124-125,128-136,138,146
+Sources/AppState.swift
+  s_c9cb9133d40bef::t_72b27ae97dde6c 125-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "63e88366554b45c04a22d67bb5c19166631a23fe",
+  "prompts": {},
+  "sessions": {
+    "s_c9cb9133d40bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46d79b12-ab26-4b09-8d76-66163839d16b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
