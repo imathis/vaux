@@ -95,6 +95,25 @@ to be the visible tab in its window, since browsers only expose that one.
 - The menu lists every input, marks the preferred one, and has an input volume
   slider and an auto switch toggle.
 
+### Vaux Camera (opt-in)
+
+A camera for your video calls: your real camera, passed through in hardware,
+with effects on your keys. Off until you turn it on in Settings → Camera.
+
+- **While dictating:** an overlay ("Dictating", or lines of your own) shows
+  while solo mode is on, so the call knows why you're talking but muted.
+- **Overlays:** text or graphics (PNG, PDF, SVG), one per spot, fading in and
+  out. **Push in:** zoom levels on top of each camera's own zoom. **Combos:**
+  several on one key.
+- **Keys:** a shortcut per effect, and the **Quick Menu** (⌥. by default): a
+  small menu over everything, one more key picks. Tap a key to toggle; hold it
+  to show the effect only while held. Mute is in the Quick Menu too (M).
+- **Cameras:** ranked like mics; Vaux sends the highest-ranked one that's
+  connected, or an iPhone set up as a camera ahead of them. Each camera has
+  its own zoom.
+- Your camera runs only while an app is using Vaux Camera. Video apps see it
+  as one camera that never switches.
+
 ## Permissions
 
 - **Mute and inputs:** none. Changing Core Audio properties doesn't trigger
@@ -106,6 +125,9 @@ to be the visible tab in its window, since browsers only expose that one.
   button can be pressed, and turns it off again after.
 - **Call and dictation detection:** none. Vaux reads which apps are using the
   mic from Core Audio's process list, without opening the mic itself.
+- **Vaux Camera:** none unless you turn it on. Then macOS asks you to approve
+  the camera extension in System Settings, and Vaux asks for camera access.
+  Turning it off removes the extension.
 
 ## Usage
 
@@ -115,8 +137,10 @@ to be the visible tab in its window, since browsers only expose that one.
 - **Click** the icon to open the menu. **Shift-, Option- or Control-click** it
   to toggle mute.
 - **Settings** (⌘, from the menu): **Microphone** has dictation (solo mode),
-  mute and preferred inputs; **Shortcuts** has every Vaux key. **Camera** and
-  **Effects** are coming. Launch at Login is a switch in the menu.
+  mute and preferred inputs; **Camera** turns Vaux Camera on and ranks your
+  cameras; **Effects** has overlays, push-ins and combos; **Shortcuts** has
+  every Vaux key. Launch at Login is a switch in the menu.
+- While the camera is on, the menu lists your effects to toggle.
 
 ## Build and run
 
@@ -128,9 +152,17 @@ checked in. Generate it first:
 
 ```sh
 make open      # generate the project and open it in Xcode, then ⌘R
-make run       # build and launch from the command line
+make run       # build Vaux Dev, install it to /Applications and launch it
+make check     # compile without signing
 make snapshot  # draw Settings and the menu to build/snapshot.*.png
+make status    # installed system extensions (Vaux Camera)
+make logs      # stream Vaux's logs
 ```
+
+`make run` installs to `/Applications/Vaux Dev.app` because macOS installs
+camera extensions only from there. Installing one also needs a provisioning
+profile, so builds sign automatically: the first time, build once in Xcode
+(`make open`, ⌘B) to sign in and let it make the profiles.
 
 Development builds are "Vaux Dev" (`dev.imathis.vaux.debug`), a separate app
 to macOS with its own permissions and settings, so they never knock out the
@@ -171,7 +203,7 @@ sandboxed yet.
 
 ```
 project.yml                  # XcodeGen spec: deployment target, signing, SPM
-Makefile                     # gen / open / build / run / snapshot / clean
+Makefile                     # gen / open / check / build / run / snapshot / clean
 Sources/
   main.swift                 # entry point
   AppDelegate.swift          # status item, clicks, Settings window, app menu
@@ -187,7 +219,6 @@ Sources/
   CaptureWatcher.swift       # which apps are using the mic
   MediaPauser.swift          # pauses playing media during solo
   SoloKeyMonitor.swift       # the 🎤 Dictation key and Escape, for solo
-  SoloBroadcast.swift        # tells other apps (Frames) when solo starts and ends
   InputVolumeView.swift      # volume slider
   InputPriorityModel.swift   # preferred-input list (Settings)
   PreferredInput.swift       # preferred-input order storage
@@ -196,8 +227,29 @@ Sources/
   AppStorageKey.swift        # shared settings keys, and migrating old ones
   Snapshot.swift             # make snapshot: draws Settings and the menu to PNGs
   Info.plist                 # LSUIElement: no Dock icon until Settings opens
+  VauxCamera.entitlements    # installing Vaux Camera, camera access
   Vaux.entitlements          # App Sandbox (off by default)
   Vaux.icon                  # app icon (Icon Composer)
+  Camera/                    # Vaux Camera, from the app's side:
+    VauxCamera.swift         #   on and off, setup, relaunch; Effects; CameraSide
+    ExtensionInstaller.swift #   install, update, uninstall, approval
+    CameraAccess.swift       #   camera permission
+    CameraDevice.swift       #   Vaux Camera's device: watched, format, sink
+    CameraPriorityModel.swift #  ranked cameras, docking
+    PreferredCamera.swift    #   camera order and zoom storage
+    Feeder.swift             #   which camera runs, when
+    CameraFeed.swift         #   capture into the sink, zoom, overlay fades
+    Compositor.swift         #   crop and scale in hardware, draw overlays
+    Overlay*.swift           #   overlays: model, drawing, library
+    Combo.swift              #   several effects on one key
+    ZoomShortcuts.swift      #   push-in levels
+    Triggers.swift           #   every effect's keys, tap and hold
+    QuickMenu.swift          #   the Quick Menu panel
+    CameraSettings.swift     #   Settings → Camera
+    EffectsSettings.swift    #   Settings → Effects
+    ShortcutsSettings.swift  #   Settings → Shortcuts
+CameraExtension/             # the camera extension (CMIO): device, streams, placeholder
+Shared/CameraSpec.swift      # Vaux Camera's name, IDs and formats, for both
 IconSource/                  # app icon layer art
 docs/                        # README images
 ```

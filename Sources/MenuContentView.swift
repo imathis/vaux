@@ -17,6 +17,7 @@ struct MenuInputDevice: Identifiable {
 /// standard NSMenu (accent-blue highlight) can't do.
 struct MenuContentView: View {
     @Bindable var appState: AppState
+    let camera: VauxCamera
     let openAbout: () -> Void
     let openSettings: () -> Void
     let dismiss: () -> Void
@@ -29,9 +30,10 @@ struct MenuContentView: View {
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @AppStorage(AppStorageKey.enforcePreferred) private var autoSwitch = false
 
-    init(appState: AppState, openAbout: @escaping () -> Void, openSettings: @escaping () -> Void,
+    init(appState: AppState, camera: VauxCamera, openAbout: @escaping () -> Void, openSettings: @escaping () -> Void,
          dismiss: @escaping () -> Void, resized: @escaping (CGSize) -> Void) {
         _appState = Bindable(wrappedValue: appState)
+        self.camera = camera
         self.openAbout = openAbout
         self.openSettings = openSettings
         self.dismiss = dismiss
@@ -67,6 +69,14 @@ struct MenuContentView: View {
                 appState.toggleSolo()
             }
             soloStatus
+            if let effects = camera.effects {
+                divider()
+                header("Camera", color: .primary, trailing: cameraStatus)
+                let keys = effects.triggers.keys
+                ForEach(effects.triggers.items.filter { $0.action != .mute }) { item in
+                    effectRow(item, key: keys[item.id]) { effects.triggers.trigger(item.action) }
+                }
+            }
             divider()
             launchAtLoginRow
             textRow("About Vaux", trailing: nil) { openAbout(); dismiss() }
@@ -170,6 +180,46 @@ struct MenuContentView: View {
                     Text(trailing).font(.system(size: 13)).foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    /// An effect: checked while it's on, with its Quick Menu key. Clicking
+    /// toggles it and leaves the menu open, for turning on another.
+    private func effectRow(_ item: Triggers.Item, key: String?, action: @escaping () -> Void) -> some View {
+        MenuRow(height: 22, edgeInset: edgeInset, contentInset: contentInset, action: action) {
+            HStack(spacing: 6) {
+                Text(item.title).font(.system(size: 13)).lineLimit(1)
+                Spacer()
+                if item.isOn {
+                    Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold))
+                }
+                if let key {
+                    Text(key).font(.system(size: 13)).foregroundStyle(.secondary)
+                        .frame(minWidth: 14, alignment: .trailing)
+                }
+            }
+        }
+    }
+
+    /// The camera's state, in a word or two.
+    private var cameraStatus: String {
+        switch camera.installer?.state {
+        case .ready: break
+        case .awaitingApproval: return "Needs your approval"
+        case .disabled: return "Turned off in System Settings"
+        case .failed: return "Couldn't install"
+        case .restartNeeded: return "Restart to finish"
+        default: return "Setting up"
+        }
+        guard let side = camera.side else { return "Starting…" }
+        guard side.access.isAuthorized else { return "Needs camera access" }
+        return switch side.feeder.status {
+        case .notReady: "Setting up"
+        case .noCamera: "No camera connected"
+        case .waitingForDevice: "Starting…"
+        case .needsRelaunch: "Needs a relaunch"
+        case .standingBy: "Standing by"
+        case .sending(let source, _): "Live: \(source.name)"
         }
     }
 

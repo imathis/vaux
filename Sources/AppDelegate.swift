@@ -9,6 +9,8 @@ import SwiftUI
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let appState = AppState()
+    /// Opt-in: nothing of it runs until it's turned on.
+    private lazy var camera = VauxCamera(appState: appState)
     private var statusItem: NSStatusItem?
     private var menuController: MenuPanelController?
     private var iconAnimator: StatusIconAnimator?
@@ -29,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = item
         menuController = MenuPanelController(
             appState: appState,
+            camera: camera,
             openAbout: { [weak self] in self?.openAbout() },
             openSettings: { [weak self] in self?.openSettings() })
 
@@ -36,7 +39,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateButton()
         // Shown only while Settings makes Vaux a regular app.
         NSApp.mainMenu = mainMenu()
-        Snapshot.runIfAsked(appState: appState) { [weak self] in self?.openSettings() }
+        // Relaunched by the camera's setup or turning off: back where you were.
+        if VauxCamera.continuingSetup || ProcessInfo.processInfo.arguments.contains("-settingsTab") {
+            openSettings(tab: .camera)
+        }
+        Snapshot.runIfAsked(appState: appState, camera: camera) { [weak self] in self?.openSettings() }
     }
 
     // MARK: Icon
@@ -113,8 +120,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// ⌘-Tab so its window can be found and focused; closing it puts Vaux back
     /// in the menu bar only.
     @objc private func openSettings() {
+        openSettings(tab: nil)
+    }
+
+    private func openSettings(tab: SettingsTabController.Tab?) {
         if settingsWindow == nil {
-            let tabs = SettingsTabController()
+            let tabs = SettingsTabController(camera: camera)
             let window = NSWindow(contentViewController: tabs)
             window.styleMask = [.titled, .closable, .miniaturizable]
             window.toolbarStyle = .preference
@@ -124,6 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.center()
             settingsWindow = window
         }
+        if let tab { (settingsWindow?.contentViewController as? SettingsTabController)?.select(tab) }
         NSApp.setActivationPolicy(.regular)
         // Forced: the menu panel doesn't activate Vaux, so another app is in front.
         NSApp.activate(ignoringOtherApps: true)
@@ -145,7 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let app = NSMenu()
         app.addItem(withTitle: "About Vaux", action: #selector(showAbout), keyEquivalent: "").target = self
         app.addItem(.separator())
-        app.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        app.addItem(withTitle: "Settings…", action: #selector(openSettings as () -> Void), keyEquivalent: ",").target = self
         app.addItem(.separator())
         app.addItem(withTitle: "Hide Vaux", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         app.addItem(withTitle: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")

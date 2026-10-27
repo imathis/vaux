@@ -21,6 +21,10 @@ enum AppStorageKey {
     /// app's bundle ID, followed while it's listening.
     static let dictateWith = "dictateWith"
     static let macOSDictation = "macOSDictation"
+
+    /// Vaux Camera is turned on (opt-in; see `VauxCamera`). The camera's own
+    /// settings live with its parts.
+    static let cameraOn = "cameraOn"
 }
 
 /// Settings from earlier builds, moved to what replaced them before anything

@@ -33,7 +33,11 @@ targets:
       - path: Sources
         excludes:
           - "Info.plist"
+      - path: Shared
     dependencies:
+      # Embedded in Contents/Library/SystemExtensions, installed only when
+      # the camera is turned on.
+      - target: VauxCamera
       - package: KeyboardShortcuts
     settings:
       base:
@@ -47,6 +51,9 @@ targets:
         # (Accessibility presses in Slack/Discord) is untested sandboxed.
         # Uncomment to enable (e.g. for App Store builds):
         # CODE_SIGN_ENTITLEMENTS: Sources/Vaux.entitlements
+        # Vaux Camera: installing the extension, and camera access. The
+        # install entitlement needs a provisioning profile.
+        CODE_SIGN_ENTITLEMENTS: Sources/VauxCamera.entitlements
         CODE_SIGN_IDENTITY: "Apple Development"
         ENABLE_HARDENED_RUNTIME: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: Vaux
@@ -59,3 +66,36 @@ targets:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: dev.imathis.vaux.debug
           VAUX_DISPLAY_NAME: Vaux Dev
+
+  # Vaux Camera: the camera extension. Sandboxed; its app group (no profile
+  # needed) names its Mach service.
+  VauxCamera:
+    type: system-extension
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: CameraExtension
+        excludes:
+          - "Info.plist"
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.imathis.vaux.camera
+        # System extensions are named by their bundle ID.
+        PRODUCT_NAME: $(PRODUCT_BUNDLE_IDENTIFIER)
+        VAUX_APP_GROUP: Q2573QH43F.dev.imathis.vaux
+        VAUX_CAMERA_NAME: Vaux Camera
+        # macOS replaces an installed extension only when this changes; the
+        # Makefile sets it from the extension's source (see there).
+        VAUX_CAMERA_BUILD: "1"
+        INFOPLIST_FILE: CameraExtension/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: CameraExtension/CameraExtension.entitlements
+        CODE_SIGN_IDENTITY: "Apple Development"
+        ENABLE_HARDENED_RUNTIME: YES
+      configs:
+        # Vaux Dev's own camera, beside the release's.
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: dev.imathis.vaux.debug.camera
+          VAUX_APP_GROUP: Q2573QH43F.dev.imathis.vaux.debug
+          VAUX_CAMERA_NAME: Vaux Dev Camera

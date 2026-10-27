@@ -6,15 +6,23 @@ import SwiftUI
 /// content as that changes, its top edge staying put.
 @MainActor
 final class SettingsTabController: NSTabViewController {
-    init() {
+    enum Tab: Int {
+        case microphone, camera, effects, shortcuts
+    }
+
+    init(camera: VauxCamera) {
         super.init(nibName: nil, bundle: nil)
         tabStyle = .toolbar
         // The window resizes instead of the tabs sliding.
         transitionOptions = []
         addTabViewItem(page(MicrophoneSettings(), "Microphone", symbol: "mic"))
-        addTabViewItem(page(CameraSettings(), "Camera", symbol: "video"))
-        addTabViewItem(page(EffectsSettings(), "Effects", symbol: "wand.and.stars"))
-        addTabViewItem(page(ShortcutsSettings(), "Shortcuts", symbol: "keyboard"))
+        addTabViewItem(page(CameraSettings(camera: camera), "Camera", symbol: "video"))
+        addTabViewItem(page(EffectsSettings(camera: camera) { [weak self] in self?.select(.camera) }, "Effects", symbol: "wand.and.stars"))
+        addTabViewItem(page(ShortcutsSettings(camera: camera), "Shortcuts", symbol: "keyboard"))
+    }
+
+    func select(_ tab: Tab) {
+        selectedTabViewItemIndex = tab.rawValue
     }
 
     @available(*, unavailable)

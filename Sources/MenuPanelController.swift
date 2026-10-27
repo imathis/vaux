@@ -11,6 +11,7 @@ final class MenuPanel: NSPanel {
 @MainActor
 final class MenuPanelController {
     private let appState: AppState
+    private let camera: VauxCamera
     private let openAbout: () -> Void
     private let openSettings: () -> Void
     private var panel: NSPanel?
@@ -20,8 +21,9 @@ final class MenuPanelController {
     private var localMonitor: Any?
     private var lastOutsideCloseAt: Date?
 
-    init(appState: AppState, openAbout: @escaping () -> Void, openSettings: @escaping () -> Void) {
+    init(appState: AppState, camera: VauxCamera, openAbout: @escaping () -> Void, openSettings: @escaping () -> Void) {
         self.appState = appState
+        self.camera = camera
         self.openAbout = openAbout
         self.openSettings = openSettings
     }
@@ -42,6 +44,7 @@ final class MenuPanelController {
     func show(relativeTo button: NSStatusBarButton) {
         let content = MenuContentView(
             appState: appState,
+            camera: camera,
             openAbout: openAbout,
             openSettings: openSettings,
             dismiss: { [weak self] in self?.close() },

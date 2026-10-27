@@ -24,6 +24,8 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Vaux sends your camera through Vaux Camera, with effects while you dictate. It asks only once you turn on the camera.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Brandon Mathis</string>
 	<key>VauxRelease</key>

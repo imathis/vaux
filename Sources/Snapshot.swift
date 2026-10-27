@@ -8,18 +8,37 @@ import SwiftUI
 /// without screen recording (Vaux draws itself). `make snapshot` does this.
 @MainActor
 enum Snapshot {
-    static func runIfAsked(appState: AppState, openSettings: @escaping () -> Void) {
+    /// Snapshots don't run the camera: a Vaux Dev already running would be
+    /// feeding it.
+    static let isRunning = ProcessInfo.processInfo.arguments.contains("-snapshot")
+
+    static func runIfAsked(appState: AppState, camera: VauxCamera, openSettings: @escaping () -> Void) {
         let arguments = ProcessInfo.processInfo.arguments
         guard let flag = arguments.firstIndex(of: "-snapshot"), arguments.indices.contains(flag + 1) else { return }
         let base = URL(fileURLWithPath: arguments[flag + 1]).deletingPathExtension()
         Task {
-            let pages: [(String, AnyView)] = [
+            var pages: [(String, AnyView)] = [
                 ("microphone", AnyView(MicrophoneSettings())),
-                ("camera", AnyView(CameraSettings())),
-                ("effects", AnyView(EffectsSettings())),
-                ("shortcuts", AnyView(ShortcutsSettings())),
-                ("menu", AnyView(MenuContentView(appState: appState, openAbout: {}, openSettings: {}, dismiss: {}, resized: { _ in }))),
+                ("camera", AnyView(CameraSettings(camera: camera))),
+                ("effects", AnyView(EffectsSettings(camera: camera) {})),
+                ("shortcuts", AnyView(ShortcutsSettings(camera: camera))),
+                ("menu", AnyView(MenuContentView(appState: appState, camera: camera, openAbout: {}, openSettings: {}, dismiss: {}, resized: { _ in }))),
             ]
+            // Effects' pages, with the camera off too: effects touch no camera.
+            let effects = camera.effects ?? Effects(appState: appState)
+            pages.append(("effects-on", AnyView(EffectsPage(effects: effects))))
+            pages.append(("shortcuts-on", AnyView(EffectShortcuts(effects: effects).frame(width: SettingsHeader.pageWidth))))
+            if let overlay = effects.overlays.overlays.first {
+                pages.append(("editor", AnyView(OverlayEditor(library: effects.overlays, id: overlay.id))))
+                let sample = Combo(name: "Big entrance", overlays: [overlay.id], pushIn: effects.zoomShortcuts.levels.first?.id)
+                pages.append(("combo-form", AnyView(
+                    ComboForm(combo: .constant(sample), overlays: effects.overlays.overlays, levels: effects.zoomShortcuts.levels)
+                        .frame(width: 480)
+                )))
+            }
+            pages.append(("quickmenu", AnyView(QuickMenuView(triggers: effects.triggers) { _ in }.padding(20))))
+            let preview = camera.effects == nil ? VauxCamera(previewing: effects, appState: appState) : camera
+            pages.append(("menu-camera", AnyView(MenuContentView(appState: appState, camera: preview, openAbout: {}, openSettings: {}, dismiss: {}, resized: { _ in }))))
             for (name, page) in pages {
                 await render(page, to: base.appendingPathExtension("\(name).png"))
             }

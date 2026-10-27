@@ -119,49 +119,31 @@ struct MicrophoneSettings: View {
     }
 }
 
-/// Vaux Camera: arrives with the camera work.
-struct CameraSettings: View {
-    var body: some View {
-        ContentUnavailableView {
-            Label("Vaux Camera", systemImage: "video")
-        } description: {
-            Text("A virtual camera for your calls, with overlays and effects that follow your dictation. Coming soon.")
-        }
-        .frame(width: SettingsHeader.pageWidth, height: 280)
-    }
-}
-
-/// Effects for Vaux Camera: arrive with it.
+/// Effects for Vaux Camera, once it's on.
 struct EffectsSettings: View {
-    var body: some View {
-        ContentUnavailableView {
-            Label("Effects", systemImage: "wand.and.stars")
-        } description: {
-            Text("Overlays, push-ins and combos for Vaux Camera, on your keys. Turn on the camera to use them.")
-        }
-        .frame(width: SettingsHeader.pageWidth, height: 280)
-    }
-}
+    let camera: VauxCamera
+    let showCamera: () -> Void
 
-/// Every Vaux key, in one place.
-struct ShortcutsSettings: View {
     var body: some View {
-        Form {
-            Section {
-                KeyboardShortcuts.Recorder("Mute", name: .toggleMicMute)
-            } header: {
-                SettingsHeader("Microphone")
+        if let effects = camera.effects {
+            EffectsPage(effects: effects)
+        } else {
+            ContentUnavailableView {
+                Label("Effects", systemImage: "wand.and.stars")
+            } description: {
+                Text("Overlays, push-ins and combos for \(CameraSpec.name), on your keys, and a sign while you dictate.")
+            } actions: {
+                Button("Set Up Camera…", action: showCamera)
             }
+            .frame(width: SettingsHeader.pageWidth, height: 280)
         }
-        .formStyle(.grouped)
-        .frame(width: SettingsHeader.pageWidth)
     }
 }
 
 /// A section title with its one-line description under it.
 struct SettingsHeader: View {
     /// Every settings page's width.
-    static let pageWidth: CGFloat = 460
+    static let pageWidth: CGFloat = 540
 
     let title: String
     let description: String?
