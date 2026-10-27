@@ -1,0 +1,25 @@
+Sources/MenuContentView.swift
+  s_c9cb9133d40bef::t_5fb2fd7870985f 32-33,76,184-206,208-220,222-245,251-285
+  s_c9cb9133d40bef::t_01900dd2c5fa69 286
+Sources/Snapshot.swift
+  s_c9cb9133d40bef::t_17455ff7cc42bf 46
+  s_c9cb9133d40bef::t_c6efddac4b9738 41-42,47-57
+Sources/AppStorageKey.swift
+  s_c9cb9133d40bef::t_5fb2fd7870985f 28-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d2f959da14db35c0e8810992a835200f1645f2f4",
+  "prompts": {},
+  "sessions": {
+    "s_c9cb9133d40bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46d79b12-ab26-4b09-8d76-66163839d16b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
