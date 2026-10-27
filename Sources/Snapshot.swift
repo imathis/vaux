@@ -37,6 +37,11 @@ enum Snapshot {
                 )))
             }
             pages.append(("quickmenu", AnyView(QuickMenuView(triggers: effects.triggers) { _ in }.padding(20))))
+            pages.append(("system-effects", AnyView(
+                Form { Section { SystemEffectsRow(effects: ["Portrait", "Studio Light"]) } }
+                    .formStyle(.grouped)
+                    .frame(width: SettingsHeader.pageWidth)
+            )))
             let preview = camera.effects == nil ? VauxCamera(previewing: effects, appState: appState) : camera
             let menu = { AnyView(MenuContentView(appState: appState, camera: preview, openAbout: {}, openSettings: {}, dismiss: {}, resized: { _ in })) }
             pages.append(("menu-camera", menu()))

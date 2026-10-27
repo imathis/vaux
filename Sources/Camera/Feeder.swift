@@ -1,4 +1,4 @@
-import Foundation
+import AVFoundation
 import Observation
 
 /// Decides when Vaux runs a camera, which, and how. While Vaux Camera is
@@ -24,6 +24,10 @@ final class Feeder {
 
     private(set) var status = Status.notReady
     private(set) var stats = CameraFeed.Stats()
+    /// macOS's video effects (Portrait, Studio Light…) on the camera being
+    /// sent. They're Vaux's own, set in Control Center's Video Effects, and
+    /// apply before overlays are drawn.
+    private(set) var systemEffects: [String] = []
     /// The zoom being sent: the camera's own, times a zoom shortcut's.
     private(set) var zoom = 1.0
 
@@ -70,7 +74,10 @@ final class Feeder {
         self.device = device
         self.overlays = overlays
         self.zoomShortcuts = zoomShortcuts
-        feed = CameraFeed { [weak self] stats in self?.stats = stats }
+        feed = CameraFeed { [weak self] stats in
+            self?.stats = stats
+            self?.readSystemEffects()
+        }
         observe()
     }
 
@@ -132,5 +139,21 @@ final class Feeder {
             // The next call starts at the camera's own zoom.
             zoomShortcuts.reset()
         }
+    }
+
+    /// Read with each second's stats: what Control Center has on for Vaux,
+    /// as this camera applies it.
+    private func readSystemEffects() {
+        guard case .sending(let camera, _) = status, let device = AVCaptureDevice(uniqueID: camera.uid) else {
+            if !systemEffects.isEmpty { systemEffects = [] }
+            return
+        }
+        var effects: [String] = []
+        if device.isCenterStageActive { effects.append("Center Stage") }
+        if device.isPortraitEffectActive { effects.append("Portrait") }
+        if device.isStudioLightActive { effects.append("Studio Light") }
+        if device.isBackgroundReplacementActive { effects.append("Background") }
+        if device.canPerformReactionEffects, AVCaptureDevice.reactionEffectGesturesEnabled { effects.append("Gesture reactions") }
+        if effects != systemEffects { systemEffects = effects }
     }
 }

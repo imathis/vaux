@@ -464,6 +464,30 @@ private struct FeedStatusView: View {
                 title: "Sending \(camera.name)",
                 detail: "\(format)\(feeder.zoom > 1 ? " at \(feeder.zoom.zoomText)" : "") · \(feeder.stats.fps) fps · \(feeder.stats.dropped) dropped · capture to \(CameraSpec.name) ≈ \(feeder.stats.latencyMS.formatted(.number.precision(.fractionLength(1)))) ms"
             )
+            SystemEffectsRow(effects: feeder.systemEffects)
+        }
+    }
+}
+
+/// macOS's video effects as they apply to Vaux's camera, and the way to
+/// change them. Only open while Vaux is using a camera: the panel lists
+/// apps that are.
+struct SystemEffectsRow: View {
+    let effects: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("macOS video effects")
+                Spacer()
+                Text(effects.isEmpty ? "Off" : effects.joined(separator: ", "))
+                    .foregroundStyle(.secondary)
+                Button("Video Effects…") { AVCaptureDevice.showSystemUserInterface(.videoEffects) }
+            }
+            Text("Set them for \(VauxCamera.appName) in the panel: they apply before overlays, which stay sharp. Keep them off in your call app, or they apply twice and blur overlays.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .wraps()
         }
     }
 }

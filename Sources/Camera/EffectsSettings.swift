@@ -352,7 +352,6 @@ struct OverlayEditor: View {
             if let index = library.overlays.firstIndex(where: { $0.id == id }) {
                 OverlayForm(
                     overlay: $library.overlays[index],
-                    isDictation: library.dictationOverlay == id,
                     previewVariant: $previewVariant,
                     importGraphics: library.importGraphics
                 )
@@ -377,7 +376,6 @@ struct OverlayEditor: View {
 
 struct OverlayForm: View {
     @Binding var overlay: Overlay
-    let isDictation: Bool
     @Binding var previewVariant: Int
     let importGraphics: ([URL]) -> [String]
 
@@ -401,7 +399,7 @@ struct OverlayForm: View {
             }
             if overlay.kind == .text {
                 Section {
-                    LinesEditor(lines: $overlay.lines, offersFunLines: isDictation)
+                    LinesEditor(lines: $overlay.lines)
                 } header: {
                     SettingsHeader("Lines", "More than one: each showing picks one at random, never the same twice running.")
                 }
@@ -505,7 +503,6 @@ private struct SizePicker: View {
 /// An overlay's lines, one field each.
 private struct LinesEditor: View {
     @Binding var lines: [String]
-    let offersFunLines: Bool
 
     var body: some View {
         ForEach(lines.indices, id: \.self) { index in
@@ -522,14 +519,7 @@ private struct LinesEditor: View {
                 .help("Remove this line")
             }
         }
-        HStack {
-            Button("Add Line") { lines.append("") }
-            if offersFunLines, !Overlay.funLines.allSatisfy(lines.contains) {
-                Button("Add Some Fun Lines") {
-                    lines += Overlay.funLines.filter { !lines.contains($0) }
-                }
-            }
-        }
+        Button("Add Line") { lines.append("") }
     }
 
     /// Safe against the line being removed while its field still shows.

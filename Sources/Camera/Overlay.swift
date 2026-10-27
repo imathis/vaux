@@ -132,15 +132,6 @@ extension Overlay {
     /// The first overlay: the original dictation badge.
     static let dictating = Overlay(name: "Dictating", lines: ["Dictating"], icon: "waveform")
 
-    static let funLines = [
-        "Incessant gargling",
-        "He doesn't realize he's muted",
-        "Not a mime. Dictating.",
-        "Writing an email with my mouth",
-        "Narrating to a robot, not you",
-        "Muted. Monologuing.",
-    ]
-
     /// Icons offered for text, kept few.
     static let icons: [(symbol: String?, label: String)] = [
         (nil, "None"),
