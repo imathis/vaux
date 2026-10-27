@@ -13,12 +13,16 @@ enum CameraSpec {
     #endif
     static let manufacturer = "Vaux"
     /// What Vaux Camera offers, like a camera does: 720p and 1080p in
-    /// cameras' own 4:2:0 YUV, at 30 fps. The watching app picks a size;
-    /// Vaux reads its choice from the stream.
+    /// cameras' own 4:2:0 YUV, at up to 60 fps (as fast as the camera
+    /// runs; 30 at the least). The watching app picks a size; Vaux reads
+    /// its choice from the stream.
     static let sizes = [CMVideoDimensions(width: 1280, height: 720), CMVideoDimensions(width: 1920, height: 1080)]
     static let pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-    static let fps: Int32 = 30
+    static let fps: Int32 = 60
     static let frameDuration = CMTime(value: 1, timescale: fps)
+    /// The slowest rate it runs at, a camera that does no better than 30:
+    /// frames later than this are filled in.
+    static let slowestFrameDuration = CMTime(value: 1, timescale: 30)
     /// Fixed, not made per launch: call apps remember a camera by its ID. It's
     /// also the device's unique ID in AVFoundation and CoreMediaIO.
     #if DEBUG

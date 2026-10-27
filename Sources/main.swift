@@ -9,6 +9,9 @@ import AppKit
 // Top-level code in main.swift is isolated to the main actor, so creating the
 // main-actor AppDelegate here is fine. NSApplication.delegate is a weak
 // reference, so `delegate` is held for the process lifetime as a global.
+// `Vaux -uninstallCamera` (Homebrew's uninstall) removes Vaux Camera and
+// exits here, before any of the app starts.
+CameraUninstall.runIfAsked()
 SettingsMigration.run()
 let app = NSApplication.shared
 let delegate = AppDelegate()

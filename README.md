@@ -33,6 +33,8 @@ Vaux to Applications. Requires macOS 26 or later.
 
 Vaux lives in the menu bar. While its Settings window is open, it's in the
 Dock and ⌘-Tab like any app. To update: `brew upgrade --cask vaux`.
+`brew uninstall --cask vaux` removes Vaux Camera too, if it was turned on.
+(Removing Vaux by hand, turn the camera off in Settings first.)
 
 ## Features
 

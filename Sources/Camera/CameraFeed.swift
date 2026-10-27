@@ -43,14 +43,15 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     private var dropped = 0
     private var latency = 0.0
     private var countingSince = CMClockGetTime(CMClockGetHostTimeClock())
-    /// The last frame taken: ones closer together than Vaux Camera's rate
-    /// are skipped. Cameras can run faster than asked: macOS resets their
-    /// rate when its video effects change (a Facecam went back to 60 fps
-    /// when Portrait was turned off, doubling the work).
+    /// The last frame taken: ones closer together than Vaux Camera's
+    /// fastest rate are skipped, should a camera run faster than asked.
     private var lastTaken = CMTime.invalid
 
     /// Overlays fade in and out over a quarter second.
-    private static let fadeStep = 1 / (0.25 * Double(CameraSpec.fps))
+    private static let fadeSeconds = 0.25
+    /// When the last frame was taken: fades go by time, so they take as
+    /// long at 30 fps as at 60.
+    private var lastFaded = CMTime.invalid
     /// Pushing in or out takes this long, eased.
     private static let zoomMoveSeconds = 0.3
 
@@ -160,19 +161,27 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         }
     }
 
+    /// How far this frame's fades move: the time since the last frame, as
+    /// a share of a fade (a first frame counts as a 30 fps one).
+    private func fadeStep(at time: CMTime) -> Double {
+        defer { lastFaded = time }
+        let elapsed = lastFaded.isValid ? (time - lastFaded).seconds : CameraSpec.slowestFrameDuration.seconds
+        return min(max(elapsed, 0), 0.1) / Self.fadeSeconds
+    }
+
     /// Advances look fades, per frame.
-    private func fadeLooks() {
+    private func fadeLooks(by fadeStep: Double) {
         for index in looks.indices {
-            let alpha = looks[index].alpha + (looks[index].shown ? Self.fadeStep : -Self.fadeStep)
+            let alpha = looks[index].alpha + (looks[index].shown ? fadeStep : -fadeStep)
             looks[index].alpha = min(max(alpha, 0), 1)
         }
         looks.removeAll { !$0.shown && $0.alpha <= 0 }
     }
 
     /// Advances overlay fades, per frame.
-    private func fadeOverlays() {
+    private func fadeOverlays(by fadeStep: Double) {
         for index in overlays.indices {
-            let alpha = overlays[index].alpha + (overlays[index].shown ? Self.fadeStep : -Self.fadeStep)
+            let alpha = overlays[index].alpha + (overlays[index].shown ? fadeStep : -fadeStep)
             overlays[index].alpha = min(max(alpha, 0), 1)
         }
         overlays.removeAll { !$0.shown && $0.alpha <= 0 }
@@ -238,19 +247,21 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         return max(largest, 1)
     }
 
+    /// Modes that run at 30 fps or better.
     private static func usableModes(of device: AVCaptureDevice) -> [AVCaptureDevice.Format] {
-        let fps = Double(CameraSpec.fps)
-        return device.formats.filter { mode in
-            mode.videoSupportedFrameRateRanges.contains { $0.minFrameRate <= fps && fps <= $0.maxFrameRate }
-        }
+        let slowest = 1 / CameraSpec.slowestFrameDuration.seconds
+        return device.formats.filter { fastest(of: $0) >= slowest }
+    }
+
+    private static func fastest(of mode: AVCaptureDevice.Format) -> Double {
+        mode.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0
     }
 
     /// Runs the camera in the mode closest to what's being sent, zoomed:
     /// that exact size if it has it (a straight copy, no scaling), else its
-    /// smallest mode that still fills it, else its largest. Caps it at Vaux
-    /// Camera's rate, so a 60 fps camera doesn't do twice the work; the
-    /// slowest rate is left alone, since cameras slow down in low light to
-    /// keep exposure.
+    /// smallest mode that still fills it, else its largest; of those, the
+    /// fastest, up to Vaux Camera's 60 fps. The slowest rate is left alone,
+    /// since cameras slow down in low light to keep exposure.
     private func configure(_ device: AVCaptureDevice, for format: FrameFormat, zoom: Double) {
         let usable = Self.usableModes(of: device)
         let filling = usable.filter { mode in
@@ -258,18 +269,24 @@ final class CameraFeed: NSObject, @unchecked Sendable {
             return Double(size.width) >= Double(format.width) * zoom && Double(size.height) >= Double(format.height) * zoom
         }
         // Among equal sizes, uncompressed YUV before anything that needs
-        // decoding (USB cameras often offer MJPEG too).
-        let ordered: (AVCaptureDevice.Format, AVCaptureDevice.Format) -> Bool = { a, b in
-            let (areaA, areaB) = (Self.area(a), Self.area(b))
-            return areaA != areaB ? areaA < areaB : Self.cost(a) < Self.cost(b)
+        // decoding (USB cameras often offer MJPEG too), then the faster.
+        let better: (AVCaptureDevice.Format, AVCaptureDevice.Format) -> Bool = { a, b in
+            Self.cost(a) != Self.cost(b) ? Self.cost(a) < Self.cost(b) : Self.rate(a) > Self.rate(b)
         }
-        let best = filling.isEmpty ? usable.max(by: ordered) : filling.min(by: ordered)
+        let best = filling.isEmpty
+            ? usable.max { a, b in Self.area(a) != Self.area(b) ? Self.area(a) < Self.area(b) : better(b, a) }
+            : filling.min { a, b in Self.area(a) != Self.area(b) ? Self.area(a) < Self.area(b) : better(a, b) }
         guard let best, (try? device.lockForConfiguration()) != nil else { return }
         // Setting the mode directly also keeps the session from applying a
         // preset over it.
         if best != device.activeFormat { device.activeFormat = best }
-        device.activeVideoMinFrameDuration = CameraSpec.frameDuration
+        device.activeVideoMinFrameDuration = CMTime(seconds: 1 / Self.rate(best), preferredTimescale: 6000)
         device.unlockForConfiguration()
+    }
+
+    /// Its fastest rate, up to Vaux Camera's.
+    private static func rate(_ mode: AVCaptureDevice.Format) -> Double {
+        min(fastest(of: mode), Double(CameraSpec.fps))
     }
 
     private static func area(_ mode: AVCaptureDevice.Format) -> Int {
@@ -314,8 +331,9 @@ extension CameraFeed: AVCaptureVideoDataOutputSampleBufferDelegate {
         let captured = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         if lastTaken.isValid, (captured - lastTaken).seconds < CameraSpec.frameDuration.seconds * 0.75 { return }
         lastTaken = captured
-        fadeOverlays()
-        fadeLooks()
+        let fadeStep = fadeStep(at: captured)
+        fadeOverlays(by: fadeStep)
+        fadeLooks(by: fadeStep)
         easeZoom()
         let drawn = overlays.map { Compositor.Drawn(layer: $0.layer, alpha: $0.alpha) }
         // The one fading out under the one fading in.

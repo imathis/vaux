@@ -24,9 +24,19 @@ cask "vaux" do
 
   app "Vaux.app"
 
-  uninstall quit: "dev.imathis.vaux"
+  # Vaux Camera, if it was turned on, goes with Vaux: only Vaux can remove
+  # it, and only before the app is deleted.
+  uninstall quit:   "dev.imathis.vaux",
+            script: {
+              executable:   "#{appdir}/Vaux.app/Contents/MacOS/Vaux",
+              args:         ["-uninstallCamera"],
+              must_succeed: false,
+            }
 
-  zap trash: "~/Library/Preferences/dev.imathis.vaux.plist"
+  zap trash: [
+    "~/Library/Application Support/dev.imathis.vaux",
+    "~/Library/Preferences/dev.imathis.vaux.plist",
+  ]
 end
 CASK
 cd "$work"

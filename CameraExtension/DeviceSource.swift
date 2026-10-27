@@ -49,7 +49,8 @@ final class DeviceSource: NSObject, CMIOExtensionDeviceSource, @unchecked Sendab
     /// How long the last frame holds before the placeholder shows: covers
     /// Vaux switching cameras.
     private static let hold: UInt64 = 2_000_000_000
-    private static let frameNanos = UInt64(CameraSpec.frameDuration.seconds * 1_000_000_000)
+    /// Frames are late past the slowest rate a camera sends at.
+    private static let frameNanos = UInt64(CameraSpec.slowestFrameDuration.seconds * 1_000_000_000)
 
     init(localizedName: String) {
         super.init()
@@ -86,7 +87,7 @@ final class DeviceSource: NSObject, CMIOExtensionDeviceSource, @unchecked Sendab
         )
         return CMIOExtensionStreamFormat(
             formatDescription: description!,
-            maxFrameDuration: CameraSpec.frameDuration,
+            maxFrameDuration: CameraSpec.slowestFrameDuration,
             minFrameDuration: CameraSpec.frameDuration,
             validFrameDurations: nil
         )
