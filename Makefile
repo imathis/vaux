@@ -1,6 +1,14 @@
 PROJECT := Vaux.xcodeproj
 SCHEME  := Vaux
 
+# xcodebuild needs Xcode, not the Command Line Tools: when xcode-select points
+# at the tools and DEVELOPER_DIR isn't set, use Xcode (or Xcode-beta).
+ifeq ($(DEVELOPER_DIR),)
+ifneq ($(findstring CommandLineTools,$(shell xcode-select -p 2>/dev/null)),)
+export DEVELOPER_DIR := $(firstword $(wildcard /Applications/Xcode.app/Contents/Developer /Applications/Xcode-beta.app/Contents/Developer))
+endif
+endif
+
 # Command-line signing override. Xcode (project.yml) uses automatic signing;
 # from the CLI we sign manually with the local dev identity (no Apple ID
 # account session needed). macOS dev builds don't require a provisioning profile.

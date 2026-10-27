@@ -142,9 +142,9 @@ On first build, Xcode resolves the one dependency,
 To sign with your own team, set `DEVELOPMENT_TEAM` in `project.yml` and `TEAM`
 in the `Makefile`. A free personal team is enough for local use.
 
-If `xcode-select` points at the Command Line Tools, select Xcode first, or
-prefix the command:
-`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make run`.
+If `xcode-select` points at the Command Line Tools, the `Makefile` uses
+`/Applications/Xcode.app` (or `Xcode-beta.app`). Set `DEVELOPER_DIR` to use
+another Xcode.
 
 ### Releases
 
