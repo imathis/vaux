@@ -31,7 +31,8 @@ Or download the zip from the latest
 [release](https://github.com/imathis/vaux/releases/latest), unzip it, and move
 Vaux to Applications. Requires macOS 26 or later.
 
-Vaux lives in the menu bar. To update: `brew upgrade --cask vaux`.
+Vaux lives in the menu bar. While its Settings window is open, it's in the
+Dock and ⌘-Tab like any app. To update: `brew upgrade --cask vaux`.
 
 ## Features
 
@@ -56,11 +57,14 @@ and **Discord**. Solo mode:
 - Puts everything back when it ends: it unmutes only the apps it muted and
   leaves your speakers alone if you changed the volume yourself.
 
-Start solo from the menu, a shortcut, or automatically while your dictation app
-is listening. Or share a key with dictation, so one press starts both: the 🎤
-Dictation key (the default, which starts macOS Dictation) or a tap of a
-right-side modifier on its own (e.g. Right ⌥, for apps like FluidVoice). When
-the shared key starts solo, Escape, which ends dictation, ends solo too.
+Tell Vaux what you dictate with, and solo follows it:
+
+- **macOS Dictation** (the default): the 🎤 Dictation key starts and ends solo
+  along with dictation, and Escape, which ends dictation, ends solo too. (macOS
+  doesn't say when Dictation is listening, so Vaux follows the key.)
+- **An app** such as FluidVoice: solo is on while the app is listening.
+
+You can also turn solo on and off from the menu.
 
 #### How it works, and what that means
 
@@ -96,10 +100,10 @@ to be the visible tab in its window, since browsers only expose that one.
 - **Mute and inputs:** none. Changing Core Audio properties doesn't trigger
   the microphone permission prompt.
 - **Solo mode:** Accessibility, to press mute in your call apps, and to notice
-  the key you share with dictation. Vaux reacts only to that key and Escape,
-  and ignores every other key. While a Chromium browser is using the mic, Vaux
-  turns on its full accessibility support (as a screen reader does) so Meet's
-  mute button can be pressed, and turns it off again after.
+  the 🎤 Dictation key. Vaux reacts only to that key and Escape, and ignores
+  every other key. While a Chromium browser is using the mic, Vaux turns on
+  its full accessibility support (as a screen reader does) so Meet's mute
+  button can be pressed, and turns it off again after.
 - **Call and dictation detection:** none. Vaux reads which apps are using the
   mic from Core Audio's process list, without opening the mic itself.
 
@@ -110,7 +114,9 @@ to be the visible tab in its window, since browsers only expose that one.
   be muted or can still hear you).
 - **Click** the icon to open the menu. **Shift-, Option- or Control-click** it
   to toggle mute.
-- **Settings:** solo mode, mute, preferred inputs, and launch at login.
+- **Settings** (⌘, from the menu): **Microphone** has dictation (solo mode),
+  mute and preferred inputs; **Shortcuts** has every Vaux key. **Camera** and
+  **Effects** are coming. Launch at Login is a switch in the menu.
 
 ## Build and run
 
@@ -123,6 +129,7 @@ checked in. Generate it first:
 ```sh
 make open      # generate the project and open it in Xcode, then ⌘R
 make run       # build and launch from the command line
+make snapshot  # draw Settings and the menu to build/snapshot.*.png
 ```
 
 Development builds are "Vaux Dev" (`dev.imathis.vaux.debug`), a separate app
@@ -164,30 +171,31 @@ sandboxed yet.
 
 ```
 project.yml                  # XcodeGen spec: deployment target, signing, SPM
-Makefile                     # gen / open / build / run / clean
+Makefile                     # gen / open / build / run / snapshot / clean
 Sources/
   main.swift                 # entry point
-  AppDelegate.swift          # status item, clicks, Settings window
+  AppDelegate.swift          # status item, clicks, Settings window, app menu
   StatusIcon.swift           # menu bar glyph: live, muted, solo
   StatusIconAnimator.swift   # springs the glyph between states
   MenuPanelController.swift  # the custom glass menu panel
   MenuContentView.swift      # menu: volume, inputs, mute, solo, settings
-  SettingsView.swift         # Settings
+  SettingsWindow.swift       # Settings window: a toolbar tab per page
+  SettingsView.swift         # Settings pages: Microphone, Camera, Effects, Shortcuts
   AppState.swift             # mute intent, device tracking, solo mode
   AudioController.swift      # Core Audio HAL: devices, mute, volume, processes
   CallMuter.swift            # presses call apps' mute via Accessibility
   CaptureWatcher.swift       # which apps are using the mic
   MediaPauser.swift          # pauses playing media during solo
-  SoloKeyMonitor.swift       # solo key shared with dictation, and Escape
+  SoloKeyMonitor.swift       # the 🎤 Dictation key and Escape, for solo
   SoloBroadcast.swift        # tells other apps (Frames) when solo starts and ends
-  SoloShortcutRecorder.swift # solo shortcut field (combos and modifier taps)
   InputVolumeView.swift      # volume slider
   InputPriorityModel.swift   # preferred-input list (Settings)
   PreferredInput.swift       # preferred-input order storage
   LaunchAtLogin.swift        # SMAppService wrapper
   Shortcuts.swift            # KeyboardShortcuts names
-  AppStorageKey.swift        # shared settings keys
-  Info.plist                 # LSUIElement: menu bar only, no Dock icon
+  AppStorageKey.swift        # shared settings keys, and migrating old ones
+  Snapshot.swift             # make snapshot: draws Settings and the menu to PNGs
+  Info.plist                 # LSUIElement: no Dock icon until Settings opens
   Vaux.entitlements          # App Sandbox (off by default)
   Vaux.icon                  # app icon (Icon Composer)
 IconSource/                  # app icon layer art

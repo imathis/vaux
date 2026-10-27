@@ -16,15 +16,27 @@ enum AppStorageKey {
     static let soloSpeakerLevel = "soloSpeakerLevel"
     static let soloSpeakerLevelDefault = 1.0
 
-    /// Solo mode: pause playing media until solo ends.
-    static let soloPauseMedia = "soloPauseMedia"
-    static let soloPauseMediaDefault = true
+    /// What you dictate with, which turns solo on and off: `macOSDictation`,
+    /// followed by its 🎤 key (its own mic use can't be seen), or a dictation
+    /// app's bundle ID, followed while it's listening.
+    static let dictateWith = "dictateWith"
+    static let macOSDictation = "macOSDictation"
+}
 
-    /// Solo mode: key shared with dictation that toggles solo
-    /// (`SoloKeyMonitor.Key`): the Dictation key or a lone modifier tap.
-    static let soloTapKey = "soloTapKey"
-
-    /// Solo mode: bundle ID of the app solo follows — on while it's listening
-    /// to the mic. Empty for none.
-    static let soloFollowApp = "soloFollowApp"
+/// Settings from earlier builds, moved to what replaced them before anything
+/// reads them.
+enum SettingsMigration {
+    static func run() {
+        let defaults = UserDefaults.standard
+        // Solo's triggers (a shortcut, a key shared with dictation, a followed
+        // app) became one choice: what you dictate with. A followed app wins;
+        // otherwise macOS Dictation. Pausing media stopped being a setting.
+        if defaults.string(forKey: AppStorageKey.dictateWith) == nil {
+            let follow = defaults.string(forKey: "soloFollowApp") ?? ""
+            defaults.set(follow.isEmpty ? AppStorageKey.macOSDictation : follow, forKey: AppStorageKey.dictateWith)
+        }
+        for key in ["soloFollowApp", "soloTapKey", "soloPauseMedia", "KeyboardShortcuts_toggleSolo"] {
+            defaults.removeObject(forKey: key)
+        }
+    }
 }

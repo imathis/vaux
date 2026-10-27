@@ -2,17 +2,16 @@ import AppKit
 import KeyboardShortcuts
 import SwiftUI
 
-struct SettingsView: View {
+/// Microphone: dictation (solo mode), mute, and preferred inputs.
+struct MicrophoneSettings: View {
     @AppStorage(AppStorageKey.unmuteVolume) private var unmuteVolume =
         AppStorageKey.unmuteVolumeDefault
     @AppStorage(AppStorageKey.enforcePreferred) private var autoSwitch = false
-    @AppStorage(AppStorageKey.soloPauseMedia) private var soloPauseMedia = true
     @AppStorage(AppStorageKey.soloSpeakerLevel) private var soloSpeakerLevel =
         AppStorageKey.soloSpeakerLevelDefault
-    @AppStorage(AppStorageKey.soloFollowApp) private var soloFollowApp = ""
+    @AppStorage(AppStorageKey.dictateWith) private var dictateWith = AppStorageKey.macOSDictation
     @State private var followChoices: [FollowChoice] = []
     @State private var accessibilityTrusted = CallMuter.isTrusted
-    @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var priority = InputPriorityModel()
 
     private let rowHeight: CGFloat = 36
@@ -33,18 +32,20 @@ struct SettingsView: View {
                         }
                     }
                 }
-                Picker(selection: $soloFollowApp) {
-                    Text("Off").tag("")
+                Picker(selection: $dictateWith) {
+                    Label { Text("macOS Dictation") } icon: { Image(systemName: "mic") }
+                        .tag(AppStorageKey.macOSDictation)
+                    if !followChoices.isEmpty { Divider() }
                     ForEach(followChoices) { choice in
                         Label { Text(choice.name) } icon: { Image(nsImage: choice.icon) }
                             .tag(choice.id)
                     }
                 } label: {
-                    Text("Turn on automatically")
-                    Text("While your dictation app is listening")
+                    Text("Dictate with")
+                    Text(dictateWith == AppStorageKey.macOSDictation
+                        ? "Solo follows its 🎤 key; Escape ends it"
+                        : "Solo is on while it's listening")
                 }
-                SoloShortcutRecorder(title: "Shortcut")
-                Toggle("Pause playing media", isOn: $soloPauseMedia)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Speaker volume")
                     VolumeSlider(value: $soloSpeakerLevel, icons: .speaker)
@@ -52,11 +53,10 @@ struct SettingsView: View {
                         .padding(.horizontal, -14) // line the icons up with the text
                 }
             } header: {
-                header("Solo Mode", "Mute your mic in calls while you dictate.")
+                SettingsHeader("Dictation", "While you dictate, solo mode mutes you in calls and pauses media.")
             }
 
             Section {
-                KeyboardShortcuts.Recorder("Shortcut", name: .toggleMicMute)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Unmute volume")
                     VolumeSlider(value: $unmuteVolume)
@@ -64,7 +64,7 @@ struct SettingsView: View {
                         .padding(.horizontal, -14)
                 }
             } header: {
-                header("Mute")
+                SettingsHeader("Mute")
             }
 
             Section {
@@ -93,34 +93,85 @@ struct SettingsView: View {
                     }
                 }
             } header: {
-                header("Preferred Inputs", "Switches to the highest-ranked mic that's connected.")
-            }
-
-            Section {
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, newValue in
-                        LaunchAtLogin.isEnabled = newValue
-                    }
+                SettingsHeader("Preferred Inputs", "Switches to the highest-ranked mic that's connected.")
             }
         }
         .formStyle(.grouped)
-        .onAppear { followChoices = FollowChoice.all(including: soloFollowApp) }
+        .onAppear { followChoices = FollowChoice.all(including: Self.followed(dictateWith)) }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             accessibilityTrusted = CallMuter.isTrusted
-            followChoices = FollowChoice.all(including: soloFollowApp)
+            followChoices = FollowChoice.all(including: Self.followed(dictateWith))
         }
         // Accessibility granted or revoked in System Settings, which stays in
         // front. The new state lands a moment after the notification.
         .onReceive(DistributedNotificationCenter.default().publisher(for: Self.accessibilityChanged)) { _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { accessibilityTrusted = CallMuter.isTrusted }
         }
-        .frame(width: 460)
+        .frame(width: SettingsHeader.pageWidth)
     }
 
     private static let accessibilityChanged = Notification.Name("com.apple.accessibility.api")
 
-    /// A section title with its one-line description under it.
-    private func header(_ title: String, _ description: String? = nil) -> some View {
+    /// The app followed, if dictating with one: kept in the list even when
+    /// it isn't running.
+    private static func followed(_ dictateWith: String) -> String {
+        dictateWith == AppStorageKey.macOSDictation ? "" : dictateWith
+    }
+}
+
+/// Vaux Camera: arrives with the camera work.
+struct CameraSettings: View {
+    var body: some View {
+        ContentUnavailableView {
+            Label("Vaux Camera", systemImage: "video")
+        } description: {
+            Text("A virtual camera for your calls, with overlays and effects that follow your dictation. Coming soon.")
+        }
+        .frame(width: SettingsHeader.pageWidth, height: 280)
+    }
+}
+
+/// Effects for Vaux Camera: arrive with it.
+struct EffectsSettings: View {
+    var body: some View {
+        ContentUnavailableView {
+            Label("Effects", systemImage: "wand.and.stars")
+        } description: {
+            Text("Overlays, push-ins and combos for Vaux Camera, on your keys. Turn on the camera to use them.")
+        }
+        .frame(width: SettingsHeader.pageWidth, height: 280)
+    }
+}
+
+/// Every Vaux key, in one place.
+struct ShortcutsSettings: View {
+    var body: some View {
+        Form {
+            Section {
+                KeyboardShortcuts.Recorder("Mute", name: .toggleMicMute)
+            } header: {
+                SettingsHeader("Microphone")
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: SettingsHeader.pageWidth)
+    }
+}
+
+/// A section title with its one-line description under it.
+struct SettingsHeader: View {
+    /// Every settings page's width.
+    static let pageWidth: CGFloat = 460
+
+    let title: String
+    let description: String?
+
+    init(_ title: String, _ description: String? = nil) {
+        self.title = title
+        self.description = description
+    }
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
             if let description {
@@ -128,6 +179,7 @@ struct SettingsView: View {
                     .font(.callout)
                     .fontWeight(.regular)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

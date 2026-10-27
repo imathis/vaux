@@ -49,9 +49,6 @@ final class AppState {
         KeyboardShortcuts.onKeyDown(for: .toggleMicMute) { [weak self] in
             self?.toggle()
         }
-        KeyboardShortcuts.onKeyDown(for: .toggleSolo) { [weak self] in
-            self?.toggleSolo()
-        }
         keyMonitor = SoloKeyMonitor(
             onKey: { [weak self] in self?.toggleSolo(byKey: true) },
             onEscape: { [weak self] in self?.escapePressed() }
@@ -145,11 +142,11 @@ final class AppState {
     private static let log = Logger(subsystem: "dev.imathis.vaux", category: "solo")
 
     @ObservationIgnored private var soloSnapshot: SoloSnapshot?
-    /// A toggle that arrived mid-transition. Queued rather than dropped: a
-    /// trigger shared with a dictation app must never be skipped, or the two
+    /// A toggle that arrived mid-transition. Queued rather than dropped: the
+    /// 🎤 key, shared with macOS Dictation, must never be skipped, or the two
     /// fall out of step.
     @ObservationIgnored private var pendingSoloToggle = false
-    /// Whether the queued toggle came from the key shared with dictation.
+    /// Whether the queued toggle came from the 🎤 key.
     @ObservationIgnored private var pendingToggleByKey = false
     /// Quitting: once the transition in flight lands, end solo and call this.
     @ObservationIgnored private var quitWhenSettled: (@MainActor @Sendable () -> Void)?
@@ -159,20 +156,18 @@ final class AppState {
     @ObservationIgnored private let micWatcher = CaptureWatcher()
     /// Solo was turned on by the followed app, so it ends when that stops.
     @ObservationIgnored private var soloStartedByFollow = false
-    /// Solo was turned on by a key shared with dictation, so Escape, which
-    /// ends dictation, ends solo too.
+    /// Solo was turned on by the 🎤 key, so Escape, which ends dictation, ends
+    /// solo too.
     @ObservationIgnored private var soloStartedByKey = false
     /// The followed app's state change that arrived mid-transition.
     @ObservationIgnored private var pendingFollow: Bool?
     @ObservationIgnored private let mediaPauser = MediaPauser()
 
+    /// The dictation app solo follows, when that's what you dictate with
+    /// rather than macOS Dictation.
     private static var followApp: String? {
-        let id = UserDefaults.standard.string(forKey: AppStorageKey.soloFollowApp) ?? ""
-        return id.isEmpty ? nil : id
-    }
-
-    private var pauseMedia: Bool {
-        UserDefaults.standard.object(forKey: AppStorageKey.soloPauseMedia) as? Bool ?? AppStorageKey.soloPauseMediaDefault
+        let id = UserDefaults.standard.string(forKey: AppStorageKey.dictateWith) ?? ""
+        return id.isEmpty || id == AppStorageKey.macOSDictation ? nil : id
     }
 
     private struct SoloSnapshot {
@@ -188,8 +183,7 @@ final class AppState {
         let ducked: Float32
     }
 
-    /// `byKey`: from the key shared with dictation, rather than the menu or a
-    /// key combo of Vaux's own.
+    /// `byKey`: from the 🎤 key, rather than the menu.
     func toggleSolo(byKey: Bool = false) {
         guard !soloBusy else {
             pendingSoloToggle.toggle()
@@ -205,7 +199,7 @@ final class AppState {
         }
     }
 
-    /// Escape ends dictation, so it ends a solo the shared key started. A solo
+    /// Escape ends dictation, so it ends a solo the 🎤 key started. A solo
     /// still starting ends as soon as it's on.
     private func escapePressed() {
         guard soloStartedByKey else { return }
@@ -331,10 +325,10 @@ final class AppState {
         }
 
         let duck = duckOutput()
-        // macOS Dictation pauses and resumes media itself, and resumes as soon
-        // as it stops listening, so a solo the Dictation key started leaves it be.
-        let dictationKey = soloStartedByKey && SoloKeyMonitor.Key.current == .dictation
-        if pauseMedia, !dictationKey {
+        // Media pauses while you dictate, as macOS Dictation does. macOS
+        // Dictation pauses and resumes it itself, and resumes as soon as it
+        // stops listening, so a solo its 🎤 key started leaves it be.
+        if !soloStartedByKey {
             mediaPauser.pause(ignoring: Self.knownApps)
         } else {
             mediaPauser.hold()

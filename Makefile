@@ -27,7 +27,7 @@ RELEASE_SIGN := CODE_SIGN_STYLE=Manual \
                 OTHER_CODE_SIGN_FLAGS=--timestamp \
                 CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
 
-.PHONY: gen open build run clean release install notarize publish
+.PHONY: gen open build run snapshot clean release install notarize publish
 
 gen: ## Generate the Xcode project from project.yml
 	xcodegen generate
@@ -40,6 +40,13 @@ build: gen ## Build Debug from the command line
 
 run: build ## Build and launch the app
 	open $$(xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Debug $(SIGN) -showBuildSettings 2>/dev/null | awk '/ BUILT_PRODUCTS_DIR/ {d=$$3} / FULL_PRODUCT_NAME/ {n=$$3} END {print d"/"n}')
+
+SNAPSHOT ?= build/snapshot.png
+
+snapshot: build ## Draw Vaux Dev's Settings tabs, menu and Settings window to $(SNAPSHOT)-named PNGs
+	@mkdir -p $(dir $(SNAPSHOT))
+	"$$(xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Debug $(SIGN) -showBuildSettings 2>/dev/null | awk '/ BUILT_PRODUCTS_DIR/ {d=$$3} / EXECUTABLE_PATH/ {e=$$3} END {print d"/"e}')" -snapshot $(abspath $(SNAPSHOT))
+	@ls $(basename $(SNAPSHOT)).*.png
 
 release: gen ## Build Release (Apple silicon and Intel), signed with Developer ID
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -derivedDataPath build \

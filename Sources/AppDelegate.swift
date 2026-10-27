@@ -34,6 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         appState.onStateChange = { [weak self] in self?.updateButton() }
         updateButton()
+        // Shown only while Settings makes Vaux a regular app.
+        NSApp.mainMenu = mainMenu()
+        Snapshot.runIfAsked(appState: appState) { [weak self] in self?.openSettings() }
     }
 
     // MARK: Icon
@@ -102,36 +105,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.orderFrontStandardAboutPanel(options: [.applicationVersion: release, .credits: credits])
     }
 
+    @objc private func showAbout() {
+        openAbout()
+    }
+
+    /// While Settings is open, Vaux is an app like any other, in the Dock and
+    /// ⌘-Tab so its window can be found and focused; closing it puts Vaux back
+    /// in the menu bar only.
     @objc private func openSettings() {
         if settingsWindow == nil {
-            let controller = SettingsHostingController(rootView: SettingsView())
-            // Size the window to the SwiftUI content (fixed width, intrinsic height).
-            controller.sizingOptions = [.preferredContentSize]
-            let window = NSWindow(contentViewController: controller)
-            window.title = "Vaux Settings"
-            window.styleMask = [.titled, .closable]
+            let tabs = SettingsTabController()
+            let window = NSWindow(contentViewController: tabs)
+            window.styleMask = [.titled, .closable, .miniaturizable]
+            window.toolbarStyle = .preference
             window.isReleasedWhenClosed = false
+            window.delegate = self
+            tabs.fitWindow(animate: false)
             window.center()
             settingsWindow = window
         }
+        NSApp.setActivationPolicy(.regular)
+        // Forced: the menu panel doesn't activate Vaux, so another app is in front.
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
     }
+
+    /// The Dock icon, while Settings makes Vaux show one: bring Settings back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows { openSettings() }
+        return true
+    }
+
+    /// The menu bar while Vaux is a regular app (Settings open): About,
+    /// Settings, hiding and quitting; Edit, so text fields cut, copy and paste;
+    /// Window.
+    private func mainMenu() -> NSMenu {
+        let main = NSMenu()
+
+        let app = NSMenu()
+        app.addItem(withTitle: "About Vaux", action: #selector(showAbout), keyEquivalent: "").target = self
+        app.addItem(.separator())
+        app.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        app.addItem(.separator())
+        app.addItem(withTitle: "Hide Vaux", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        app.addItem(withTitle: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+            .keyEquivalentModifierMask = [.command, .option]
+        app.addItem(withTitle: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        app.addItem(.separator())
+        app.addItem(withTitle: "Quit Vaux", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        main.addItem(withTitle: "Vaux", action: nil, keyEquivalent: "").submenu = app
+
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+            .keyEquivalentModifierMask = [.command, .shift]
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        main.addItem(withTitle: "Edit", action: nil, keyEquivalent: "").submenu = edit
+
+        let window = NSMenu(title: "Window")
+        window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        main.addItem(withTitle: "Window", action: nil, keyEquivalent: "").submenu = window
+        NSApp.windowsMenu = window
+
+        return main
+    }
 }
 
-/// Sizes the Settings window to its content, but never taller than the screen:
-/// past that, the grouped form scrolls inside it.
-private final class SettingsHostingController: NSHostingController<SettingsView> {
-    override var preferredContentSize: NSSize {
-        get {
-            var size = super.preferredContentSize
-            if let screen = view.window?.screen ?? NSScreen.main {
-                let style = view.window?.styleMask ?? [.titled, .closable]
-                let titleBar = NSWindow.frameRect(forContentRect: .zero, styleMask: style).height
-                size.height = min(size.height, screen.visibleFrame.height - titleBar)
-            }
-            return size
-        }
-        set { super.preferredContentSize = newValue }
+extension AppDelegate: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        guard (notification.object as? NSWindow) === settingsWindow else { return }
+        NSApp.setActivationPolicy(.accessory)
     }
 }

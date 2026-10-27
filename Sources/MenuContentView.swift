@@ -26,6 +26,7 @@ struct MenuContentView: View {
     @State private var volume: Double = 0
     @State private var canSetVolume = false
     @State private var currentDeviceID: AudioDeviceID?
+    @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @AppStorage(AppStorageKey.enforcePreferred) private var autoSwitch = false
 
     init(appState: AppState, openAbout: @escaping () -> Void, openSettings: @escaping () -> Void,
@@ -62,11 +63,12 @@ struct MenuContentView: View {
             autoSwitchRow
             divider()
             textRow(appState.muted ? "Unmute" : "Mute", trailing: muteShortcut) { appState.toggle() }
-            textRow(appState.soloActive ? "End Solo Mode" : "Solo Mode", trailing: soloShortcut, trailingSymbol: soloShortcutSymbol) {
+            textRow(appState.soloActive ? "End Solo Mode" : "Solo Mode", trailing: nil, trailingSymbol: soloKeySymbol) {
                 appState.toggleSolo()
             }
             soloStatus
             divider()
+            launchAtLoginRow
             textRow("About Vaux", trailing: nil) { openAbout(); dismiss() }
             textRow("Settings…", trailing: "⌘,") { openSettings(); dismiss() }
             textRow("Quit Vaux", trailing: "⌘Q") { NSApp.terminate(nil) }
@@ -119,6 +121,26 @@ struct MenuContentView: View {
                 if device.isPreferred, autoSwitch { preferredBadge }
             }
         }
+    }
+
+    /// Lives here rather than in Settings: set once, like most menu bar apps.
+    private var launchAtLoginRow: some View {
+        HStack {
+            Text("Launch at Login").font(.system(size: 13))
+            Spacer()
+            Toggle("Launch at Login", isOn: Binding(
+                get: { launchAtLogin },
+                set: {
+                    launchAtLogin = $0
+                    LaunchAtLogin.isEnabled = $0
+                }
+            ))
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .labelsHidden()
+        }
+        .padding(.horizontal, contentInset)
+        .frame(height: 26)
     }
 
     /// Switch to the preferred input as devices come and go (Settings ranks them).
@@ -216,12 +238,9 @@ struct MenuContentView: View {
         KeyboardShortcuts.getShortcut(for: .toggleMicMute)?.description ?? ""
     }
 
-    private var soloShortcut: String {
-        KeyboardShortcuts.getShortcut(for: .toggleSolo)?.description ?? SoloKeyMonitor.Key.current.symbol
-    }
-
-    private var soloShortcutSymbol: String? {
-        KeyboardShortcuts.getShortcut(for: .toggleSolo) == nil && SoloKeyMonitor.Key.current == .dictation ? "mic" : nil
+    /// The 🎤 key starts solo when you dictate with macOS Dictation.
+    private var soloKeySymbol: String? {
+        UserDefaults.standard.string(forKey: AppStorageKey.dictateWith) == AppStorageKey.macOSDictation ? "mic" : nil
     }
 
     private func select(_ device: MenuInputDevice) {
@@ -230,6 +249,8 @@ struct MenuContentView: View {
     }
 
     private func reload() {
+        // Changed in System Settings → Login Items meanwhile, maybe.
+        launchAtLogin = LaunchAtLogin.isEnabled
         let all = AudioController.inputDevices()
         let input = Self.currentInput()
         let order = PreferredInput.order
