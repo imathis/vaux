@@ -35,10 +35,23 @@ targets:
           - "Info.plist"
       - path: Shared
     dependencies:
-      # Embedded in Contents/Library/SystemExtensions, installed only when
-      # the camera is turned on.
+      # Built first, then copied into Contents/Library/SystemExtensions by
+      # the script below (installed only when the camera is turned on). Its
+      # file is named by its bundle ID, which differs per configuration;
+      # an embed phase would look for the one name in both.
       - target: VauxCamera
+        embed: false
       - package: KeyboardShortcuts
+    postBuildScripts:
+      - name: Embed Vaux Camera
+        # Every build: the extension can change without its folder's date.
+        basedOnDependencyAnalysis: false
+        script: |
+          extension="${VAUX_CAMERA_ID}.systemextension"
+          folder="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library/SystemExtensions"
+          rm -rf "$folder"
+          mkdir -p "$folder"
+          ditto "${BUILT_PRODUCTS_DIR}/$extension" "$folder/$extension"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.imathis.vaux
@@ -59,6 +72,10 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: Vaux
         COMBINE_HIDPI_IMAGES: YES
         VAUX_DISPLAY_NAME: Vaux
+        # The camera extension the script embeds (see VauxCamera).
+        VAUX_CAMERA_ID: dev.imathis.vaux.camera
+        # The embed script reads the built extension and writes into the app.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
       configs:
         # Development builds are a separate app to macOS: permissions are
         # granted per bundle ID and signature, so sharing the release's ID
@@ -66,6 +83,7 @@ targets:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: dev.imathis.vaux.debug
           VAUX_DISPLAY_NAME: Vaux Dev
+          VAUX_CAMERA_ID: dev.imathis.vaux.debug.camera
 
   # Vaux Camera: the camera extension. Sandboxed; its app group (no profile
   # needed) names its Mach service.
@@ -93,6 +111,8 @@ targets:
         CODE_SIGN_ENTITLEMENTS: CameraExtension/CameraExtension.entitlements
         CODE_SIGN_IDENTITY: "Apple Development"
         ENABLE_HARDENED_RUNTIME: YES
+        # Inside Vaux, not a product of its own in an archive.
+        SKIP_INSTALL: YES
       configs:
         # Vaux Dev's own camera, beside the release's.
         Debug:
