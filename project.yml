@@ -1,6 +1,9 @@
 name: Vaux
 options:
   bundleIdPrefix: dev.imathis
+  # Up to date for this Xcode, so it doesn't offer to update the settings
+  # (they're below; changes made in Xcode are lost on regenerating).
+  xcodeVersion: "27.0"
   deploymentTarget:
     macOS: "26.0"
   createIntermediateGroups: true
@@ -16,6 +19,10 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: Q2573QH43F
     CODE_SIGN_STYLE: Automatic
+    # Xcode's recommended settings.
+    DEAD_CODE_STRIPPING: YES
+    STRING_CATALOG_GENERATE_SYMBOLS: YES
+    REGISTER_APP_GROUPS: YES
 
 packages:
   KeyboardShortcuts:
@@ -46,6 +53,7 @@ targets:
       - name: Embed Vaux Camera
         # Every build: the extension can change without its folder's date.
         basedOnDependencyAnalysis: false
+        showEnvVars: false
         script: |
           extension="${VAUX_CAMERA_ID}.systemextension"
           folder="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library/SystemExtensions"
