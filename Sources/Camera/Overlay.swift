@@ -54,6 +54,19 @@ struct Overlay: Codable, Identifiable, Hashable, Sendable {
 
     /// The lines or images a showing picks from.
     var variants: Int { kind == .text ? lines.count : images.count }
+
+    /// A line shows its text, and its icon if it has one; a blank line with
+    /// an icon shows just the icon (a coffee cup for a break). An image
+    /// always shows.
+    func shows(_ variant: Int) -> Bool {
+        switch kind {
+        case .text: lines.indices.contains(variant) && (icon != nil || !lines[variant].trimmingCharacters(in: .whitespaces).isEmpty)
+        case .graphic: images.indices.contains(variant)
+        }
+    }
+
+    /// Has something to show.
+    var canShow: Bool { (0..<variants).contains(where: shows) }
 }
 
 extension Overlay.Spot {
@@ -109,14 +122,18 @@ extension Overlay.Spot {
 }
 
 extension Overlay.Size {
-    /// Text height as a share of the frame's height.
+    /// Text height as a share of the frame's height. Text comes in medium
+    /// and large; small text read as an afterthought, so any left over shows
+    /// as medium.
     var textScale: CGFloat {
         switch self {
-        case .small: 0.026
-        case .medium: 0.034
-        case .large: 0.05
+        case .small, .medium: 0.04
+        case .large: 0.06
         }
     }
+
+    /// The sizes text offers.
+    static let textSizes: [Self] = [.medium, .large]
 
     /// A positioned graphic's height as a share of the frame's height.
     var graphicScale: CGFloat {

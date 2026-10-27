@@ -12,7 +12,8 @@ enum OverlayRenderer {
         case .text:
             guard overlay.lines.indices.contains(variant) else { return nil }
             let text = overlay.lines[variant].trimmingCharacters(in: .whitespaces)
-            guard !text.isEmpty else { return nil }
+            // Blank: the icon alone, if there is one.
+            guard !text.isEmpty || overlay.icon != nil else { return nil }
             let renderer = ImageRenderer(content: TextOverlayView(
                 text: text, icon: overlay.icon, style: overlay.style, size: overlay.size, frameHeight: frame.height
             ))
@@ -96,23 +97,27 @@ struct TextOverlayView: View {
 
     var body: some View {
         let font = frameHeight * size.textScale
+        // An icon on its own is drawn bigger, in a rounder pill.
+        let iconOnly = text.isEmpty
         let content = HStack(spacing: font * 0.45) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: font, weight: .semibold))
+                    .font(.system(size: iconOnly ? font * 1.3 : font, weight: .semibold))
             }
-            Text(text)
-                .font(.system(size: font, weight: .semibold, design: style == .pill ? .rounded : .default))
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
+            if !iconOnly {
+                Text(text)
+                    .font(.system(size: font, weight: .semibold, design: style == .pill ? .rounded : .default))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
         }
         .foregroundStyle(.white)
 
         switch style {
         case .pill:
             content
-                .padding(.horizontal, font * 0.9)
-                .padding(.vertical, font * 0.5)
+                .padding(.horizontal, font * (iconOnly ? 0.55 : 0.9))
+                .padding(.vertical, font * (iconOnly ? 0.45 : 0.5))
                 .background(Capsule().fill(.black.opacity(0.55)))
                 .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: max(1, font * 0.05)))
         case .bar:

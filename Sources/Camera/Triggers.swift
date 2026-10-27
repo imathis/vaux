@@ -170,7 +170,7 @@ final class Triggers {
         case .combo(let id):
             guard let combo = combos.combo(id) else { return nil }
             return Effect(
-                overlays: combo.overlays.filter { (overlays.overlay($0)?.variants ?? 0) > 0 },
+                overlays: combo.overlays.filter { overlays.overlay($0)?.canShow ?? false },
                 pushIn: combo.pushIn.flatMap { level in zoom.levels.contains { $0.id == level } ? level : nil }
             )
         case .clearAll:

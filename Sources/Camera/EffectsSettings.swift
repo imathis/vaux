@@ -308,8 +308,8 @@ private struct OverlayRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(overlay.variants == 0)
-            .help(overlay.variants == 0 ? "Nothing to show yet" : showing ? "Hide" : "Show now")
+            .disabled(!overlay.canShow)
+            .help(!overlay.canShow ? "Nothing to show yet" : showing ? "Hide" : "Show now")
             Button(action: edit) {
                 Image(systemName: "chevron.right")
                     .foregroundStyle(.tertiary)
@@ -359,7 +359,7 @@ struct OverlayEditor: View {
                 }
                 Spacer()
                 Button(library.isShowing(id) ? "Hide" : "Show Now") { library.toggle(id) }
-                    .disabled((library.overlay(id)?.variants ?? 0) == 0)
+                    .disabled(!(library.overlay(id)?.canShow ?? false))
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
@@ -396,7 +396,7 @@ struct OverlayForm: View {
                 Section {
                     LinesEditor(lines: $overlay.lines)
                 } header: {
-                    SettingsHeader("Lines", "More than one: each showing picks one at random, never the same twice running.")
+                    SettingsHeader("Lines", "More than one: each showing picks one at random. Leave a line blank to show just the icon.")
                 }
                 Section("Look") {
                     Picker("Style", selection: $overlay.style) {
@@ -405,7 +405,7 @@ struct OverlayForm: View {
                         Text("Plain").tag(Overlay.Style.plain)
                     }
                     .pickerStyle(.segmented)
-                    SizePicker(size: $overlay.size)
+                    SizePicker(size: $overlay.size, sizes: Overlay.Size.textSizes)
                     Picker("Icon", selection: $overlay.icon) {
                         ForEach(Overlay.icons, id: \.label) { icon in
                             Label(icon.label, systemImage: icon.symbol ?? "circle.slash").tag(icon.symbol)
@@ -419,7 +419,7 @@ struct OverlayForm: View {
                     SettingsHeader("Images", "PNG, PDF, SVG or any image, transparency kept. More than one: each showing picks one at random.")
                 }
                 Section("Look") {
-                    SizePicker(size: $overlay.size)
+                    SizePicker(size: $overlay.size, sizes: Overlay.Size.allCases)
                         .disabled(overlay.spot == .fullFrame)
                 }
             }
@@ -478,18 +478,20 @@ struct OverlayForm: View {
         } set: { kind in
             overlay.kind = kind
             if kind == .text, overlay.spot == .fullFrame { overlay.spot = .top }
+            if kind == .text, !Overlay.Size.textSizes.contains(overlay.size) { overlay.size = .medium }
         }
     }
 }
 
 private struct SizePicker: View {
     @Binding var size: Overlay.Size
+    let sizes: [Overlay.Size]
 
     var body: some View {
         Picker("Size", selection: $size) {
-            Text("Small").tag(Overlay.Size.small)
-            Text("Medium").tag(Overlay.Size.medium)
-            Text("Large").tag(Overlay.Size.large)
+            ForEach(sizes, id: \.self) { size in
+                Text(size.rawValue.capitalized).tag(size)
+            }
         }
         .pickerStyle(.segmented)
     }

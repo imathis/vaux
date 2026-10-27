@@ -36,6 +36,11 @@ enum Snapshot {
                         .frame(width: 480)
                 )))
             }
+            var coffee = Overlay(name: "Coffee", lines: [""], icon: "cup.and.saucer.fill", spot: .bottomTrailing)
+            pages.append(("overlay-icon", AnyView(OverlayForm(overlay: .constant(coffee), previewVariant: .constant(0)) { _ in [] }.frame(width: 540))))
+            coffee.size = .large
+            coffee.lines = ["Back in 5"]
+            pages.append(("overlay-large", AnyView(OverlayForm(overlay: .constant(coffee), previewVariant: .constant(0)) { _ in [] }.frame(width: 540))))
             pages.append(("quickmenu", AnyView(QuickMenuView(triggers: effects.triggers) { _ in }.padding(20))))
             pages.append(("system-effects", AnyView(
                 Form { Section { SystemEffectsRow(effects: ["Portrait", "Studio Light"]) } }

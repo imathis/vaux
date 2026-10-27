@@ -66,7 +66,13 @@ final class OverlayLibrary {
 
     init() {
         if let data = try? Data(contentsOf: Self.file), let stored = try? JSONDecoder().decode(Stored.self, from: data) {
-            overlays = stored.overlays
+            // Text no longer comes small: those are medium now.
+            overlays = stored.overlays.map { overlay in
+                guard overlay.kind == .text, !Overlay.Size.textSizes.contains(overlay.size) else { return overlay }
+                var medium = overlay
+                medium.size = .medium
+                return medium
+            }
             dictationOverlay = stored.dictationOverlay
         } else {
             // First run: the original badge, shown while dictating.
@@ -90,7 +96,7 @@ final class OverlayLibrary {
     /// Returns what was in the spot, so a held key can put it back.
     @discardableResult
     func show(_ id: UUID) -> Showing? {
-        guard let overlay = overlay(id), overlay.variants > 0 else { return nil }
+        guard let overlay = overlay(id), overlay.canShow else { return nil }
         let replaced = showing[overlay.spot]
         let token = UUID()
         showing[overlay.spot] = Showing(overlay: id, variant: pick(from: overlay), token: token)
@@ -204,7 +210,8 @@ final class OverlayLibrary {
 
     /// A line or image, at random, never the one shown last time.
     private func pick(from overlay: Overlay) -> Int {
-        let choices = (0..<overlay.variants).filter { $0 != lastVariant[overlay.id] }
+        let showable = (0..<overlay.variants).filter(overlay.shows)
+        let choices = showable.count > 1 ? showable.filter { $0 != lastVariant[overlay.id] } : showable
         let choice = choices.randomElement() ?? 0
         lastVariant[overlay.id] = choice
         return choice
@@ -214,7 +221,7 @@ final class OverlayLibrary {
     /// with them; one deleted, or emptied, goes.
     private func reconcile() {
         for (spot, shown) in showing {
-            guard let overlay = overlay(shown.overlay), overlay.variants > 0 else {
+            guard let overlay = overlay(shown.overlay), overlay.canShow else {
                 showing[spot] = nil
                 continue
             }
