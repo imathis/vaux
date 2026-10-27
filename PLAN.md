@@ -156,9 +156,10 @@ user who never turns on the camera sees no prompt and no extension.
 Verified live: install and approval, relaunch, camera access, the feed,
 solo's overlay, the Frames import, Live, looks, the menu.
 
-Left (the user's hands): the Quick Menu, holding a key, Turn Off then Turn
-On again, and retiring Frames (Uninstall Frames Camera in Frames, then
-delete Frames.app).
+Frames is retired (2026-10-27): Frames Camera uninstalled (its builds go
+at the next restart), Frames.app, its overlays and its settings moved to
+the Trash. Left (the user's hands): the Quick Menu, holding a key, Turn Off
+then Turn On again.
 
 ## Phase 3: shipping
 
@@ -173,6 +174,12 @@ delete Frames.app).
    Layout.
 3. **Cask:** note that removing Vaux should turn off the camera first (or an
    `uninstall` step that deactivates the extension).
+4. **The user's own switch to the release Vaux:** their camera setup lives
+   only in Vaux Dev now (`dev.imathis.vaux.debug` defaults: looks, combos,
+   push-ins, Quick Menu keys, shortcuts, camera order; and
+   `~/Library/Application Support/dev.imathis.vaux.debug`). Frames' data,
+   which the release's first Turn On would import, is gone, so copy Vaux
+   Dev's over once, before turning the camera on in the release.
 
 ## Open decisions
 
