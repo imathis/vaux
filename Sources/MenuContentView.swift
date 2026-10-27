@@ -29,6 +29,8 @@ struct MenuContentView: View {
     @State private var currentDeviceID: AudioDeviceID?
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @AppStorage(AppStorageKey.enforcePreferred) private var autoSwitch = false
+    /// The camera section shows every effect; collapsed, only what's on.
+    @AppStorage(AppStorageKey.menuCameraExpanded) private var cameraExpanded = true
 
     init(appState: AppState, camera: VauxCamera, openAbout: @escaping () -> Void, openSettings: @escaping () -> Void,
          dismiss: @escaping () -> Void, resized: @escaping (CGSize) -> Void) {
@@ -71,11 +73,7 @@ struct MenuContentView: View {
             soloStatus
             if let effects = camera.effects {
                 divider()
-                header("Camera", color: .primary, trailing: cameraStatus)
-                let keys = effects.triggers.keys
-                ForEach(effects.triggers.items.filter { $0.action != .mute }) { item in
-                    effectRow(item, key: keys[item.id]) { effects.triggers.trigger(item.action) }
-                }
+                cameraSection(effects)
             }
             divider()
             launchAtLoginRow
@@ -183,22 +181,107 @@ struct MenuContentView: View {
         }
     }
 
-    /// An effect: checked while it's on, with its Quick Menu key. Clicking
-    /// toggles it and leaves the menu open, for turning on another.
-    private func effectRow(_ item: Triggers.Item, key: String?, action: @escaping () -> Void) -> some View {
-        MenuRow(height: 22, edgeInset: edgeInset, contentInset: contentInset, action: action) {
+    /// Overlays and combos, each a list (their names can repeat across the
+    /// two), and push-ins as one choice, since one level is on at a time.
+    /// Collapsed, only what's on shows. Keys live in the Quick Menu.
+    @ViewBuilder private func cameraSection(_ effects: Effects) -> some View {
+        let items = effects.triggers.items
+        let overlays = items.filter { if case .overlay = $0.action { true } else { false } }
+        let combos = items.filter { if case .combo = $0.action { true } else { false } }
+        let levels = effects.zoomShortcuts.levels.sorted { $0.zoom < $1.zoom }
+        let pushedIn = effects.zoomShortcuts.active
+        cameraHeader(showingOverlays: !effects.overlays.showing.isEmpty) { effects.overlays.clearAll() }
+        effectList("Overlays", cameraExpanded ? overlays : overlays.filter(\.isOn), effects)
+        if !levels.isEmpty, cameraExpanded || pushedIn != nil {
+            pushInRow(levels, active: pushedIn, effects)
+        }
+        effectList("Combos", cameraExpanded ? combos : combos.filter(\.isOn), effects)
+    }
+
+    /// Camera, its state, Clear while overlays show, and the chevron; the
+    /// row expands and collapses the section.
+    private func cameraHeader(showingOverlays: Bool, clear: @escaping () -> Void) -> some View {
+        MenuRow(height: 26, edgeInset: edgeInset, contentInset: contentInset) {
+            withAnimation(.easeInOut(duration: 0.15)) { cameraExpanded.toggle() }
+        } content: {
             HStack(spacing: 6) {
-                Text(item.title).font(.system(size: 13)).lineLimit(1)
-                Spacer()
-                if item.isOn {
-                    Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold))
+                Text("Camera").font(.system(size: 13, weight: .semibold))
+                Text(cameraStatus).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: 6)
+                if showingOverlays {
+                    Button(action: clear) {
+                        Text("Clear")
+                            .font(.system(size: 11))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color(nsColor: .quaternaryLabelColor)))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Hide every overlay")
                 }
-                if let key {
-                    Text(key).font(.system(size: 13)).foregroundStyle(.secondary)
-                        .frame(minWidth: 14, alignment: .trailing)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(cameraExpanded ? 90 : 0))
+            }
+        }
+    }
+
+    /// A titled list of effects, checked while on; the title only when
+    /// expanded (collapsed, the checks say enough).
+    @ViewBuilder private func effectList(_ title: String, _ items: [Triggers.Item], _ effects: Effects) -> some View {
+        if !items.isEmpty {
+            if cameraExpanded { subheader(title) }
+            ForEach(items) { item in
+                MenuRow(height: 22, edgeInset: edgeInset, contentInset: contentInset) {
+                    effects.triggers.trigger(item.action)
+                } content: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .semibold))
+                            .opacity(item.isOn ? 1 : 0)
+                            .frame(width: 14)
+                        Text(item.title).font(.system(size: 13)).lineLimit(1)
+                    }
                 }
             }
         }
+    }
+
+    /// Push in: off (1×) or one of the levels.
+    private func pushInRow(_ levels: [ZoomShortcuts.Level], active: UUID?, _ effects: Effects) -> some View {
+        HStack {
+            Text("Push in").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Picker("Push in", selection: Binding(
+                get: { active },
+                set: { level in
+                    // Toggling the level on, or the one that's on, off.
+                    if let id = level ?? active { effects.triggers.trigger(.pushIn(id)) }
+                }
+            )) {
+                Text("1×").tag(UUID?.none)
+                ForEach(levels) { level in
+                    Text(level.zoom.zoomText).tag(UUID?.some(level.id))
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .fixedSize()
+        }
+        .padding(.horizontal, contentInset)
+        .frame(height: 30)
+    }
+
+    private func subheader(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, contentInset)
+            .padding(.top, 4)
+            .padding(.bottom, 1)
     }
 
     /// The camera's state, in a word or two.

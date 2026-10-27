@@ -38,10 +38,23 @@ enum Snapshot {
             }
             pages.append(("quickmenu", AnyView(QuickMenuView(triggers: effects.triggers) { _ in }.padding(20))))
             let preview = camera.effects == nil ? VauxCamera(previewing: effects, appState: appState) : camera
-            pages.append(("menu-camera", AnyView(MenuContentView(appState: appState, camera: preview, openAbout: {}, openSettings: {}, dismiss: {}, resized: { _ in }))))
+            let menu = { AnyView(MenuContentView(appState: appState, camera: preview, openAbout: {}, openSettings: {}, dismiss: {}, resized: { _ in })) }
+            pages.append(("menu-camera", menu()))
             for (name, page) in pages {
                 await render(page, to: base.appendingPathExtension("\(name).png"))
             }
+            // The menu with an overlay and a push-in on, in this process only.
+            if let overlay = effects.overlays.overlays.first { effects.overlays.show(overlay.id) }
+            if let level = effects.zoomShortcuts.levels.first { effects.zoomShortcuts.activate(level.id) }
+            await render(menu(), to: base.appendingPathExtension("menu-camera-on.png"))
+            // Collapsed: the stored choice, flipped for a moment.
+            let key = AppStorageKey.menuCameraExpanded
+            let stored = UserDefaults.standard.object(forKey: key)
+            UserDefaults.standard.set(false, forKey: key)
+            await render(menu(), to: base.appendingPathExtension("menu-camera-collapsed.png"))
+            UserDefaults.standard.set(stored, forKey: key)
+            effects.overlays.clearAll()
+            effects.zoomShortcuts.activate(nil)
             openSettings()
             // Let the window lay out and size itself to its first tab.
             try? await Task.sleep(for: .seconds(1))

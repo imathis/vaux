@@ -25,6 +25,8 @@ enum AppStorageKey {
     /// Vaux Camera is turned on (opt-in; see `VauxCamera`). The camera's own
     /// settings live with its parts.
     static let cameraOn = "cameraOn"
+    /// The menu's camera section shows every effect (or only what's on).
+    static let menuCameraExpanded = "menuCameraExpanded"
 }
 
 /// Settings from earlier builds, moved to what replaced them before anything
