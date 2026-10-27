@@ -1,0 +1,30 @@
+Sources/Snapshot.swift
+  s_c9cb9133d40bef::t_45c686c2fa5833 91-118
+Sources/Camera/ExtensionInstaller.swift
+  s_c9cb9133d40bef::t_3bc974348a425f 50-57
+Sources/Camera/CameraSettings.swift
+  s_c9cb9133d40bef::t_f660f34e166f30 5-7,17-18,25-38,55-153,229-231,237-238,371,502-506,508,510-511,513
+Makefile
+  s_c9cb9133d40bef::t_45c686c2fa5833 46,75-79
+  s_c9cb9133d40bef::t_ceebf4b14ba6e5 80
+Sources/AppDelegate.swift
+  s_c9cb9133d40bef::t_45c686c2fa5833 47-49
+Sources/Camera/Look.swift
+  s_c9cb9133d40bef::t_f47edfec5902f2 200-205,223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7e8ecd9c6e6c33031d7b3c1ce3a45623aa622aa3",
+  "prompts": {},
+  "sessions": {
+    "s_c9cb9133d40bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46d79b12-ab26-4b09-8d76-66163839d16b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
