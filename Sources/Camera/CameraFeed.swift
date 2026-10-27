@@ -239,7 +239,9 @@ final class CameraFeed: NSObject, @unchecked Sendable {
 
     private func logMode(of device: AVCaptureDevice, for format: FrameFormat) {
         let mode = device.activeFormat.formatDescription
-        log.notice("Camera: \(device.localizedName, privacy: .public), \(mode.dimensions.width)×\(mode.dimensions.height) \(Self.fourCC(mode.mediaSubType.rawValue), privacy: .public) for \(format.description, privacy: .public) at \(self.configuredZoom.zoomText, privacy: .public)")
+        let fps = Int((1 / device.activeVideoMinFrameDuration.seconds).rounded())
+        let type = Self.fourCC(mode.mediaSubType.rawValue) + (Self.decompressedFrom(device.activeFormat).map { " from \(Self.fourCC($0))" } ?? "")
+        log.notice("Camera: \(device.localizedName, privacy: .public), \(mode.dimensions.width)×\(mode.dimensions.height) \(type, privacy: .public) \(fps) fps for \(format.description, privacy: .public) at \(self.configuredZoom.zoomText, privacy: .public)")
     }
 
     /// How far a camera can zoom into `format` and stay sharp: past this, its
@@ -275,7 +277,8 @@ final class CameraFeed: NSObject, @unchecked Sendable {
             return Double(size.width) >= Double(format.width) * zoom && Double(size.height) >= Double(format.height) * zoom
         }
         // Among equal sizes, uncompressed YUV before anything that needs
-        // decoding (USB cameras often offer MJPEG too), then the faster.
+        // decoding (USB cameras often offer MJPEG too), even if slower;
+        // then the faster.
         let better: (AVCaptureDevice.Format, AVCaptureDevice.Format) -> Bool = { a, b in
             Self.cost(a) != Self.cost(b) ? Self.cost(a) < Self.cost(b) : Self.rate(a) > Self.rate(b)
         }
@@ -322,12 +325,24 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         return Int(size.width) * Int(size.height)
     }
 
+    /// Compressed modes rank last: decoding costs, and a frame damaged on
+    /// the way decodes to smeared gray blocks (a Logitech StreamCam at
+    /// 1080p60, its MJPEG-only rate).
     private static func cost(_ mode: AVCaptureDevice.Format) -> Int {
-        switch mode.formatDescription.mediaSubType.rawValue {
+        if decompressedFrom(mode) != nil { return 2 }
+        return switch mode.formatDescription.mediaSubType.rawValue {
         case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange, kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: 0
         case kCVPixelFormatType_422YpCbCr8, kCVPixelFormatType_422YpCbCr8_yuvs: 1
         default: 2
         }
+    }
+
+    /// What the camera really sends in a mode macOS decompresses (MJPEG is
+    /// `dmb1`): such modes list as YUV, 420v like the raw ones, and say so
+    /// only here.
+    private static func decompressedFrom(_ mode: AVCaptureDevice.Format) -> FourCharCode? {
+        let key = "com.apple.cmio.format_extension.decompressed_from_format_type" as CFString
+        return (CMFormatDescriptionGetExtension(mode.formatDescription, extensionKey: key) as? NSNumber)?.uint32Value
     }
 
     private static func fourCC(_ code: FourCharCode) -> String {
