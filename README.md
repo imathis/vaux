@@ -111,7 +111,7 @@ with effects on your keys. Off until you turn it on in Settings → Camera.
   highlights), and texture (fade, vignette, film grain). Starts with Noir,
   Black & White, Warm, Vivid, Faded and Teal & Orange; any can be reset.
 - **Live:** a small panel for effects on the spot: type a line, pick its
-  look and spot, a zoom and a look, and Show puts it all up at once.
+  style and spot, a zoom and a look, and Show puts it all up at once.
 - **Keys:** a shortcut per effect, and the **Quick Menu** (⌥. by default): a
   small menu over everything, one more key picks. Tap a key to toggle; hold it
   to show the effect only while held. Mute is in the Quick Menu too (M), and
