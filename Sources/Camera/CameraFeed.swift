@@ -280,8 +280,24 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         // Setting the mode directly also keeps the session from applying a
         // preset over it.
         if best != device.activeFormat { device.activeFormat = best }
-        device.activeVideoMinFrameDuration = CMTime(seconds: 1 / Self.rate(best), preferredTimescale: 6000)
+        // A duration the mode itself reports, never one worked out: one a
+        // hair outside its range (60 against a 59.94 fps mode) throws, and
+        // takes Vaux down with it.
+        if let duration = Self.frameDuration(of: best) { device.activeVideoMinFrameDuration = duration }
         device.unlockForConfiguration()
+    }
+
+    /// The mode's fastest frame duration, held to Vaux Camera's 60 fps: an
+    /// exact value from its own ranges, or nil if none fits.
+    private static func frameDuration(of mode: AVCaptureDevice.Format) -> CMTime? {
+        mode.videoSupportedFrameRateRanges
+            .map { range in CMTimeMaximum(range.minFrameDuration, CameraSpec.frameDuration) }
+            .filter { duration in
+                mode.videoSupportedFrameRateRanges.contains { range in
+                    CMTimeCompare(duration, range.minFrameDuration) >= 0 && CMTimeCompare(duration, range.maxFrameDuration) <= 0
+                }
+            }
+            .min { CMTimeCompare($0, $1) < 0 }
     }
 
     /// Its fastest rate, up to Vaux Camera's.
