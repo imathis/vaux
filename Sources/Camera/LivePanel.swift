@@ -1,11 +1,11 @@
 import AppKit
 import SwiftUI
 
-/// Live: effects on the spot. Type something and Return shows it over your
-/// video, in the look and spot you pick; a slider pushes in. Opened from the
-/// Quick Menu (L), the menu, or its shortcut, it floats beside the call
-/// until closed, and takes keys without activating Vaux, so the call app
-/// stays in front.
+/// Live: an effect set up on the spot. Text over your video, in the look
+/// and spot you pick, and a push-in; Show puts it all up at once, Hide
+/// takes it down. Opened from the Quick Menu (L), the menu, or its
+/// shortcut, it floats beside the call until closed, and takes keys
+/// without activating Vaux, so the call app stays in front.
 @MainActor
 final class LivePanel: NSObject, NSWindowDelegate {
     private let overlays: OverlayLibrary
@@ -66,8 +66,9 @@ private final class LiveWindow: NSPanel {
     }
 }
 
-/// What to say, its look and spot, and the zoom. Typing doesn't change
-/// what's showing until Return: each change would fade in anew.
+/// What to say, its look and spot, and the zoom, shown and hidden together.
+/// While it's up, the look, spot and zoom follow changes at once; typed
+/// text waits for Return, since each change would fade in anew.
 struct LiveView: View {
     @Bindable var library: OverlayLibrary
     let zoom: ZoomShortcuts
@@ -123,20 +124,20 @@ struct LiveView: View {
                 Image(systemName: "plus.magnifyingglass")
                     .foregroundStyle(.secondary)
                     .help("Push in")
-                Slider(value: Binding(get: { zoom.factor }, set: { zoom.setLiveZoom(($0 * 20).rounded() / 20) }), in: 1...ZoomShortcuts.range.upperBound)
+                Slider(value: Binding(get: { zoom.liveLevel }, set: { zoom.liveLevel = ($0 * 20).rounded() / 20 }), in: 1...ZoomShortcuts.range.upperBound)
                     .controlSize(.small)
-                Text(zoom.factor.zoomText)
+                Text(zoom.liveLevel.zoomText)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .frame(width: 44, alignment: .trailing)
-                Button { zoom.setLiveZoom(1) } label: {
+                Button { zoom.liveLevel = 1 } label: {
                     Image(systemName: "arrow.counterclockwise")
                 }
                 .buttonStyle(.borderless)
-                .disabled(zoom.factor <= 1)
+                .disabled(zoom.liveLevel <= 1)
                 .help("Back to 1×")
             }
-            Text("Return shows it, or updates it while it's up · Esc closes")
+            Text("Show (or Return) puts the text and zoom up together · Esc closes")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -148,22 +149,28 @@ struct LiveView: View {
         }
     }
 
-    private var showing: Bool { library.isShowing(library.live.id) }
+    /// Its text is up, or its zoom.
+    private var showing: Bool { library.isShowing(library.live.id) || zoom.liveZoom != nil }
 
-    private var canShow: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty || library.live.icon != nil }
+    private var hasText: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty || library.live.icon != nil }
+
+    private var canShow: Bool { hasText || zoom.liveLevel > 1.001 }
 
     private var edited: Bool { draft != (library.live.lines.first ?? "") }
 
     private var primaryTitle: String { !showing ? "Show" : edited ? "Update" : "Hide" }
 
-    /// Shows what's typed, updates it while it's up, or hides it.
+    /// Shows all of it, updates the text while it's up, or hides all of it.
     private func primary() {
         if showing, !edited {
             library.hide(library.live.id)
+            zoom.applyLive(false)
             return
         }
         library.live.lines = [draft]
-        if !showing, canShow { library.show(library.live.id) }
+        guard !showing else { return }
+        if hasText { library.show(library.live.id) }
+        zoom.applyLive(true)
     }
 }
 

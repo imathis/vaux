@@ -24,9 +24,18 @@ final class ZoomShortcuts {
     private(set) var active: UUID?
     /// Levels with a key recorded: only they're in play mid-call.
     private(set) var assigned: Set<UUID> = []
-    /// The Live panel's zoom, while it's set one: in place of the levels
-    /// until a level is pushed in or it's back at 1×.
+    /// The Live effect's zoom, while Live is on: in place of the levels
+    /// until a level is pushed in.
     private(set) var liveZoom: Double?
+    /// The zoom the Live effect pushes in to when it's on, kept for next
+    /// time. Changed while Live is on, the camera follows.
+    var liveLevel = UserDefaults.standard.object(forKey: ZoomShortcuts.liveLevelKey) as? Double ?? 1 {
+        didSet {
+            UserDefaults.standard.set(liveLevel, forKey: Self.liveLevelKey)
+            if liveZoom != nil { liveZoom = liveLevel > 1.001 ? liveLevel : nil }
+        }
+    }
+    private static let liveLevelKey = "liveZoom"
 
     init() {
         let stored = UserDefaults.standard.data(forKey: Self.key).flatMap { try? JSONDecoder().decode([Level].self, from: $0) }
@@ -41,16 +50,15 @@ final class ZoomShortcuts {
     /// neither.
     var factor: Double { liveZoom ?? levels.first { $0.id == active }?.zoom ?? 1 }
 
-    /// The furthest a level with a key (or the Live zoom) pushes in: the
+    /// The furthest a level with a key (or the Live effect) pushes in: the
     /// camera runs in a mode that keeps it sharp, so pushing in never
     /// switches modes mid-call.
-    var furthest: Double { max(levels.filter { assigned.contains($0.id) }.map(\.zoom).max() ?? 1, liveZoom ?? 1) }
+    var furthest: Double { max(levels.filter { assigned.contains($0.id) }.map(\.zoom).max() ?? 1, liveLevel) }
 
-    /// The Live slider: pushes in this far, in place of any level.
-    func setLiveZoom(_ zoom: Double) {
-        let zoom = min(max(zoom, 1), Self.range.upperBound)
-        liveZoom = zoom > 1.001 ? zoom : nil
-        if active != nil { active = nil }
+    /// The Live effect on (its level, in place of any other) or off.
+    func applyLive(_ on: Bool) {
+        liveZoom = on && liveLevel > 1.001 ? liveLevel : nil
+        if on, liveZoom != nil, active != nil { active = nil }
     }
 
     /// The recorder changed a level's key.

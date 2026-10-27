@@ -275,7 +275,7 @@ struct MenuContentView: View {
                     if let id = level ?? active {
                         effects.triggers.trigger(.pushIn(id))
                     } else {
-                        effects.zoomShortcuts.setLiveZoom(1)
+                        effects.zoomShortcuts.applyLive(false)
                     }
                 }
             )) {
