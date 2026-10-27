@@ -32,7 +32,7 @@ enum Snapshot {
                 pages.append(("editor", AnyView(OverlayEditor(library: effects.overlays, id: overlay.id))))
                 let sample = Combo(name: "Big entrance", overlays: [overlay.id], pushIn: effects.zoomShortcuts.levels.first?.id)
                 pages.append(("combo-form", AnyView(
-                    ComboForm(combo: .constant(sample), overlays: effects.overlays.overlays, levels: effects.zoomShortcuts.levels)
+                    ComboForm(combo: .constant(sample), overlays: effects.overlays.overlays, levels: effects.zoomShortcuts.levels, looks: effects.looks.looks)
                         .frame(width: 480)
                 )))
             }
@@ -42,7 +42,10 @@ enum Snapshot {
             coffee.lines = ["Back in 5"]
             pages.append(("overlay-large", AnyView(OverlayForm(overlay: .constant(coffee), previewVariant: .constant(0)) { _ in [] }.frame(width: 540))))
             pages.append(("quickmenu", AnyView(QuickMenuView(triggers: effects.triggers) { _ in }.padding(20))))
-            pages.append(("live", AnyView(LiveView(library: effects.overlays, zoom: effects.zoomShortcuts))))
+            if let look = effects.looks.looks.first {
+                pages.append(("look-editor", AnyView(LookEditor(effects: effects, id: look.id))))
+            }
+            pages.append(("live", AnyView(LiveView(library: effects.overlays, zoom: effects.zoomShortcuts, looks: effects.looks))))
             pages.append(("system-effects", AnyView(
                 Form { Section { SystemEffectsRow(effects: ["Portrait", "Studio Light"]) } }
                     .formStyle(.grouped)

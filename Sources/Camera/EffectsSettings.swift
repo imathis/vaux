@@ -8,6 +8,7 @@ struct EffectsPage: View {
 
     @State private var editing: Editing?
     @State private var editingCombo: Editing?
+    @State private var editingLook: Editing?
 
     private struct Editing: Identifiable {
         let id: UUID
@@ -55,6 +56,27 @@ struct EffectsPage: View {
                 SettingsHeader("Push In", "Zoom further, and back. On top of each camera's zoom, up to 2×.")
             }
             Section {
+                ForEach(effects.looks.looks) { look in
+                    LookRow(
+                        look: look,
+                        key: keys["look-\(look.id)"],
+                        isOn: effects.looks.active == look.id,
+                        toggle: { effects.triggers.trigger(.look(look.id)) },
+                        edit: { editingLook = Editing(id: look.id) }
+                    )
+                    .contextMenu {
+                        Button("Edit…") { editingLook = Editing(id: look.id) }
+                        Button("Duplicate") { effects.looks.duplicate(look.id) }
+                        Divider()
+                        Button("Delete", role: .destructive) { effects.looks.remove(look.id) }
+                    }
+                }
+                .onMove { effects.looks.looks.move(fromOffsets: $0, toOffset: $1) }
+                Button("Add Look") { editingLook = Editing(id: effects.looks.add().id) }
+            } header: {
+                SettingsHeader("Looks", "Color over the whole picture, one at a time.")
+            }
+            Section {
                 let items = effects.triggers.items
                 ForEach(effects.combos.combos) { combo in
                     ComboRow(
@@ -74,7 +96,7 @@ struct EffectsPage: View {
                 }
                 Button("Add Combo") { editingCombo = Editing(id: effects.combos.add().id) }
             } header: {
-                SettingsHeader("Combos", "Several overlays, and a push-in, on one key.")
+                SettingsHeader("Combos", "Several overlays, a push-in and a look, on one key.")
             }
             Section {
                 Picker("While dictating, show", selection: $library.dictationOverlay) {
@@ -95,14 +117,18 @@ struct EffectsPage: View {
         .sheet(item: $editingCombo) { editing in
             ComboEditor(effects: effects, id: editing.id)
         }
+        .sheet(item: $editingLook) { editing in
+            LookEditor(effects: effects, id: editing.id)
+        }
     }
 
-    /// Its overlays' names, and its push-in.
+    /// Its overlays' names, its push-in, and its look.
     private func summary(of combo: Combo) -> String {
         var parts = combo.overlays.compactMap { library.overlay($0)?.name }
         if let level = effects.zoomShortcuts.levels.first(where: { $0.id == combo.pushIn }) {
             parts.append("Push in \(level.zoom.zoomText)")
         }
+        if let look = combo.look.flatMap(effects.looks.look) { parts.append(look.name) }
         return parts.isEmpty ? "Nothing in it yet" : parts.joined(separator: " + ")
     }
 }
@@ -160,7 +186,7 @@ struct ComboEditor: View {
         @Bindable var combos = effects.combos
         VStack(spacing: 0) {
             if let index = combos.combos.firstIndex(where: { $0.id == id }) {
-                ComboForm(combo: $combos.combos[index], overlays: effects.overlays.overlays, levels: effects.zoomShortcuts.levels)
+                ComboForm(combo: $combos.combos[index], overlays: effects.overlays.overlays, levels: effects.zoomShortcuts.levels, looks: effects.looks.looks)
             }
             Divider()
             HStack {
@@ -184,6 +210,7 @@ struct ComboForm: View {
     @Binding var combo: Combo
     let overlays: [Overlay]
     let levels: [ZoomShortcuts.Level]
+    let looks: [Look]
 
     var body: some View {
         Form {
@@ -211,6 +238,12 @@ struct ComboForm: View {
                     Text("None").tag(UUID?.none)
                     ForEach(levels) { level in
                         Text("Push in \(level.zoom.zoomText)").tag(UUID?.some(level.id))
+                    }
+                }
+                Picker("Look", selection: $combo.look) {
+                    Text("None").tag(UUID?.none)
+                    ForEach(looks) { look in
+                        Text(look.name).tag(UUID?.some(look.id))
                     }
                 }
             }

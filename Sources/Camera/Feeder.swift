@@ -37,6 +37,7 @@ final class Feeder {
     @ObservationIgnored private let device: CameraDevice
     @ObservationIgnored private let overlays: OverlayLibrary
     @ObservationIgnored private let zoomShortcuts: ZoomShortcuts
+    @ObservationIgnored private let looks: LookLibrary
     @ObservationIgnored private var feed: CameraFeed!
     /// What the feed is running now.
     @ObservationIgnored private var feeding: Feeding?
@@ -58,6 +59,7 @@ final class Feeder {
         let modeZoom: Double
         let shortcut: UUID?
         let overlays: [OverlayLayer]
+        let look: Look?
     }
 
     init(
@@ -66,7 +68,8 @@ final class Feeder {
         cameras: CameraPriorityModel,
         device: CameraDevice,
         overlays: OverlayLibrary,
-        zoomShortcuts: ZoomShortcuts
+        zoomShortcuts: ZoomShortcuts,
+        looks: LookLibrary
     ) {
         self.installer = installer
         self.access = access
@@ -74,6 +77,7 @@ final class Feeder {
         self.device = device
         self.overlays = overlays
         self.zoomShortcuts = zoomShortcuts
+        self.looks = looks
         feed = CameraFeed { [weak self] stats in
             self?.stats = stats
             self?.readSystemEffects()
@@ -97,7 +101,8 @@ final class Feeder {
             zoom: min(base * zoomShortcuts.factor, most),
             modeZoom: min(base * zoomShortcuts.furthest, most),
             shortcut: zoomShortcuts.active,
-            overlays: overlays.scene
+            overlays: overlays.scene,
+            look: looks.activeLook
         )
     }
 
@@ -113,6 +118,7 @@ final class Feeder {
         status = wanted.status
         zoom = wanted.zoom
         feed.showOverlays(wanted.overlays)
+        feed.showLook(wanted.look)
         if case .sending(let camera, let format) = wanted.status, let sink = device.sink {
             if let feeding, feeding.camera == camera.uid, feeding.format == format, feeding.sink === sink {
                 // Same camera, same format: only the zoom may have moved. A

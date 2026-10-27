@@ -2,12 +2,14 @@ import Foundation
 import Observation
 
 /// Several effects on one key: overlays, each in its spot, and at most one
-/// push-in (zoom is one level at a time). Taps and holds like any other.
+/// push-in and one look (each is one at a time). Taps and holds like any
+/// other.
 struct Combo: Codable, Identifiable, Hashable, Sendable {
     var id = UUID()
     var name: String
     var overlays: [UUID] = []
     var pushIn: UUID?
+    var look: UUID?
 }
 
 /// The user's combos, stored in UserDefaults. Members deleted elsewhere are

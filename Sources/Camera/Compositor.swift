@@ -4,14 +4,21 @@ import VideoToolbox
 
 /// Fits camera frames to the format Vaux Camera is sending: center
 /// cropped to fill it, zoomed in by the camera's zoom, in hardware (a
-/// straight copy when the camera's mode already matches). Vaux come out in
+/// straight copy when the camera's mode already matches). Frames come out in
 /// the camera's own color tags, in IOSurface-backed buffers Vaux Camera
 /// takes without a copy. While overlays show, Core Image draws just their
-/// rectangles; the rest of the frame stays the hardware copy.
+/// rectangles; the rest of the frame stays the hardware copy. While a look
+/// is on, Core Image draws the whole frame.
 final class Compositor {
     /// An overlay to draw, and how visible it is, 0 to 1 (fading).
     struct Drawn {
         let layer: OverlayLayer
+        let alpha: Double
+    }
+
+    /// A look over the frame, and how much of it, 0 to 1 (fading).
+    struct Graded {
+        let look: Look
         let alpha: Double
     }
 
@@ -24,6 +31,8 @@ final class Compositor {
     private var poolFormat: FrameFormat?
     /// Overlay images, by layer key and frame height.
     private var images: [String: CIImage] = [:]
+    /// Frames drawn with a look, which moves its grain.
+    private var gradedFrames = 0
 
     init() {
         var transfer: VTPixelTransferSession?
@@ -38,7 +47,7 @@ final class Compositor {
         VTPixelTransferSessionInvalidate(transfer)
     }
 
-    func fit(_ camera: CVPixelBuffer, to format: FrameFormat, zoom: Double, overlays: [Drawn]) -> CVPixelBuffer? {
+    func fit(_ camera: CVPixelBuffer, to format: FrameFormat, zoom: Double, overlays: [Drawn], looks: [Graded]) -> CVPixelBuffer? {
         if poolFormat != format {
             pool = Self.pool(for: format)
             poolFormat = format
@@ -50,26 +59,41 @@ final class Compositor {
         // overlays are drawn in the same terms.
         CVBufferPropagateAttachments(camera, output)
         let visible = overlays.filter { $0.alpha > 0 }
+        let looks = looks.filter { $0.alpha > 0 }
         if visible.isEmpty {
             images = [:]
-            return output
+            if looks.isEmpty { return output }
         }
-        // Overlays are drawn over a second copy, since Core Image shouldn't
-        // read and write the same buffer.
+        // Drawn over a second copy, since Core Image shouldn't read and
+        // write the same buffer.
         if let under = makeBuffer(), VTPixelTransferSessionTransferImage(transfer, from: camera, to: under) == noErr {
             CVBufferPropagateAttachments(camera, under)
-            draw(visible, height: format.height, over: under, into: output)
+            draw(visible, looks: looks, height: format.height, over: under, into: output)
         }
         return output
     }
 
-    /// Each overlay in its spot, full frame ones underneath. Renders only the
-    /// overlays' rectangles, on even pixels for 4:2:0 chroma.
-    private func draw(_ overlays: [Drawn], height: Int32, over frame: CVPixelBuffer, into output: CVPixelBuffer) {
+    /// The looks over the whole frame, then each overlay in its spot, full
+    /// frame ones underneath. Without a look, renders only the overlays'
+    /// rectangles, on even pixels for 4:2:0 chroma.
+    private func draw(_ overlays: [Drawn], looks: [Graded], height: Int32, over frame: CVPixelBuffer, into output: CVPixelBuffer) {
         let size = CGSize(width: CVPixelBufferGetWidth(frame), height: CVPixelBufferGetHeight(frame))
         let bounds = CGRect(origin: .zero, size: size)
-        var composite = CIImage(cvPixelBuffer: frame)
+        let original = CIImage(cvPixelBuffer: frame)
+        var composite = original
         var rects: [CGRect] = []
+        if !looks.isEmpty {
+            // Fading out first, then in: one look dissolves into the next.
+            gradedFrames += 1
+            for graded in looks {
+                let looked = graded.look.apply(to: original, frame: gradedFrames)
+                composite = graded.alpha >= 1 ? looked : composite.applyingFilter("CIDissolveTransition", parameters: [
+                    kCIInputTargetImageKey: looked,
+                    kCIInputTimeKey: graded.alpha,
+                ])
+            }
+            rects = [bounds]
+        }
         var used = Set<String>()
         for drawn in overlays.sorted(by: { ($0.layer.spot == .fullFrame ? 0 : 1) < ($1.layer.spot == .fullFrame ? 0 : 1) }) {
             let key = "\(drawn.layer.key)-\(height)"
@@ -81,7 +105,7 @@ final class Compositor {
                 .applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: drawn.alpha)])
                 .transformed(by: CGAffineTransform(translationX: origin.x, y: origin.y))
             composite = placed.composited(over: composite)
-            rects.append(Self.evenPixels(placed.extent.intersection(bounds)))
+            if looks.isEmpty { rects.append(Self.evenPixels(placed.extent.intersection(bounds))) }
         }
         images = images.filter { used.contains($0.key) }
         let destination = CIRenderDestination(pixelBuffer: output)

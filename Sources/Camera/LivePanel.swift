@@ -1,20 +1,22 @@
 import AppKit
 import SwiftUI
 
-/// Live: an effect set up on the spot. Text over your video, in the look
-/// and spot you pick, and a push-in; Show puts it all up at once, Hide
-/// takes it down. Opened from the Quick Menu (L), the menu, or its
+/// Live: an effect set up on the spot. Text over your video, in the style
+/// and spot you pick, a push-in and a look; Show puts it all up at once,
+/// Hide takes it down. Opened from the Quick Menu (L), the menu, or its
 /// shortcut, it floats beside the call until closed, and takes keys
 /// without activating Vaux, so the call app stays in front.
 @MainActor
 final class LivePanel: NSObject, NSWindowDelegate {
     private let overlays: OverlayLibrary
     private let zoom: ZoomShortcuts
+    private let looks: LookLibrary
     private var panel: NSPanel?
 
-    init(overlays: OverlayLibrary, zoom: ZoomShortcuts) {
+    init(overlays: OverlayLibrary, zoom: ZoomShortcuts, looks: LookLibrary) {
         self.overlays = overlays
         self.zoom = zoom
+        self.looks = looks
         super.init()
     }
 
@@ -24,7 +26,7 @@ final class LivePanel: NSObject, NSWindowDelegate {
             return
         }
         let panel = LiveWindow()
-        let host = NSHostingView(rootView: LiveView(library: overlays, zoom: zoom))
+        let host = NSHostingView(rootView: LiveView(library: overlays, zoom: zoom, looks: looks))
         panel.contentView = host
         panel.setContentSize(host.fittingSize)
         panel.delegate = self
@@ -66,12 +68,13 @@ private final class LiveWindow: NSPanel {
     }
 }
 
-/// What to say, its look and spot, and the zoom, shown and hidden together.
-/// While it's up, the look, spot and zoom follow changes at once; typed
+/// What to say, its style and spot, the zoom and the look, shown and hidden
+/// together. While it's up, all but the text follow changes at once; typed
 /// text waits for Return, since each change would fade in anew.
 struct LiveView: View {
     @Bindable var library: OverlayLibrary
     let zoom: ZoomShortcuts
+    @Bindable var looks: LookLibrary
 
     @State private var draft = ""
     @FocusState private var typing: Bool
@@ -137,7 +140,21 @@ struct LiveView: View {
                 .disabled(zoom.liveLevel <= 1)
                 .help("Back to 1×")
             }
-            Text("Show (or Return) puts the text and zoom up together · Esc closes")
+            HStack(spacing: 8) {
+                Image(systemName: "camera.filters")
+                    .foregroundStyle(.secondary)
+                    .help("Look")
+                Picker("Look", selection: $looks.liveLook) {
+                    Text("No look").tag(UUID?.none)
+                    ForEach(looks.looks) { look in
+                        Text(look.name).tag(UUID?.some(look.id))
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+                Spacer()
+            }
+            Text("Show (or Return) puts it all up together · Esc closes")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -149,12 +166,12 @@ struct LiveView: View {
         }
     }
 
-    /// Its text is up, or its zoom.
-    private var showing: Bool { library.liveOn || zoom.liveZoom != nil }
+    /// Its text is up, its zoom, or its look.
+    private var showing: Bool { library.liveOn || zoom.liveZoom != nil || looks.liveApplied }
 
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty || library.live.icon != nil }
 
-    private var canShow: Bool { hasText || zoom.liveLevel > 1.001 }
+    private var canShow: Bool { hasText || zoom.liveLevel > 1.001 || looks.liveLook != nil }
 
     private var edited: Bool { draft != (library.live.lines.first ?? "") }
 
@@ -165,12 +182,14 @@ struct LiveView: View {
         if showing, !edited {
             library.setLive(false)
             zoom.applyLive(false)
+            looks.applyLive(false)
             return
         }
         library.live.lines = [draft]
         guard !showing else { return }
         library.setLive(true)
         zoom.applyLive(true)
+        looks.applyLive(true)
     }
 }
 

@@ -80,6 +80,14 @@ struct EffectShortcuts: View {
             } header: {
                 SettingsHeader("Push In", "Each pushes in, and back out. Levels are set in the Effects tab.")
             }
+            Section {
+                ColumnTitles()
+                ForEach(items.filter { if case .look = $0.action { true } else { false } }) { item in
+                    TriggerRow(item: item, key: keys[item.id] ?? "", triggers: triggers)
+                }
+            } header: {
+                SettingsHeader("Looks", "Each turns its look on, and off. Looks are set in the Effects tab.")
+            }
             let comboItems = items.filter { if case .combo = $0.action { true } else { false } }
             if !comboItems.isEmpty {
                 Section {

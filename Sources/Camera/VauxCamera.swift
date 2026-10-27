@@ -124,13 +124,14 @@ final class VauxCamera {
     }
 }
 
-/// Effects: overlays, push-ins and combos, the keys that trigger them (with
+/// Effects: overlays, push-ins, looks and combos, the keys that trigger them (with
 /// Mute), the Quick Menu, the Live panel, and the overlay shown while you
 /// dictate.
 @MainActor
 final class Effects {
     let overlays = OverlayLibrary()
     let zoomShortcuts = ZoomShortcuts()
+    let looks = LookLibrary()
     let combos = ComboLibrary()
     let triggers: Triggers
     let quickMenu: QuickMenu
@@ -140,9 +141,9 @@ final class Effects {
 
     init(appState: AppState) {
         self.appState = appState
-        triggers = Triggers(appState: appState, overlays: overlays, zoom: zoomShortcuts, combos: combos)
+        triggers = Triggers(appState: appState, overlays: overlays, zoom: zoomShortcuts, looks: looks, combos: combos)
         quickMenu = QuickMenu(triggers: triggers)
-        live = LivePanel(overlays: overlays, zoom: zoomShortcuts)
+        live = LivePanel(overlays: overlays, zoom: zoomShortcuts, looks: looks)
         triggers.openLive = { [live] in live.show() }
         followSolo()
     }
@@ -175,7 +176,8 @@ final class CameraSide {
             cameras: priority,
             device: device,
             overlays: effects.overlays,
-            zoomShortcuts: effects.zoomShortcuts
+            zoomShortcuts: effects.zoomShortcuts,
+            looks: effects.looks
         )
     }
 }

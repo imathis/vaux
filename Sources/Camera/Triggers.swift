@@ -2,8 +2,8 @@ import Foundation
 import KeyboardShortcuts
 import Observation
 
-/// Everything that can be triggered (Mute, each overlay, each push-in level,
-/// each combo, and Clear All) and the keys for it: a global shortcut each,
+/// Everything that can be triggered (Mute, Live, each overlay, push-in
+/// level, look and combo, and Clear All) and the keys for it: a global shortcut each,
 /// and a one-key code in the Quick Menu. One list behind the Quick Menu, the
 /// Shortcuts tab and Stream Deck alike.
 ///
@@ -19,6 +19,7 @@ final class Triggers {
             case live
             case overlay(UUID)
             case pushIn(UUID)
+            case look(UUID)
             case combo(UUID)
             case clearAll
         }
@@ -38,6 +39,7 @@ final class Triggers {
     private let appState: AppState
     private let overlays: OverlayLibrary
     private let zoom: ZoomShortcuts
+    private let looks: LookLibrary
     private let combos: ComboLibrary
     /// Quick Menu keys set by hand, by item ID; the rest are given in order.
     private(set) var customKeys: [String: String]
@@ -57,16 +59,19 @@ final class Triggers {
         var shown: [(overlay: UUID, replaced: OverlayLibrary.Showing?)] = []
         var pushIn: UUID?
         var previousZoom: UUID?
+        var look: UUID?
+        var previousLook: UUID?
     }
 
     /// Held at least this long, a key's effect lasts only while it's held.
     static let holdSeconds = 0.35
     private static let keysKey = "quickMenuKeys"
 
-    init(appState: AppState, overlays: OverlayLibrary, zoom: ZoomShortcuts, combos: ComboLibrary) {
+    init(appState: AppState, overlays: OverlayLibrary, zoom: ZoomShortcuts, looks: LookLibrary, combos: ComboLibrary) {
         self.appState = appState
         self.overlays = overlays
         self.zoom = zoom
+        self.looks = looks
         self.combos = combos
         customKeys = UserDefaults.standard.dictionary(forKey: Self.keysKey) as? [String: String] ?? [:]
         KeyboardShortcuts.onKeyDown(for: Item.clearAllName) { [weak self] in self?.press(.clearAll) }
@@ -93,13 +98,16 @@ final class Triggers {
     var items: [Item] {
         [
             Item(id: Self.id(of: .mute), action: .mute, title: "Mute", isOn: appState.muted),
-            Item(id: Self.id(of: .live), action: .live, title: "Live…", isOn: overlays.liveOn || zoom.liveZoom != nil),
+            Item(id: Self.id(of: .live), action: .live, title: "Live…", isOn: overlays.liveOn || zoom.liveZoom != nil || looks.liveApplied),
         ]
         + overlays.overlays.map { overlay in
             Item(id: "overlay-\(overlay.id)", action: .overlay(overlay.id), title: overlay.name, isOn: overlays.isShowing(overlay.id))
         }
         + zoom.levels.map { level in
             Item(id: level.name.rawValue, action: .pushIn(level.id), title: "Push in \(level.zoom.zoomText)", isOn: zoom.active == level.id)
+        }
+        + looks.looks.map { look in
+            Item(id: Self.id(of: .look(look.id)), action: .look(look.id), title: look.name, isOn: looks.active == look.id)
         }
         + combos.combos.map { combo in
             let action = Item.Action.combo(combo.id)
@@ -109,8 +117,8 @@ final class Triggers {
     }
 
     /// Each item's Quick Menu key: set by hand, or given in order. Mute gets
-    /// M, Live L, overlays 1–9 then letters, push-ins Z X C V…, combos
-    /// A S D F…, Clear All 0.
+    /// M, Live L, overlays 1–9 then letters, push-ins Z X C V…, looks
+    /// Q W E R…, combos A S D F…, Clear All 0.
     var keys: [String: String] {
         var keys: [String: String] = [:]
         let items = items
@@ -131,6 +139,7 @@ final class Triggers {
             case .live: next(from: ["L"] + letters)
             case .overlay: next(from: digits + letters)
             case .pushIn: next(from: "ZXCVBNM".map(String.init) + letters)
+            case .look: next(from: "QWERTYUIOP".map(String.init) + letters)
             case .combo: next(from: "ASDFGHJKL".map(String.init) + letters)
             case .clearAll: next(from: ["0"] + letters)
             }
@@ -158,14 +167,15 @@ final class Triggers {
         release(action)
     }
 
-    /// What an item does: overlays, each in its spot, and at most one push-in.
-    /// One overlay or one level for those items; a combo's members (any
-    /// deleted, or with nothing to show, skipped). Clear All has none.
+    /// What an item does: overlays, each in its spot, at most one push-in,
+    /// and at most one look. One of them for those items; a combo's members
+    /// (any deleted, or with nothing to show, skipped). Clear All has none.
     private struct Effect {
         var overlays: [UUID] = []
         var pushIn: UUID?
+        var look: UUID?
 
-        var isEmpty: Bool { overlays.isEmpty && pushIn == nil }
+        var isEmpty: Bool { overlays.isEmpty && pushIn == nil && look == nil }
     }
 
     private func effect(of action: Item.Action) -> Effect? {
@@ -176,11 +186,14 @@ final class Triggers {
             return Effect(overlays: [id])
         case .pushIn(let id):
             return Effect(pushIn: id)
+        case .look(let id):
+            return Effect(look: id)
         case .combo(let id):
             guard let combo = combos.combo(id) else { return nil }
             return Effect(
                 overlays: combo.overlays.filter { overlays.overlay($0)?.canShow ?? false },
-                pushIn: combo.pushIn.flatMap { level in zoom.levels.contains { $0.id == level } ? level : nil }
+                pushIn: combo.pushIn.flatMap { level in zoom.levels.contains { $0.id == level } ? level : nil },
+                look: combo.look.flatMap { looks.look($0)?.id }
             )
         case .clearAll:
             return nil
@@ -192,6 +205,7 @@ final class Triggers {
         !effect.isEmpty
             && effect.overlays.allSatisfy(overlays.isShowing)
             && effect.pushIn.map { zoom.active == $0 } ?? true
+            && effect.look.map { looks.active == $0 } ?? true
     }
 
     /// Its key went down: toggles the effect, all of it.
@@ -208,6 +222,7 @@ final class Triggers {
         if isOn(effect) {
             effect.overlays.forEach(overlays.hide)
             if let level = effect.pushIn, zoom.active == level { zoom.activate(nil) }
+            if let look = effect.look, looks.active == look { looks.activate(nil) }
             presses[id] = Press(turnedOn: false)
             return
         }
@@ -219,6 +234,11 @@ final class Triggers {
             press.pushIn = level
             press.previousZoom = zoom.active
             zoom.activate(level)
+        }
+        if let look = effect.look, looks.active != look {
+            press.look = look
+            press.previousLook = looks.active
+            looks.activate(look)
         }
         presses[id] = press
     }
@@ -235,6 +255,7 @@ final class Triggers {
             if let replaced { overlays.restore(replaced) }
         }
         if let level = press.pushIn, zoom.active == level { zoom.activate(press.previousZoom) }
+        if let look = press.look, looks.active == look { looks.activate(press.previousLook) }
     }
 
     private static func id(of action: Item.Action) -> String {
@@ -243,18 +264,20 @@ final class Triggers {
         case .live: Item.liveName.rawValue
         case .overlay(let id): "overlay-\(id)"
         case .pushIn(let id): ZoomShortcuts.Level.shortcut(for: id).rawValue
+        case .look(let id): "look-\(id)"
         case .combo(let id): "combo-\(id)"
         case .clearAll: Item.clearAllName.rawValue
         }
     }
 
-    /// Listens for each overlay's, push-in level's and combo's shortcut, down
-    /// and up, as they come and go; a deleted one's shortcut and Quick Menu
-    /// key go with it.
+    /// Listens for each overlay's, push-in level's, look's and combo's
+    /// shortcut, down and up, as they come and go; a deleted one's shortcut
+    /// and Quick Menu key go with it.
     private func followItems() {
         let actions = withObservationTracking {
             overlays.overlays.map { Item.Action.overlay($0.id) }
                 + zoom.levels.map { Item.Action.pushIn($0.id) }
+                + looks.looks.map { Item.Action.look($0.id) }
                 + combos.combos.map { Item.Action.combo($0.id) }
         } onChange: { [weak self] in
             Task { @MainActor in self?.followItems() }

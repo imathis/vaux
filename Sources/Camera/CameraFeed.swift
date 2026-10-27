@@ -37,6 +37,8 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     private var zoomMove: (from: Double, to: Double, start: CMTime)?
     /// Overlays showing and fading: each eases toward shown or gone.
     private var overlays: [(layer: OverlayLayer, alpha: Double, shown: Bool)] = []
+    /// Looks fading in and out, by ID: one is shown at a time.
+    private var looks: [(look: Look, alpha: Double, shown: Bool)] = []
     private var sent = 0
     private var dropped = 0
     private var latency = 0.0
@@ -133,6 +135,33 @@ final class CameraFeed: NSObject, @unchecked Sendable {
                 overlays.append((layer: layer, alpha: 0, shown: true))
             }
         }
+    }
+
+    /// The look to show, or none. It fades in over the last; an edit to the
+    /// one showing applies at once, so its sliders can be watched.
+    func showLook(_ look: Look?) {
+        videoQueue.async { [self] in
+            for index in looks.indices {
+                if looks[index].look.id == look?.id, let look {
+                    looks[index].look = look
+                    looks[index].shown = true
+                } else {
+                    looks[index].shown = false
+                }
+            }
+            if let look, !looks.contains(where: { $0.look.id == look.id }) {
+                looks.append((look: look, alpha: 0, shown: true))
+            }
+        }
+    }
+
+    /// Advances look fades, per frame.
+    private func fadeLooks() {
+        for index in looks.indices {
+            let alpha = looks[index].alpha + (looks[index].shown ? Self.fadeStep : -Self.fadeStep)
+            looks[index].alpha = min(max(alpha, 0), 1)
+        }
+        looks.removeAll { !$0.shown && $0.alpha <= 0 }
     }
 
     /// Advances overlay fades, per frame.
@@ -278,10 +307,13 @@ final class CameraFeed: NSObject, @unchecked Sendable {
 extension CameraFeed: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         fadeOverlays()
+        fadeLooks()
         easeZoom()
         let drawn = overlays.map { Compositor.Drawn(layer: $0.layer, alpha: $0.alpha) }
+        // The one fading out under the one fading in.
+        let graded = (looks.filter { !$0.shown } + looks.filter(\.shown)).map { Compositor.Graded(look: $0.look, alpha: $0.alpha) }
         guard let sink, let format, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer),
-              let frame = compositor.fit(pixels, to: format, zoom: zoom, overlays: drawn)
+              let frame = compositor.fit(pixels, to: format, zoom: zoom, overlays: drawn, looks: graded)
         else {
             count(sent: false)
             return

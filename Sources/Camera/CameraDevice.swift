@@ -137,7 +137,7 @@ final class CameraDevice {
     }
 }
 
-/// Feeds one Vaux Camera device's sink stream. Vaux go in from the video
+/// Feeds one Vaux Camera device's sink stream. Frames go in from the video
 /// queue; start and stop come from elsewhere.
 final class SinkConnection: @unchecked Sendable {
     private let device: CMIODeviceID

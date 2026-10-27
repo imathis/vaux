@@ -181,13 +181,14 @@ struct MenuContentView: View {
         }
     }
 
-    /// Overlays and combos, each a list (their names can repeat across the
-    /// two), and push-ins as one choice, since one level is on at a time.
+    /// Overlays, looks and combos, each a list (names can repeat across
+    /// them), and push-ins as one choice, since one level is on at a time.
     /// Collapsed, only what's on shows. Keys live in the Quick Menu.
     @ViewBuilder private func cameraSection(_ effects: Effects) -> some View {
         let items = effects.triggers.items
         let overlays = items.filter { if case .overlay = $0.action { true } else { false } }
         let combos = items.filter { if case .combo = $0.action { true } else { false } }
+        let looks = items.filter { if case .look = $0.action { true } else { false } }
         let levels = effects.zoomShortcuts.levels.sorted { $0.zoom < $1.zoom }
         let pushedIn = effects.zoomShortcuts.active
         let live = items.first { $0.action == .live }
@@ -202,6 +203,7 @@ struct MenuContentView: View {
         if !levels.isEmpty, cameraExpanded || pushedIn != nil || effects.zoomShortcuts.liveZoom != nil {
             pushInRow(levels, active: pushedIn, effects)
         }
+        effectList("Looks", cameraExpanded ? looks : looks.filter(\.isOn), effects)
         effectList("Combos", cameraExpanded ? combos : combos.filter(\.isOn), effects)
     }
 
