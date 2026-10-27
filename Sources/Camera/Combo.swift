@@ -35,11 +35,15 @@ final class ComboLibrary {
         return combo
     }
 
-    func duplicate(_ id: UUID) {
-        guard var copy = combo(id) else { return }
+    /// A copy beside it.
+    @discardableResult
+    func duplicate(_ id: UUID) -> Combo? {
+        guard let index = combos.firstIndex(where: { $0.id == id }) else { return nil }
+        var copy = combos[index]
         copy.id = UUID()
         copy.name += " Copy"
-        combos.append(copy)
+        combos.insert(copy, at: index + 1)
+        return copy
     }
 
     func remove(_ id: UUID) {

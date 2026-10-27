@@ -4,6 +4,8 @@ import SwiftUI
 /// edit.
 struct LookRow: View {
     let look: Look
+    /// On whenever no other look is.
+    let isDefault: Bool
     let isOn: Bool
     let toggle: () -> Void
     let edit: () -> Void
@@ -15,6 +17,14 @@ struct LookRow: View {
                 .frame(width: 20)
             Text(look.name)
                 .lineLimit(1)
+            if isDefault {
+                Text("Default")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(.quaternary, in: Capsule())
+            }
             Spacer(minLength: 8)
             Button(action: toggle) {
                 Image(systemName: isOn ? "eye.fill" : "eye")
@@ -43,30 +53,54 @@ struct LookRow: View {
 struct LookEditor: View {
     let effects: Effects
     let id: UUID
+    /// Just added: Cancel takes it away again.
+    var isNew = false
     /// Undoably, by the page that opened it.
     let delete: () -> Void
+    /// Opens a copy to edit, by the page that opened it.
+    var duplicate: (() -> Void)?
     /// Snapshots draw it whole.
     var height: CGFloat = 640
 
-    @Environment(\.dismiss) private var dismiss
     /// The range the grade's sliders are showing.
     @State private var range = GradeRange.shadows
+    /// How it was when opened, for Cancel.
+    @State private var opened: (look: Look, state: LookLibrary.Override?, defaultLook: UUID?)?
 
     var body: some View {
         @Bindable var library = effects.looks
-        VStack(spacing: 0) {
-            if let index = library.looks.firstIndex(where: { $0.id == id }) {
-                let look = $library.looks[index]
-                let defaults = look.wrappedValue.defaults
+        if let index = library.looks.firstIndex(where: { $0.id == id }) {
+            let look = $library.looks[index]
+            let defaults = look.wrappedValue.defaults
+            EditorSheet(
+                name: look.name,
+                isOn: library.active == id,
+                toggle: { effects.triggers.trigger(.look(id)) },
+                delete: delete,
+                cancel: cancel,
+                width: 480,
+                height: height
+            ) {
+                // A preset goes back to how it came; one made from scratch,
+                // to plain.
+                Button { library.looks[index] = defaults } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                }
+                .help(look.wrappedValue.preset == nil ? "Reset to plain" : "Reset to default")
+                .disabled(look.wrappedValue.isDefault)
+                if let duplicate {
+                    Button(action: duplicate) {
+                        Image(systemName: "plus.square.on.square")
+                    }
+                    .help("Duplicate, to make another version of it")
+                }
+            } content: {
                 Form {
                     Section {
-                        TextField("Name", text: look.name)
-                    } footer: {
-                        Text(library.active == id
-                            ? "On now: your camera follows as you change it."
-                            : "Turn it on to see it on your camera as you change it.")
-                            .foregroundStyle(.secondary)
-                            .wraps()
+                        Toggle(isOn: Binding(get: { library.defaultLook == id }, set: { library.defaultLook = $0 ? id : nil })) {
+                            Text("Default look")
+                            Text("On whenever no other look is, under your other effects.")
+                        }
                     }
                     Section {
                         LookSlider(title: "Temperature", value: look.warmth, defaultValue: defaults.warmth, range: Look.warmthRange, format: .signedPercent)
@@ -111,30 +145,24 @@ struct LookEditor: View {
                 }
                 .formStyle(.grouped)
             }
-            Divider()
-            HStack {
-                Button("Delete", role: .destructive) {
-                    dismiss()
-                    delete()
-                }
-                Spacer()
-                if let look = library.look(id) {
-                    // A preset goes back to how it came; one made from
-                    // scratch, to plain.
-                    Button(look.preset == nil ? "Reset" : "Reset to Default") {
-                        if let index = library.looks.firstIndex(where: { $0.id == id }) {
-                            library.looks[index] = look.defaults
-                        }
-                    }
-                    .disabled(look.isDefault)
-                }
-                Button(library.active == id ? "Turn Off" : "Turn On") { effects.triggers.trigger(.look(id)) }
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
+            .onAppear {
+                if opened == nil { opened = (library.looks[index], library.state, library.defaultLook) }
             }
-            .padding(12)
         }
-        .frame(width: 480, height: height)
+    }
+
+    /// Back to how it was when opened: its settings, which look was on, and
+    /// the default. One just added goes.
+    private func cancel() {
+        let library = effects.looks
+        guard let opened else { return }
+        if isNew {
+            library.remove(id)
+        } else if let index = library.looks.firstIndex(where: { $0.id == id }) {
+            library.looks[index] = opened.look
+        }
+        library.defaultLook = opened.defaultLook
+        library.restore(opened.state)
     }
 }
 

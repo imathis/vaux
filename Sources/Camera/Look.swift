@@ -110,34 +110,64 @@ extension Look {
     }
 }
 
-/// The user's looks, and which one is on. Stored in UserDefaults.
+/// The user's looks, and which one is on: the default, unless another is
+/// turned on over it (or it's turned off for now). Stored in UserDefaults.
 @MainActor @Observable
 final class LookLibrary {
     var looks: [Look] {
         didSet {
             save()
-            if let active, look(active) == nil { self.active = nil }
+            if let defaultLook, look(defaultLook) == nil { self.defaultLook = nil }
+            if case .look(let id) = override, look(id) == nil { override = nil }
             if let liveLook, look(liveLook) == nil { self.liveLook = nil }
         }
     }
 
-    /// The look on, if any.
-    private(set) var active: UUID?
+    /// On whenever no other look is: under everything else, kept between
+    /// launches.
+    var defaultLook: UUID? {
+        didSet {
+            UserDefaults.standard.set(defaultLook?.uuidString, forKey: Self.defaultKey)
+            if case .look(let id) = override, id == defaultLook { override = nil }
+        }
+    }
+
+    /// What's been turned on or off over the default, for now.
+    enum Override: Equatable {
+        case look(UUID)
+        /// The default, turned off.
+        case off
+    }
+
+    private(set) var override: Override?
+
+    /// The look on.
+    var active: UUID? {
+        switch override {
+        case .look(let id): id
+        case .off: nil
+        case nil: defaultLook
+        }
+    }
+
     /// The Live effect's look, applied while Live is on.
     var liveLook: UUID? {
         didSet {
             UserDefaults.standard.set(liveLook?.uuidString, forKey: Self.liveKey)
             // Changed while Live is on: the camera follows.
             if liveApplied {
-                active = liveLook
+                if let liveLook { set(.look(liveLook)) } else { set(beforeLive) }
                 liveApplied = liveLook != nil
             }
         }
     }
     /// Live put its look on, and it's still the one on.
     private(set) var liveApplied = false
+    /// What was on before Live's look, to go back to.
+    @ObservationIgnored private var beforeLive: Override?
 
     private static let key = "looks"
+    private static let defaultKey = "defaultLook"
     private static let liveKey = "liveLook"
 
     init() {
@@ -149,6 +179,7 @@ final class LookLibrary {
             matched.preset = preset.preset
             return matched
         } ?? Look.presets
+        defaultLook = UserDefaults.standard.string(forKey: Self.defaultKey).flatMap(UUID.init)
         liveLook = UserDefaults.standard.string(forKey: Self.liveKey).flatMap(UUID.init)
         if stored == nil { save() }
     }
@@ -158,22 +189,46 @@ final class LookLibrary {
     var activeLook: Look? { active.flatMap(look) }
 
     func toggle(_ id: UUID) {
-        activate(active == id ? nil : id)
+        if active == id { turnOff() } else { turnOn(id) }
     }
 
-    /// Turns a look on, the one that was on off; nil turns it off.
-    func activate(_ id: UUID?) {
-        if active != id { active = id }
+    /// Turns a look on over the default (or the default back on).
+    func turnOn(_ id: UUID) {
+        set(id == defaultLook ? nil : .look(id))
+    }
+
+    /// Turns off the look that's on: back to the default, or, if the
+    /// default was on, no look for now.
+    func turnOff() {
+        switch override {
+        case .look: set(nil)
+        case nil where defaultLook != nil: set(.off)
+        default: break
+        }
+    }
+
+    /// What's on over the default, to put back after a held key.
+    var state: Override? { override }
+
+    func restore(_ state: Override?) {
+        set(state)
+    }
+
+    private func set(_ override: Override?) {
+        if self.override != override { self.override = override }
         liveApplied = false
     }
 
-    /// The Live effect on (its look, in place of any other) or off.
+    /// The Live effect on (its look, in place of any other) or off: back
+    /// to what was on before.
     func applyLive(_ on: Bool) {
         if on, let liveLook {
-            activate(liveLook)
+            let before = override
+            set(.look(liveLook))
+            beforeLive = before
             liveApplied = true
         } else if !on, liveApplied {
-            activate(nil)
+            set(beforeLive)
         }
     }
 
@@ -192,11 +247,15 @@ final class LookLibrary {
         return look
     }
 
-    func duplicate(_ id: UUID) {
-        guard var copy = look(id) else { return }
+    /// A copy beside it, to make another version of it.
+    @discardableResult
+    func duplicate(_ id: UUID) -> Look? {
+        guard let index = looks.firstIndex(where: { $0.id == id }) else { return nil }
+        var copy = looks[index]
         copy.id = UUID()
         copy.name += " Copy"
-        looks.append(copy)
+        looks.insert(copy, at: index + 1)
+        return copy
     }
 
     func remove(_ id: UUID) {

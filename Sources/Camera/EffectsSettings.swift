@@ -14,6 +14,8 @@ struct EffectsPage: View {
 
     private struct Editing: Identifiable {
         let id: UUID
+        /// Just added: Cancel takes it away again.
+        var isNew = false
     }
 
     private var library: OverlayLibrary { effects.overlays }
@@ -42,8 +44,8 @@ struct EffectsPage: View {
                 HStack {
                     Spacer()
                     Menu("Add Overlay") {
-                        Button("Text") { editing = Editing(id: library.add(.text).id) }
-                        Button("Graphic") { editing = Editing(id: library.add(.graphic).id) }
+                        Button("Text") { editing = Editing(id: library.add(.text).id, isNew: true) }
+                        Button("Graphic") { editing = Editing(id: library.add(.graphic).id, isNew: true) }
                     }
                     .fixedSize()
                 }
@@ -59,34 +61,45 @@ struct EffectsPage: View {
                 ForEach(effects.looks.looks) { look in
                     LookRow(
                         look: look,
+                        isDefault: effects.looks.defaultLook == look.id,
                         isOn: effects.looks.active == look.id,
                         toggle: { effects.triggers.trigger(.look(look.id)) },
                         edit: { editingLook = Editing(id: look.id) }
                     )
                     .contextMenu {
                         Button("Edit…") { editingLook = Editing(id: look.id) }
+                        Button(effects.looks.defaultLook == look.id ? "Not the Default" : "Make Default") {
+                            effects.looks.defaultLook = effects.looks.defaultLook == look.id ? nil : look.id
+                        }
                         Button("Duplicate") { effects.looks.duplicate(look.id) }
                         Divider()
                         Button("Delete", role: .destructive) { remove(.look(look.id)) }
                     }
                 }
                 .onMove { effects.looks.looks.move(fromOffsets: $0, toOffset: $1) }
+                @Bindable var looks = effects.looks
+                Picker("Default look", selection: $looks.defaultLook) {
+                    Text("None").tag(UUID?.none)
+                    ForEach(looks.looks) { look in
+                        Text(look.name).tag(UUID?.some(look.id))
+                    }
+                }
                 HStack {
                     Spacer()
                     // The presets again: one deleted, or a fresh copy beside
                     // one that's been changed.
                     Menu("Add Look") {
-                        Button("New Look") { editingLook = Editing(id: effects.looks.add().id) }
+                        Button("New Look") { editingLook = Editing(id: effects.looks.add().id, isNew: true) }
                         Section("Presets") {
                             ForEach(Look.presets) { preset in
-                                Button(preset.name) { editingLook = Editing(id: effects.looks.add(preset).id) }
+                                Button(preset.name) { editingLook = Editing(id: effects.looks.add(preset).id, isNew: true) }
                             }
                         }
                     }
                     .fixedSize()
                 }
             } header: {
-                SettingsHeader("Looks", "Color over the whole picture, one at a time.")
+                SettingsHeader("Looks", "Color over the whole picture, one at a time. The default is on whenever no other is.")
             }
             Section {
                 let items = effects.triggers.items
@@ -107,7 +120,7 @@ struct EffectsPage: View {
                 }
                 HStack {
                     Spacer()
-                    Button("Add Combo") { editingCombo = Editing(id: effects.combos.add().id) }
+                    Button("Add Combo") { editingCombo = Editing(id: effects.combos.add().id, isNew: true) }
                 }
             } header: {
                 SettingsHeader("Combos", "Several overlays, a push-in and a look, on one key.")
@@ -126,13 +139,19 @@ struct EffectsPage: View {
         .formStyle(.grouped)
         .frame(width: SettingsHeader.pageWidth)
         .sheet(item: $editing) { editing in
-            OverlayEditor(library: library, id: editing.id) { remove(.overlay(editing.id)) }
+            OverlayEditor(library: library, id: editing.id, isNew: editing.isNew, delete: { remove(.overlay(editing.id)) }) {
+                if let copy = library.duplicate(editing.id) { self.editing = Editing(id: copy.id, isNew: true) }
+            }
         }
         .sheet(item: $editingCombo) { editing in
-            ComboEditor(effects: effects, id: editing.id) { remove(.combo(editing.id)) }
+            ComboEditor(effects: effects, id: editing.id, isNew: editing.isNew, delete: { remove(.combo(editing.id)) }) {
+                if let copy = effects.combos.duplicate(editing.id) { editingCombo = Editing(id: copy.id, isNew: true) }
+            }
         }
         .sheet(item: $editingLook) { editing in
-            LookEditor(effects: effects, id: editing.id) { remove(.look(editing.id)) }
+            LookEditor(effects: effects, id: editing.id, isNew: editing.isNew, delete: { remove(.look(editing.id)) }, duplicate: {
+                if let copy = effects.looks.duplicate(editing.id) { editingLook = Editing(id: copy.id, isNew: true) }
+            })
         }
     }
 
@@ -195,32 +214,50 @@ private struct ComboRow: View {
 struct ComboEditor: View {
     let effects: Effects
     let id: UUID
+    /// Just added: Cancel takes it away again.
+    var isNew = false
     /// Undoably, by the page that opened it.
     let delete: () -> Void
+    /// Opens a copy to edit, by the page that opened it.
+    let duplicate: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
+    /// How it was when opened, and whether it was on, for Cancel.
+    @State private var opened: (combo: Combo, on: Bool)?
 
     var body: some View {
         @Bindable var combos = effects.combos
-        VStack(spacing: 0) {
-            if let index = combos.combos.firstIndex(where: { $0.id == id }) {
+        if let index = combos.combos.firstIndex(where: { $0.id == id }) {
+            EditorSheet(
+                name: $combos.combos[index].name,
+                isOn: isOn,
+                toggle: { effects.triggers.trigger(.combo(id)) },
+                delete: delete,
+                cancel: cancel,
+                width: 480,
+                height: 540
+            ) {
+                Button(action: duplicate) { Image(systemName: "plus.square.on.square") }
+                    .help("Duplicate, to make another version of it")
+            } content: {
                 ComboForm(combo: $combos.combos[index], overlays: effects.overlays.overlays, levels: effects.zoomShortcuts.levels, looks: effects.looks.looks)
             }
-            Divider()
-            HStack {
-                Button("Delete", role: .destructive) {
-                    dismiss()
-                    delete()
-                }
-                Spacer()
-                let isOn = effects.triggers.items.first { $0.action == .combo(id) }?.isOn ?? false
-                Button(isOn ? "Turn Off" : "Turn On") { effects.triggers.trigger(.combo(id)) }
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
+            .onAppear {
+                if opened == nil { opened = (combos.combos[index], isOn) }
             }
-            .padding(12)
         }
-        .frame(width: 480, height: 540)
+    }
+
+    private var isOn: Bool { effects.triggers.items.first { $0.action == .combo(id) }?.isOn ?? false }
+
+    /// Back to how it was, on or off as it was. One just added goes.
+    private func cancel() {
+        guard let opened else { return }
+        if isOn != opened.on { effects.triggers.trigger(.combo(id)) }
+        if isNew {
+            effects.combos.remove(id)
+        } else if let index = effects.combos.combos.firstIndex(where: { $0.id == id }) {
+            effects.combos.combos[index] = opened.combo
+        }
     }
 }
 
@@ -232,9 +269,6 @@ struct ComboForm: View {
 
     var body: some View {
         Form {
-            Section {
-                TextField("Name", text: $combo.name)
-            }
             Section {
                 ForEach(overlays) { overlay in
                     Toggle(isOn: member(overlay.id)) {
@@ -399,36 +433,55 @@ private struct OverlayRow: View {
 struct OverlayEditor: View {
     @Bindable var library: OverlayLibrary
     let id: UUID
+    /// Just added: Cancel takes it away again.
+    var isNew = false
     /// Undoably, by the page that opened it.
     let delete: () -> Void
+    /// Opens a copy to edit, by the page that opened it.
+    let duplicate: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var previewVariant = 0
+    /// How it was when opened, and whether it was showing, for Cancel.
+    @State private var opened: (overlay: Overlay, showing: Bool)?
 
     var body: some View {
-        VStack(spacing: 0) {
-            if let index = library.overlays.firstIndex(where: { $0.id == id }) {
+        if let index = library.overlays.firstIndex(where: { $0.id == id }) {
+            EditorSheet(
+                name: $library.overlays[index].name,
+                isOn: library.isShowing(id),
+                canTurnOn: library.overlays[index].canShow,
+                toggle: { library.toggle(id) },
+                delete: delete,
+                cancel: cancel,
+                width: 540,
+                height: 680
+            ) {
+                Button(action: duplicate) { Image(systemName: "plus.square.on.square") }
+                    .help("Duplicate, to make another version of it")
+            } content: {
                 OverlayForm(
                     overlay: $library.overlays[index],
                     previewVariant: $previewVariant,
                     importGraphics: library.importGraphics
                 )
             }
-            Divider()
-            HStack {
-                Button("Delete", role: .destructive) {
-                    dismiss()
-                    delete()
-                }
-                Spacer()
-                Button(library.isShowing(id) ? "Hide" : "Show Now") { library.toggle(id) }
-                    .disabled(!(library.overlay(id)?.canShow ?? false))
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
+            .onAppear {
+                if opened == nil { opened = (library.overlays[index], library.isShowing(id)) }
             }
-            .padding(12)
         }
-        .frame(width: 540, height: 680)
+    }
+
+    /// Back to how it was, showing or not as it was. One just added goes.
+    private func cancel() {
+        guard let opened else { return }
+        if isNew {
+            library.remove(id)
+            return
+        }
+        if let index = library.overlays.firstIndex(where: { $0.id == id }) {
+            library.overlays[index] = opened.overlay
+        }
+        if library.isShowing(id) != opened.showing { library.toggle(id) }
     }
 }
 
@@ -448,7 +501,6 @@ struct OverlayForm: View {
                     .wraps()
             }
             Section {
-                TextField("Name", text: $overlay.name)
                 Picker("Kind", selection: kind) {
                     Text("Text").tag(Overlay.Kind.text)
                     Text("Graphic").tag(Overlay.Kind.graphic)

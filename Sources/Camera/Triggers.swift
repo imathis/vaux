@@ -60,7 +60,7 @@ final class Triggers {
         var pushIn: UUID?
         var previousZoom: UUID?
         var look: UUID?
-        var previousLook: UUID?
+        var previousLook: LookLibrary.Override?
     }
 
     /// Held at least this long, a key's effect lasts only while it's held.
@@ -222,7 +222,7 @@ final class Triggers {
         if isOn(effect) {
             effect.overlays.forEach(overlays.hide)
             if let level = effect.pushIn, zoom.active == level { zoom.activate(nil) }
-            if let look = effect.look, looks.active == look { looks.activate(nil) }
+            if let look = effect.look, looks.active == look { looks.turnOff() }
             presses[id] = Press(turnedOn: false)
             return
         }
@@ -237,8 +237,8 @@ final class Triggers {
         }
         if let look = effect.look, looks.active != look {
             press.look = look
-            press.previousLook = looks.active
-            looks.activate(look)
+            press.previousLook = looks.state
+            looks.turnOn(look)
         }
         presses[id] = press
     }
@@ -255,7 +255,7 @@ final class Triggers {
             if let replaced { overlays.restore(replaced) }
         }
         if let level = press.pushIn, zoom.active == level { zoom.activate(press.previousZoom) }
-        if let look = press.look, looks.active == look { looks.activate(press.previousLook) }
+        if let look = press.look, looks.active == look { looks.restore(press.previousLook) }
     }
 
     /// An item's ID, which names its shortcut and its Quick Menu key.

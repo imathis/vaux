@@ -187,11 +187,15 @@ final class OverlayLibrary {
         return overlay
     }
 
-    func duplicate(_ id: UUID) {
-        guard var copy = overlay(id) else { return }
+    /// A copy beside it.
+    @discardableResult
+    func duplicate(_ id: UUID) -> Overlay? {
+        guard let index = overlays.firstIndex(where: { $0.id == id }) else { return nil }
+        var copy = overlays[index]
         copy.id = UUID()
         copy.name += " Copy"
-        overlays.append(copy)
+        overlays.insert(copy, at: index + 1)
+        return copy
     }
 
     func remove(_ id: UUID) {
