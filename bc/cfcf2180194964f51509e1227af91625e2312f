@@ -1,0 +1,23 @@
+Sources/Camera/CameraSettings.swift
+  s_c9cb9133d40bef::t_54fa9e74e43d55 165
+PLAN.md
+  s_c9cb9133d40bef::t_7e7c0d75d5d04f 132,138-141,144-146,148-149,153-154,156-161
+README.md
+  s_c9cb9133d40bef::t_0577823c4d9679 105-114,117-118,123-126,154-156,171,259-261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bccfcf2180194964f51509e1227af91625e2312f",
+  "prompts": {},
+  "sessions": {
+    "s_c9cb9133d40bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46d79b12-ab26-4b09-8d76-66163839d16b",
+        "model": "unknown"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
