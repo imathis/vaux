@@ -90,20 +90,7 @@ struct LiveView: View {
                     .disabled(!showing && !canShow)
                     .frame(minWidth: 64)
             }
-            HStack(spacing: 2) {
-                ForEach(Overlay.icons, id: \.label) { icon in
-                    let selected = library.live.icon == icon.symbol
-                    Button { library.live.icon = icon.symbol } label: {
-                        Image(systemName: icon.symbol ?? "circle.slash")
-                            .foregroundStyle(selected ? Color.accentColor : .secondary)
-                            .frame(width: 30, height: 24)
-                            .background(RoundedRectangle(cornerRadius: 5).fill(selected ? Color.accentColor.opacity(0.18) : .clear))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help(icon.label)
-                }
-            }
+            IconChoices(icon: icon)
             HStack(alignment: .top, spacing: 14) {
                 VStack(alignment: .leading, spacing: 8) {
                     Picker("Style", selection: $library.live.style) {
@@ -161,7 +148,7 @@ struct LiveView: View {
         .padding(14)
         .frame(width: 380)
         .onAppear {
-            draft = library.live.lines.first ?? ""
+            draft = library.live.lines.first?.text ?? ""
             typing = true
         }
     }
@@ -169,11 +156,24 @@ struct LiveView: View {
     /// Its text is up, its zoom, or its look.
     private var showing: Bool { library.liveOn || zoom.liveZoom != nil || looks.liveApplied }
 
-    private var hasText: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty || library.live.icon != nil }
+    /// The icon goes up (or changes) at once, unlike typed text.
+    private var icon: Binding<String?> {
+        Binding {
+            library.live.lines.first?.icon
+        } set: { icon in
+            if library.live.lines.isEmpty {
+                library.live.lines = [Overlay.Line(text: "", icon: icon)]
+            } else {
+                library.live.lines[0].icon = icon
+            }
+        }
+    }
+
+    private var hasText: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty || library.live.lines.first?.icon != nil }
 
     private var canShow: Bool { hasText || zoom.liveLevel > 1.001 || looks.liveLook != nil }
 
-    private var edited: Bool { draft != (library.live.lines.first ?? "") }
+    private var edited: Bool { draft != (library.live.lines.first?.text ?? "") }
 
     private var primaryTitle: String { !showing ? "Show" : edited ? "Update" : "Hide" }
 
@@ -185,7 +185,7 @@ struct LiveView: View {
             looks.applyLive(false)
             return
         }
-        library.live.lines = [draft]
+        library.live.lines = [Overlay.Line(text: draft, icon: library.live.lines.first?.icon)]
         guard !showing else { return }
         library.setLive(true)
         zoom.applyLive(true)

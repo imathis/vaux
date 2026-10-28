@@ -77,17 +77,27 @@ final class OverlayLibrary {
         var live: Overlay?
     }
 
+    /// Saved before lines had their own icons: one icon per overlay.
+    private struct OldIcons: Decodable {
+        struct Entry: Decodable {
+            let id: UUID
+            let icon: String?
+        }
+
+        let overlays: [Entry]
+        let live: Entry?
+
+        var byOverlay: [UUID: String] {
+            ((live.map { [$0] } ?? []) + overlays).reduce(into: [:]) { icons, entry in icons[entry.id] = entry.icon }
+        }
+    }
+
     init() {
         if let data = try? Data(contentsOf: Self.file), let stored = try? JSONDecoder().decode(Stored.self, from: data) {
-            // Text no longer comes small: those are medium now.
-            overlays = stored.overlays.map { overlay in
-                guard overlay.kind == .text, !Overlay.Size.textSizes.contains(overlay.size) else { return overlay }
-                var medium = overlay
-                medium.size = .medium
-                return medium
-            }
+            let icons = (try? JSONDecoder().decode(OldIcons.self, from: data))?.byOverlay ?? [:]
+            overlays = stored.overlays.map { Self.updated($0, icon: icons[$0.id]) }
             dictationOverlay = stored.dictationOverlay
-            live = stored.live ?? .live
+            live = stored.live.map { Self.updated($0, icon: icons[$0.id]) } ?? .live
         } else {
             // First run: the original badge, shown while dictating.
             let dictating = Overlay.dictating
@@ -97,6 +107,18 @@ final class OverlayLibrary {
             save()
         }
         pruneGraphics(keeping: Set(overlays.flatMap(\.images) + live.images))
+    }
+
+    /// An overlay as an earlier Vaux saved it, brought up to date.
+    private static func updated(_ overlay: Overlay, icon: String?) -> Overlay {
+        var overlay = overlay
+        // Text no longer comes small: those are medium now.
+        if overlay.kind == .text, !Overlay.Size.textSizes.contains(overlay.size) { overlay.size = .medium }
+        // Its one icon goes on each of its lines.
+        if let icon {
+            for index in overlay.lines.indices where overlay.lines[index].icon == nil { overlay.lines[index].icon = icon }
+        }
+        return overlay
     }
 
     func overlay(_ id: UUID) -> Overlay? { overlays.first { $0.id == id } ?? (live.id == id ? live : nil) }
@@ -180,7 +202,7 @@ final class OverlayLibrary {
         let overlay = Overlay(
             name: kind == .text ? "New Text" : "New Graphic",
             kind: kind,
-            lines: kind == .text ? ["Be right back"] : [],
+            lines: kind == .text ? [Overlay.Line(text: "Be right back")] : [],
             spot: kind == .text ? .bottom : .bottomTrailing
         )
         overlays.append(overlay)

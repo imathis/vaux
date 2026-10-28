@@ -511,7 +511,7 @@ struct OverlayForm: View {
                 Section {
                     LinesEditor(lines: $overlay.lines)
                 } header: {
-                    SettingsHeader("Lines", "More than one: each showing picks one at random. Leave a line blank to show just the icon.")
+                    SettingsHeader("Lines", "More than one: each showing picks one at random. Each line has its own icon; leave its text blank to show just the icon.")
                 }
                 Section("Look") {
                     Picker("Style", selection: $overlay.style) {
@@ -521,11 +521,6 @@ struct OverlayForm: View {
                     }
                     .pickerStyle(.segmented)
                     SizePicker(size: $overlay.size, sizes: Overlay.Size.textSizes)
-                    Picker("Icon", selection: $overlay.icon) {
-                        ForEach(Overlay.icons, id: \.label) { icon in
-                            Label(icon.label, systemImage: icon.symbol ?? "circle.slash").tag(icon.symbol)
-                        }
-                    }
                 }
             } else {
                 Section {
@@ -612,14 +607,15 @@ private struct SizePicker: View {
     }
 }
 
-/// An overlay's lines, one field each.
+/// An overlay's lines, one field each, its icon before it.
 private struct LinesEditor: View {
-    @Binding var lines: [String]
+    @Binding var lines: [Overlay.Line]
 
     var body: some View {
         ForEach(lines.indices, id: \.self) { index in
             HStack {
-                TextField("Line \(index + 1)", text: line(index))
+                LineIcon(icon: line(index).icon)
+                TextField("Line \(index + 1)", text: line(index).text)
                     .labelsHidden()
                 Button {
                     if lines.indices.contains(index) { lines.remove(at: index) }
@@ -631,15 +627,38 @@ private struct LinesEditor: View {
                 .help("Remove this line")
             }
         }
-        Button("Add Line") { lines.append("") }
+        // With the last line's icon, as a set usually goes.
+        Button("Add Line") { lines.append(Overlay.Line(text: "", icon: lines.last?.icon)) }
     }
 
     /// Safe against the line being removed while its field still shows.
-    private func line(_ index: Int) -> Binding<String> {
+    private func line(_ index: Int) -> Binding<Overlay.Line> {
         Binding {
-            lines.indices.contains(index) ? lines[index] : ""
-        } set: { text in
-            if lines.indices.contains(index) { lines[index] = text }
+            lines.indices.contains(index) ? lines[index] : Overlay.Line(text: "")
+        } set: { line in
+            if lines.indices.contains(index) { lines[index] = line }
+        }
+    }
+}
+
+/// A line's icon, or a place for one: opens the icons to pick from.
+private struct LineIcon: View {
+    @Binding var icon: String?
+
+    @State private var choosing = false
+
+    var body: some View {
+        Button { choosing = true } label: {
+            OverlayIcon(icon: icon ?? "circle.dashed")
+                .foregroundStyle(icon == nil ? .tertiary : .primary)
+                .frame(width: 24, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(icon == nil ? "Add an icon" : "Change the icon")
+        .popover(isPresented: $choosing, arrowEdge: .bottom) {
+            IconChoices(icon: $icon, layout: .square) { choosing = false }
+                .padding(12)
         }
     }
 }

@@ -11,11 +11,12 @@ enum OverlayRenderer {
         switch overlay.kind {
         case .text:
             guard overlay.lines.indices.contains(variant) else { return nil }
-            let text = overlay.lines[variant].trimmingCharacters(in: .whitespaces)
+            let line = overlay.lines[variant]
+            let text = line.text.trimmingCharacters(in: .whitespaces)
             // Blank: the icon alone, if there is one.
-            guard !text.isEmpty || overlay.icon != nil else { return nil }
+            guard !text.isEmpty || line.icon != nil else { return nil }
             let renderer = ImageRenderer(content: TextOverlayView(
-                text: text, icon: overlay.icon, style: overlay.style, size: overlay.size, frameHeight: frame.height
+                text: text, icon: line.icon, style: overlay.style, size: overlay.size, frameHeight: frame.height
             ))
             // Long text wraps to fit the spot.
             renderer.proposedSize = ProposedViewSize(width: Overlay.Spot.maxWidth(in: frame), height: nil)
@@ -86,6 +87,30 @@ enum OverlayRenderer {
     }
 }
 
+/// An overlay's icon: its SF Symbol (or one of Vaux's own), or its emoji
+/// (in color).
+struct OverlayIcon: View {
+    let icon: String
+
+    /// Symbols drawn for Vaux, in its assets, where SF Symbols has none.
+    static let ownSymbols: Set = ["poop"]
+
+    var body: some View {
+        if Self.isEmoji(icon) {
+            Text(icon)
+        } else if Self.ownSymbols.contains(icon) {
+            Image(icon)
+        } else {
+            Image(systemName: icon)
+        }
+    }
+
+    /// SF Symbol names are plain ASCII; anything else is an emoji.
+    static func isEmoji(_ icon: String) -> Bool {
+        !icon.allSatisfy(\.isASCII)
+    }
+}
+
 /// Text over the video in one of the fixed styles, sized to the frame it's
 /// drawn into (`frameHeight`, in pixels).
 struct TextOverlayView: View {
@@ -101,8 +126,13 @@ struct TextOverlayView: View {
         let iconOnly = text.isEmpty
         let content = HStack(spacing: font * 0.45) {
             if let icon {
-                Image(systemName: icon)
-                    .font(.system(size: iconOnly ? font * 1.3 : font, weight: .semibold))
+                let emoji = OverlayIcon.isEmoji(icon)
+                // An emoji's picture sits smaller in its size than a
+                // symbol's: a size up matches them, without making a line
+                // with text any taller.
+                OverlayIcon(icon: icon)
+                    .font(.system(size: (iconOnly ? font * 1.3 : font) * (emoji ? 1.4 : 1), weight: .semibold))
+                    .padding(.vertical, emoji && !iconOnly ? -font * 0.25 : 0)
             }
             if !iconOnly {
                 Text(text)

@@ -36,11 +36,19 @@ enum Snapshot {
                         .frame(width: 480)
                 )))
             }
-            var coffee = Overlay(name: "Coffee", lines: [""], icon: "cup.and.saucer.fill", spot: .bottomTrailing)
+            var coffee = Overlay(name: "Coffee", lines: [Overlay.Line(text: "", icon: "cup.and.saucer.fill")], spot: .bottomTrailing)
             pages.append(("overlay-icon", AnyView(OverlayForm(overlay: .constant(coffee), previewVariant: .constant(0)) { _ in [] }.frame(width: 540))))
             coffee.size = .large
-            coffee.lines = ["Back in 5"]
+            coffee.lines = [Overlay.Line(text: "Back in 5", icon: "cup.and.saucer.fill")]
             pages.append(("overlay-large", AnyView(OverlayForm(overlay: .constant(coffee), previewVariant: .constant(0)) { _ in [] }.frame(width: 540))))
+            // A set whose icon changes with each showing, and a line without one.
+            let breaks = Overlay(
+                name: "Break",
+                lines: ["cup.and.saucer.fill", "poop", "😴"].map { Overlay.Line(text: "", icon: $0) } + [Overlay.Line(text: "Back in 5")],
+                spot: .bottomTrailing
+            )
+            pages.append(("overlay-icons", AnyView(OverlayForm(overlay: .constant(breaks), previewVariant: .constant(1)) { _ in [] }.frame(width: 540))))
+            pages.append(("icon-choices", AnyView(IconChoices(icon: .constant("😴"), layout: .square).padding(12))))
             pages.append(("quickmenu", AnyView(QuickMenuView(triggers: effects.triggers) { _ in }.padding(20))))
             if let look = effects.looks.looks.first {
                 pages.append(("look-editor", AnyView(LookEditor(effects: effects, id: look.id, delete: {}, duplicate: {}, height: 1180))))

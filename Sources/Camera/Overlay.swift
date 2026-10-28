@@ -37,14 +37,19 @@ struct Overlay: Codable, Identifiable, Hashable, Sendable {
         case fill
     }
 
+    /// One of a text overlay's lines: its text, and an icon before it.
+    struct Line: Codable, Hashable, Sendable {
+        var text: String
+        /// An SF Symbol, or an emoji.
+        var icon: String?
+    }
+
     var id = UUID()
     var name: String
     var kind = Kind.text
-    var lines: [String] = []
+    var lines: [Line] = []
     /// Graphic files, in `OverlayLibrary.graphicsFolder`.
     var images: [String] = []
-    /// An SF Symbol before the text, if any.
-    var icon: String?
     var style = Style.pill
     var size = Size.medium
     var spot = Spot.top
@@ -60,13 +65,25 @@ struct Overlay: Codable, Identifiable, Hashable, Sendable {
     /// always shows.
     func shows(_ variant: Int) -> Bool {
         switch kind {
-        case .text: lines.indices.contains(variant) && (icon != nil || !lines[variant].trimmingCharacters(in: .whitespaces).isEmpty)
+        case .text: lines.indices.contains(variant) && (lines[variant].icon != nil || !lines[variant].text.trimmingCharacters(in: .whitespaces).isEmpty)
         case .graphic: images.indices.contains(variant)
         }
     }
 
     /// Has something to show.
     var canShow: Bool { (0..<variants).contains(where: shows) }
+}
+
+extension Overlay.Line {
+    /// Lines were saved as just their text before they had icons.
+    init(from decoder: any Decoder) throws {
+        if let text = try? decoder.singleValueContainer().decode(String.self) {
+            self.init(text: text)
+            return
+        }
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(text: try values.decode(String.self, forKey: .text), icon: try values.decodeIfPresent(String.self, forKey: .icon))
+    }
 }
 
 extension Overlay.Spot {
@@ -147,12 +164,12 @@ extension Overlay.Size {
 
 extension Overlay {
     /// The first overlay: the original dictation badge.
-    static let dictating = Overlay(name: "Dictating", lines: ["Dictating"], icon: "waveform")
+    static let dictating = Overlay(name: "Dictating", lines: [Line(text: "Dictating", icon: "waveform")])
 
     /// The Live panel's, until you type: big, at the bottom.
-    static let live = Overlay(name: "Live", lines: [""], size: .large, spot: .bottom)
+    static let live = Overlay(name: "Live", lines: [Line(text: "")], size: .large, spot: .bottom)
 
-    /// Icons offered for text, kept few.
+    /// Icons offered for lines, kept few. Any emoji can be one too.
     static let icons: [(symbol: String?, label: String)] = [
         (nil, "None"),
         ("waveform", "Waveform"),
@@ -162,5 +179,6 @@ extension Overlay {
         ("hand.raised.fill", "Hand"),
         ("sparkles", "Sparkles"),
         ("bubble.left.fill", "Speech"),
+        ("poop", "Poop"),
     ]
 }
