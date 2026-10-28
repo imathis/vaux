@@ -150,9 +150,10 @@ all back. Deletes can be undone.
 
 - **Shortcuts:** each effect can have a global shortcut, which a Stream Deck
   button can press.
-- **The Quick Menu:** one key (⌥. by default) opens a small menu over
-  everything, and a second key picks: numbers, then letters, for effects, L
-  for Live, M for Mute. Your call app keeps focus.
+- **The Quick Menu:** one key (⌥. by default), or a right-side modifier
+  tapped on its own (right ⇧, say, the way FluidVoice takes right ⌥), opens a
+  small menu over everything, and a second key picks: numbers, then letters,
+  for effects, L for Live, M for Mute. Your call app keeps focus.
 - **Tap or hold:** tap a key to turn its effect on or off; hold it to show the
   effect only while it's held, then whatever it covered shows again.
 - **The menu bar:** while the camera is on, the menu has an **Effects** tab
@@ -198,7 +199,8 @@ an idle Vaux Camera costs nothing. Effects are drawn only while they show.
   mic from Core Audio's process list, without opening the mic itself.
 - **Vaux Camera:** none unless you turn it on. Then macOS asks you to approve
   the camera extension in System Settings, and Vaux asks for camera access.
-  Turning it off removes the extension.
+  Turning it off removes the extension. Opening the Quick Menu by tapping a
+  modifier on its own needs Accessibility, and only modifier keys are watched.
 
 ## Usage
 
@@ -293,6 +295,8 @@ Sources/
   CaptureWatcher.swift       # which apps are using the mic
   MediaPauser.swift          # pauses playing media during solo
   SoloKeyMonitor.swift       # the 🎤 Dictation key and Escape, for solo
+  ModifierTapMonitor.swift   # a right-side modifier tapped alone (opens the Quick Menu)
+  KeyTap.swift               # the HID-level key tap both of those use
   InputVolumeView.swift      # volume slider
   InputPriorityModel.swift   # preferred-input list (Settings)
   PreferredInput.swift       # preferred-input order storage

@@ -2,8 +2,8 @@ import AppKit
 import KeyboardShortcuts
 import SwiftUI
 
-/// The Quick Menu: the leader key opens a small panel over everything; one
-/// more key fires an item. Tapped, the effect stays on; held, it lasts until
+/// The Quick Menu: the leader key (or a right-side modifier tapped alone)
+/// opens a small panel over everything; one more key fires an item. Tapped, the effect stays on; held, it lasts until
 /// the key comes up (the panel hides but keeps listening for that). Escape,
 /// the leader key again, or a click elsewhere closes it too. It takes keys
 /// without activating Vaux, so the call app keeps focus. It's there while
@@ -14,11 +14,16 @@ final class QuickMenu: NSObject, NSWindowDelegate {
     private var panel: QuickMenuPanel?
     /// The item key that's down, waiting for it to come up.
     private var holding: (keyCode: UInt16, action: Triggers.Item.Action)?
+    private var tapMonitor: ModifierTapMonitor?
+
+    /// Where the modifier that opens it, tapped alone, is kept.
+    static let tapKey = "quickMenuTap"
 
     init(triggers: Triggers) {
         self.triggers = triggers
         super.init()
         KeyboardShortcuts.onKeyDown(for: Triggers.quickMenu) { [weak self] in self?.toggle() }
+        tapMonitor = ModifierTapMonitor(defaultsKey: Self.tapKey) { [weak self] in self?.toggle() }
     }
 
     func toggle() {

@@ -34,6 +34,9 @@ struct ShortcutsSettings: View {
 struct EffectShortcuts: View {
     let effects: Effects
 
+    @AppStorage(QuickMenu.tapKey) private var tapKey = ModifierTapMonitor.Key.off
+    @State private var accessibilityTrusted = CallMuter.isTrusted
+
     private var triggers: Triggers { effects.triggers }
 
     var body: some View {
@@ -52,6 +55,31 @@ struct EffectShortcuts: View {
                 LabeledContent("Open the Quick Menu") {
                     KeyboardShortcuts.Recorder(for: Triggers.quickMenu) { triggers.claim($0, for: Triggers.quickMenu) }
                         .frame(width: 150)
+                }
+                Picker(selection: $tapKey) {
+                    Text("Nothing").tag(ModifierTapMonitor.Key.off)
+                    Divider()
+                    ForEach(ModifierTapMonitor.Key.allCases.filter { $0 != .off }) { key in
+                        Text(key.symbol).tag(key)
+                    }
+                } label: {
+                    Text("Or tap")
+                    Text("A key pressed and let go on its own")
+                }
+                .onChange(of: tapKey) {
+                    if tapKey != .off, !accessibilityTrusted { CallMuter.requestTrust() }
+                }
+                if tapKey != .off, !accessibilityTrusted {
+                    HStack {
+                        Text("Tapping \(tapKey.symbol) needs Accessibility access.")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Open Settings…") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                    }
                 }
             } header: {
                 SettingsHeader("Quick Menu", "One key opens a small menu over everything; a second key picks from it. The call app keeps focus. Every effect key, in the menu or a shortcut: tap it to turn the effect on or off, or hold it to show the effect only while held.")
@@ -76,6 +104,10 @@ struct EffectShortcuts: View {
             }
         }
         .formStyle(.grouped)
+        .onReceive(DistributedNotificationCenter.default().publisher(for: Notification.Name("com.apple.accessibility.api"))) { _ in
+            // The new trust state lands a moment after the notification.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { accessibilityTrusted = CallMuter.isTrusted }
+        }
     }
 }
 
