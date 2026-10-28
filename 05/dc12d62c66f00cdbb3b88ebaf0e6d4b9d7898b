@@ -1,0 +1,68 @@
+Sources/Camera/CameraFeed.swift
+  s_c9cb9133d40bef::t_85e7a9d3fab302 225-230,232,444-450
+  s_c9cb9133d40bef::t_48f13dc2647f5f 11-12,48-52,103,223,235-239,421-432
+  s_c9cb9133d40bef::t_6b8a083cc47fc6 406
+  s_c9cb9133d40bef::t_cff454f83b8d44 44-45,180-191,218-222,231,233-234,436,441-443,451,453
+  s_c9cb9133d40bef::t_cdf53d18cd0115 224
+README.md
+  s_c9cb9133d40bef::t_5b31ecc1a07eb5 177-182,332
+  s_c9cb9133d40bef::t_04783e238e0f13 330
+  s_c9cb9133d40bef::t_85e7a9d3fab302 331
+  s_c9cb9133d40bef::t_bcf36654c9af97 127-128
+  s_c9cb9133d40bef::t_8265b3d04ba334 126
+  s_c9cb9133d40bef::t_7da6742475a221 145-146
+  s_c9cb9133d40bef::t_72db29fd609329 129-135,137,142-144
+Sources/Camera/Feeder.swift
+  s_c9cb9133d40bef::t_48f13dc2647f5f 34-41,90,101
+  s_c9cb9133d40bef::t_92a2711450becc 32,71,109-110,113-114,131
+  s_c9cb9133d40bef::t_ec890d0bfe8daf 31,102
+Sources/Camera/Compositor.swift
+  s_c9cb9133d40bef::t_aa769ea719e038 29-30,34-36,72
+  s_c9cb9133d40bef::t_0d1fae5a7dd536 11,25-28,31-33,44-46,51-57,74,77-89,94,97,99,104-109,111,116,123,134-135,145-209,222-236,240-246,248-249,256,263,265-267
+Sources/Camera/EffectsSettings.swift
+  s_c9cb9133d40bef::t_85e7a9d3fab302 341-344,350
+  s_c9cb9133d40bef::t_7b431def3ea72a 206,210,212,222,225,230-240,390-398
+  s_c9cb9133d40bef::t_9bf99b17371a81 699-700
+  s_c9cb9133d40bef::t_523ce99ec5a397 58,96,157,172,327-340,345-349,361,471-472
+  s_c9cb9133d40bef::t_af7219f494fd61 5-6,207-208,241-242,302-303,351-352,399-400,458-459
+Sources/Camera/BrokenFrame.swift
+  s_c9cb9133d40bef::t_7450b8fa7e3ae2 1-10,16-64,66-67
+  s_c9cb9133d40bef::t_93f491729402f1 11-15,65
+Sources/Camera/EffectLibrary.swift
+  s_c9cb9133d40bef::t_0f791652f71398 137-139,255,257,359-360,366,394,405
+  s_c9cb9133d40bef::t_5688690c1436d9 21-23,84-86,411-413
+Sources/Snapshot.swift
+  s_c9cb9133d40bef::t_0233eba2f68bf4 59-64
+  s_c9cb9133d40bef::t_27ba9f64aa224e 56-58
+  s_c9cb9133d40bef::t_737975288e35a3 35-36
+Sources/Camera/Effect.swift
+  s_c9cb9133d40bef::t_013011ff7f140a 16,23-54,67
+  s_c9cb9133d40bef::t_55b6af16c015c6 75
+  s_c9cb9133d40bef::t_585d38645da5d0 4
+Sources/Camera/CameraSettings.swift
+  s_c9cb9133d40bef::t_48f13dc2647f5f 337,374-386
+Sources/Camera/LookSections.swift
+  s_c9cb9133d40bef::t_55b6af16c015c6 57
+  s_c9cb9133d40bef::t_10c18fa01348ce 3-4,25,62
+Sources/Camera/Look.swift
+  s_c9cb9133d40bef::t_8265b3d04ba334 46-47
+  s_c9cb9133d40bef::t_55b6af16c015c6 6,48,51,114,137-139,141-143,145-147,187-189,192,194
+  s_c9cb9133d40bef::t_be0365a36cf275 79-81,140,144
+  s_c9cb9133d40bef::t_4ba768f35e76b9 7-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "05dc12d62c66f00cdbb3b88ebaf0e6d4b9d7898b",
+  "prompts": {},
+  "sessions": {
+    "s_c9cb9133d40bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46d79b12-ab26-4b09-8d76-66163839d16b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
