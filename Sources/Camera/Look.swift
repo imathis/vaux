@@ -3,8 +3,9 @@ import CoreImage.CIFilterBuiltins
 import Foundation
 import os
 
-/// A color look over the whole picture: white balance, tone, saturation, a
-/// three-way color grade, and texture, set together, as part of an effect.
+/// A look over the whole picture: white balance, tone, saturation, a
+/// three-way color grade, and texture (blur included), set together, as part
+/// of an effect.
 /// Looks on together merge, setting by setting; changing what's on fades
 /// from one to the next.
 struct Look: Codable, Identifiable, Hashable, Sendable {
@@ -42,9 +43,12 @@ struct Look: Codable, Identifiable, Hashable, Sendable {
     var shadowGrade = Grade()
     var midtoneGrade = Grade()
     var highlightGrade = Grade()
+    /// Softened, from a touch (soft focus) to past recognizing, as through a
+    /// frosted shower door.
+    var blur = 0.0
     /// Smoke: blacks lifted toward gray and a soft glow.
     var fade = 0.0
-    /// Darkened edges.
+    /// Darkened edges, reaching further in as it gets stronger.
     var vignette = 0.0
     /// Film grain, moving frame to frame.
     var grain = 0.0
@@ -72,6 +76,9 @@ struct Look: Codable, Identifiable, Hashable, Sendable {
             shadowGrade: Grade(hue: 195, saturation: 0.55, luminance: -0.05),
             highlightGrade: Grade(hue: 32, saturation: 0.45, luminance: 0.03)
         ),
+        // Behind a frosted shower door: there, but past recognizing, for
+        // stepping away with text over it.
+        Look(name: "Frosted", preset: "frosted", blur: 1),
     ]
 
     /// What Reset goes back to: its preset's settings, or plain, keeping its
@@ -104,6 +111,7 @@ extension Look {
         shadowGrade = try values.decodeIfPresent(Grade.self, forKey: .shadowGrade) ?? shadowGrade
         midtoneGrade = try values.decodeIfPresent(Grade.self, forKey: .midtoneGrade) ?? midtoneGrade
         highlightGrade = try values.decodeIfPresent(Grade.self, forKey: .highlightGrade) ?? highlightGrade
+        blur = try values.decodeIfPresent(Double.self, forKey: .blur) ?? blur
         fade = try values.decodeIfPresent(Double.self, forKey: .fade) ?? fade
         vignette = try values.decodeIfPresent(Double.self, forKey: .vignette) ?? vignette
         grain = try values.decodeIfPresent(Double.self, forKey: .grain) ?? grain
@@ -126,7 +134,17 @@ extension Look {
     /// Compositor), as a video grade would treat them.
     func apply(to image: CIImage, frame: Int) -> CIImage {
         let extent = image.extent
-        var out = image.applyingFilter("CIColorControls", parameters: [
+        var out = image
+        if blur > 0 {
+            // First, so the grain stays sharp over it. Gentle low on the
+            // slider, for soft focus; up to an eighth of the frame's height.
+            // Its edges smear outward rather than fading to black.
+            out = out
+                .clampedToExtent()
+                .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: extent.height / 8 * blur * blur])
+                .cropped(to: extent)
+        }
+        out = out.applyingFilter("CIColorControls", parameters: [
             kCIInputSaturationKey: saturation,
             kCIInputContrastKey: contrast,
             kCIInputBrightnessKey: brightness,
@@ -166,11 +184,14 @@ extension Look {
                 .cropped(to: extent)
         }
         if vignette > 0 {
+            // Darker and reaching further in together: the vignette's own
+            // strength alone only darkens past where it starts, which a fixed
+            // start leaves in the corners.
             out = out.applyingFilter("CIVignetteEffect", parameters: [
                 kCIInputCenterKey: CIVector(x: extent.midX, y: extent.midY),
-                kCIInputRadiusKey: max(extent.width, extent.height) * 0.55,
+                kCIInputRadiusKey: max(extent.width, extent.height) * (0.6 - 0.3 * vignette),
                 kCIInputIntensityKey: vignette,
-                "inputFalloff": 0.6,
+                "inputFalloff": 0.5 + 0.3 * vignette,
             ])
         }
         if grain > 0 {

@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// A look in an effect: color, tone, the three-way grade, and texture. While
+/// A look in an effect: color, tone, the three-way grade, and texture (blur
+/// included). While
 /// its effect is on, the camera follows each slider as it moves.
 struct LookSections: View {
     @Binding var look: Look
@@ -21,7 +22,7 @@ struct LookSections: View {
             // plain.
             PartHeader(
                 "Look",
-                "Color over the whole picture. Looks on together mix: each setting comes from the latest that changes it.",
+                "Color and texture over the whole picture. Looks on together mix: each setting comes from the latest that changes it.",
                 reset: look.isDefault ? nil : { look = defaults },
                 remove: remove
             )
@@ -53,11 +54,12 @@ struct LookSections: View {
             SettingsHeader("Color Grading", "The shadows, midtones and highlights apart: tint each toward a hue, and brighten or darken it.")
         }
         Section {
+            LookSlider(title: "Blur", value: $look.blur, defaultValue: defaults.blur, range: Look.amountRange, format: .percent)
             LookSlider(title: "Fade", value: $look.fade, defaultValue: defaults.fade, range: Look.amountRange, format: .percent)
             LookSlider(title: "Vignette", value: $look.vignette, defaultValue: defaults.vignette, range: Look.amountRange, format: .percent)
             LookSlider(title: "Grain", value: $look.grain, defaultValue: defaults.grain, range: Look.amountRange, format: .percent)
         } header: {
-            SettingsHeader("Texture", "Fade lifts the blacks with a soft glow, for smoke and haze.")
+            SettingsHeader("Texture", "Blur softens the picture, a touch for soft focus, or all the way, like a frosted shower door, for stepping away; text and graphics stay sharp over it. Fade lifts the blacks with a soft glow, for smoke and haze.")
         }
     }
 }

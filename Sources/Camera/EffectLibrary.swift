@@ -18,9 +18,9 @@ struct OverlayLayer: Equatable, @unchecked Sendable {
 /// came on: the default effect at the bottom, then each as it's turned on
 /// (the dictation effect while you dictate, the Live panel's while it's up).
 /// What shows comes from the whole stack, each part from the latest effect
-/// that sets it: overlays by spot, the push-in, and look by look setting,
-/// so looks stack. A held key adds its effect only while held, so whatever
-/// it covered was never gone.
+/// that sets it: overlays by spot, the push-in, the shake, and look by look
+/// setting, so looks stack. A held key adds its effect only while held, so
+/// whatever it covered was never gone.
 @MainActor @Observable
 final class EffectLibrary {
     var effects: [Effect] {
@@ -81,8 +81,9 @@ final class EffectLibrary {
     private(set) var look: Look?
     /// How far the stack pushes in; 1 for not at all.
     private(set) var zoom = 1.0
-    /// What set the zoom: a new one eases there, an edit to the same one
-    /// moves at once.
+    private(set) var shake: Effect.Shake?
+    /// What set the zoom, the push-in and the shake (which needs room): a
+    /// new one eases there, an edit to the same one moves at once.
     private(set) var zoomSource: UUID?
 
     @ObservationIgnored private var lastVariant: [UUID: Int] = [:]
@@ -132,6 +133,9 @@ final class EffectLibrary {
     /// The furthest any effect (or Live) pushes in: the camera runs in a
     /// mode that keeps it sharp, so pushing in never switches modes mid-call.
     var furthest: Double { max((effects + [live]).compactMap(\.pushIn).max() ?? 1, 1) }
+
+    /// The most room any shake needs, as a zoom; the same goes for it.
+    var furthestShake: Double { (effects + [live]).compactMap(\.shake?.zoom).max() ?? 1 }
 
     /// An effect and what it builds on, in the order they stack: what it
     /// includes first (each with what that includes), then itself. Each
@@ -248,9 +252,9 @@ final class EffectLibrary {
     }
 
     /// A call ended: the next starts at each camera's own zoom, so effects
-    /// that push in go.
+    /// that push in (or shake) go.
     func endCall() {
-        let pushing = stack.filter { ($0.source == .user || $0.source == .live) && parts(of: $0).contains { $0.pushIn != nil } }
+        let pushing = stack.filter { ($0.source == .user || $0.source == .live) && parts(of: $0).contains { $0.pushIn != nil || $0.shake != nil } }
         guard !pushing.isEmpty else { return }
         let tokens = Set(pushing.map(\.token))
         stack.removeAll { tokens.contains($0.token) }
@@ -352,12 +356,14 @@ final class EffectLibrary {
     }
 
     /// What an entry sets, so a later one can be seen to cover all of it:
-    /// its overlays' spots, a push-in, and the look settings it changes.
+    /// its overlays' spots, a push-in, a shake, and the look settings it
+    /// changes.
     private func slots(of entry: Entry) -> Set<String> {
         var slots: Set<String> = []
         for part in parts(of: entry) {
             for overlay in part.overlays where overlay.canShow { slots.insert("spot \(overlay.spot)") }
             if part.pushIn != nil { slots.insert("push-in") }
+            if part.shake != nil { slots.insert("shake") }
             if let look = part.look { slots.formUnion(look.changes.map { "look \($0)" }) }
         }
         return slots
@@ -385,6 +391,7 @@ final class EffectLibrary {
         placeDefault()
         var spots: [Overlay.Spot: (overlay: Overlay, variant: Int, token: UUID)] = [:]
         var pushIn: (zoom: Double, source: UUID)?
+        var shaking: (shake: Effect.Shake, source: UUID)?
         var looks: [(look: Look, source: UUID)] = []
         var entries = stack
         for index in entries.indices {
@@ -395,12 +402,15 @@ final class EffectLibrary {
                     spots[overlay.spot] = (overlay, variant, token)
                 }
                 if let zoom = part.pushIn { pushIn = (zoom, UUID.combining([token, part.id])) }
+                if let shake = part.shake { shaking = (shake, UUID.combining([token, part.id])) }
                 if let look = part.look { looks.append((look, part.id)) }
             }
         }
         if entries != stack { stack = entries }
         zoom = pushIn?.zoom ?? 1
-        zoomSource = pushIn?.source
+        shake = shaking?.shake
+        let zoomSources = [pushIn?.source, shaking?.source].compactMap { $0 }
+        zoomSource = zoomSources.isEmpty ? nil : UUID.combining(zoomSources)
         look = Look.merged(looks.map(\.look), id: UUID.combining(looks.map(\.source)))
         let order = [Overlay.Spot.fullFrame] + Overlay.Spot.allCases.filter { $0 != .fullFrame }
         var keys = Set<String>()

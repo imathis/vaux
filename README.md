@@ -123,21 +123,27 @@ An effect is anything you name and turn on, made of any of these:
   - tone: brightness, contrast, highlights and shadows
   - a three-way color grade: hue, saturation and luminance for the shadows,
     midtones and highlights apart
-  - texture: fade (lifted blacks and a soft glow, for smoke and haze),
-    vignette and film grain
+  - texture: blur (a touch for soft focus, up to a frosted shower door for
+    stepping away, with text staying sharp over it), fade (lifted blacks and
+    a soft glow, for smoke and haze), vignette and film grain
 
-  Presets: Noir, Black & White, Warm, Vivid, Faded and Teal & Orange.
+  Presets: Noir, Black & White, Warm, Vivid, Faded, Teal & Orange and
+  Frosted (behind a frosted shower door, for a "back in 5" over it).
+- **Shake:** the picture jolts and tilts around, gentle to wild, with motion
+  blur if you like, pushing in just far enough to have room (not at all if
+  it's pushed in that far already). Text and graphics hold still over it, or
+  shake along.
 - **Other effects to build on:** "Dictating, ferociously" can be Dictating
-  plus a push-in; edit Dictating and it follows.
+  plus a shake; edit Dictating and it follows.
 
 An effect can also turn itself off after a few seconds.
 
 **Effects stack.** Turn on several and they layer, the latest on top: text and
-graphics share the screen, one per spot; the latest push-in wins; looks mix,
-each setting from the latest look that changes it, so black and white from one
-and grain from another both show. Turning an effect on that covers all of
-another turns that one off. The **default effect** is always on, under
-everything else.
+graphics share the screen, one per spot; the latest push-in and the latest
+shake win; looks mix, each setting from the latest look that changes it, so
+black and white from one and grain from another both show. Turning an effect
+on that covers all of another turns that one off. The **default effect** is
+always on, under everything else.
 
 **Live** is a small panel for the moment: type a line, pick its style and
 spot, a push-in and an effect to go with it, and Show puts it all up at once;
@@ -168,7 +174,12 @@ all back. Deletes can be undone.
   sharp.
 - An iPhone set up as a camera (propped up in landscape and locked) can go
   ahead of the list, and back when you pick it up.
-- Up to 60 fps, in 720p or 1080p, as the video app asks.
+- Up to 60 fps, in 720p or 1080p, as the video app asks, from the camera's
+  uncompressed modes where it has them.
+- Frames that arrive broken are hidden: through a dock or hub, some cameras
+  lose part of a frame now and then, which shows as a gray striped band with
+  the picture shifted. Vaux skips those (calls see the frame before a moment
+  longer) rather than drop to a lighter, lower-quality mode.
 - While Vaux isn't sending a camera, Vaux Camera shows a vintage test card:
   PLEASE STAND BY.
 
@@ -316,8 +327,9 @@ Sources/
     CameraPriorityModel.swift #  ranked cameras, docking
     PreferredCamera.swift    #   camera order and zoom storage
     Feeder.swift             #   which camera runs, when
-    CameraFeed.swift         #   capture into the sink, zoom, overlay fades
-    Compositor.swift         #   crop and scale in hardware, draw overlays
+    CameraFeed.swift         #   capture into the sink, zoom, shake, fades
+    Compositor.swift         #   crop and scale in hardware; draw shake, looks, overlays
+    BrokenFrame.swift        #   spotting frames that arrive from the camera broken
     Effect.swift             #   effects: their parts, and looks merged
     EffectLibrary.swift      #   your effects, the stack of those on, what shows
     EffectMigration.swift    #   effects from overlays, push-ins, looks and combos kept apart

@@ -8,6 +8,8 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         var format: FrameFormat?
         var fps = 0
         var dropped = 0
+        /// Frames that arrived broken, skipped since the camera started.
+        var hidden = 0
         /// Capture to handoff, averaged over the last second.
         var latencyMS = 0.0
     }
@@ -39,8 +41,15 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     private var overlays: [(layer: OverlayLayer, alpha: Double, shown: Bool)] = []
     /// Looks fading in and out, by ID: one is shown at a time.
     private var looks: [(look: Look, alpha: Double, shown: Bool)] = []
+    /// The shake on, or the last one settling: it eases in and out too.
+    private var shake: (shake: Effect.Shake, alpha: Double, shown: Bool)?
     private var sent = 0
     private var dropped = 0
+    private var hidden = 0
+    /// Skip frames that arrive broken (see BrokenFrame).
+    private var hidesBroken = true
+    /// Broken frames skipped one after another.
+    private var brokenInARow = 0
     private var latency = 0.0
     private var countingSince = CMClockGetTime(CMClockGetHostTimeClock())
     /// The last frame taken: ones closer together than Vaux Camera's
@@ -91,6 +100,7 @@ final class CameraFeed: NSObject, @unchecked Sendable {
                     self.format = format
                     self.zoom = zoom
                     zoomMove = nil
+                    hidden = 0
                 }
                 return self.sink
             }
@@ -167,6 +177,18 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         }
     }
 
+    /// The shake to show, or none. A new one, or an edit, applies at once;
+    /// it eases in from still, and back to still when it goes.
+    func showShake(_ shake: Effect.Shake?) {
+        videoQueue.async { [self] in
+            if let shake {
+                self.shake = (shake: shake, alpha: self.shake?.alpha ?? 0, shown: true)
+            } else {
+                self.shake?.shown = false
+            }
+        }
+    }
+
     /// How far this frame's fades move: the time since the last frame, as
     /// a share of a fade (a first frame counts as a 30 fps one).
     private func fadeStep(at time: CMTime) -> Double {
@@ -191,6 +213,28 @@ final class CameraFeed: NSObject, @unchecked Sendable {
             overlays[index].alpha = min(max(alpha, 0), 1)
         }
         overlays.removeAll { !$0.shown && $0.alpha <= 0 }
+    }
+
+    /// Advances the shake's ease, per frame.
+    private func fadeShake(by fadeStep: Double) {
+        guard let shake else { return }
+        let alpha = min(max(shake.alpha + (shake.shown ? fadeStep : -fadeStep), 0), 1)
+        self.shake = shake.shown || alpha > 0 ? (shake: shake.shake, alpha: alpha, shown: shake.shown) : nil
+    }
+
+    /// Where a shake has the picture at a moment, each -1 to 1: across, up
+    /// and down, and turned. A few jolts a second, wandering rather than
+    /// repeating: three waves each, at rates that never line up.
+    private static func wobble(at seconds: Double) -> (x: Double, y: Double, turn: Double) {
+        func wave(_ a: Double, _ b: Double, _ c: Double, _ phase: Double) -> Double {
+            0.5 * sin(2 * .pi * a * seconds + phase) + 0.3 * sin(2 * .pi * b * seconds + phase + 1.3) + 0.2 * sin(2 * .pi * c * seconds + phase + 2.9)
+        }
+        return (wave(3.1, 5.9, 9.7, 0), wave(2.7, 6.7, 11.3, 0), wave(1.9, 4.3, 8.1, 0.7))
+    }
+
+    /// Skips frames that arrive from the camera broken, or doesn't.
+    func hideBrokenFrames(_ on: Bool) {
+        videoQueue.async { [self] in hidesBroken = on }
     }
 
     /// Stops the camera (its light goes off) and the sink.
@@ -359,7 +403,7 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         }
         let now = CMClockGetTime(CMClockGetHostTimeClock())
         guard (now - countingSince).seconds >= 1 else { return }
-        let stats = Stats(format: format, fps: sent, dropped: dropped, latencyMS: sent > 0 ? latency / Double(sent) * 1000 : 0)
+        let stats = Stats(format: format, fps: sent, dropped: dropped, hidden: hidden, latencyMS: sent > 0 ? latency / Double(sent) * 1000 : 0)
         sent = 0
         dropped = 0
         latency = 0
@@ -374,15 +418,39 @@ extension CameraFeed: AVCaptureVideoDataOutputSampleBufferDelegate {
         let captured = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         if lastTaken.isValid, (captured - lastTaken).seconds < CameraSpec.frameDuration.seconds * 0.75 { return }
         lastTaken = captured
+        if hidesBroken, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer), BrokenFrame.isBroken(pixels) {
+            // A camera breaks a frame here and there. More than a couple in a
+            // row is likely the picture itself, so those go through rather
+            // than freeze it.
+            if brokenInARow < 2 {
+                brokenInARow += 1
+                hidden += 1
+                return
+            }
+        } else {
+            brokenInARow = 0
+        }
         let fadeStep = fadeStep(at: captured)
         fadeOverlays(by: fadeStep)
         fadeLooks(by: fadeStep)
+        fadeShake(by: fadeStep)
         easeZoom()
         let drawn = overlays.map { Compositor.Drawn(layer: $0.layer, alpha: $0.alpha) }
         // The one fading out under the one fading in.
         let graded = (looks.filter { !$0.shown } + looks.filter(\.shown)).map { Compositor.Graded(look: $0.look, alpha: $0.alpha) }
+        let shaken = shake.map { shake in
+            let wobble = Self.wobble(at: captured.seconds)
+            let reach = shake.shake.reach * shake.alpha
+            return Compositor.Shaken(
+                shift: CGPoint(x: wobble.x * reach, y: wobble.y * reach),
+                tilt: wobble.turn * shake.shake.tilt * shake.alpha,
+                room: shake.shake.zoom,
+                blur: shake.shake.blur,
+                overlays: shake.shake.overlays
+            )
+        }
         guard let sink, let format, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer),
-              let frame = compositor.fit(pixels, to: format, zoom: zoom, overlays: drawn, looks: graded)
+              let frame = compositor.fit(pixels, to: format, zoom: zoom, shaken: shaken, overlays: drawn, looks: graded)
         else {
             count(sent: false)
             return

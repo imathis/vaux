@@ -32,8 +32,8 @@ enum Snapshot {
             if let first = library.effects.first {
                 pages.append(("editor", AnyView(EffectEditor(effects: effects, id: first.id, delete: {}, duplicate: {}, height: 900))))
             }
-            func form(_ effect: Effect) -> AnyView {
-                AnyView(EffectForm(effect: .constant(effect), library: library).frame(width: 560, height: 1100))
+            func form(_ effect: Effect, height: CGFloat = 1100) -> AnyView {
+                AnyView(EffectForm(effect: .constant(effect), library: library).frame(width: 560, height: height))
             }
             let coffee = Overlay(lines: [Overlay.Line(text: "", icon: "cup.and.saucer.fill")], spot: .bottomTrailing)
             pages.append(("overlay-icon", form(Effect(name: "Coffee", overlays: [coffee]))))
@@ -52,6 +52,15 @@ enum Snapshot {
                 var look = Look.presets[1].copy
                 look.grain = 0.4
                 pages.append(("effect-stack", form(Effect(name: "Ferociously", includes: [first.id], pushIn: 1.6, look: look))))
+            }
+            // Dictating, ferociously: the dictation effect, shaken.
+            if let dictating = library.dictationEffect ?? library.effects.first?.id {
+                pages.append(("effect-shake", form(Effect(name: "Dictating Ferociously", includes: [dictating], shake: Effect.Shake(amount: 0.8, overlays: true)))))
+            }
+            // Stepping away: text over frosted glass, the look whole.
+            if let frosted = Look.presets.first(where: { $0.preset == "frosted" }) {
+                let back = Overlay(lines: [Overlay.Line(text: "Back in 5", icon: "cup.and.saucer.fill")], spot: .bottom)
+                pages.append(("effect-frosted", form(Effect(name: "Be Right Back", overlays: [back], look: frosted.copy), height: 1900)))
             }
             pages.append(("effect-empty", form(Effect(name: "New Effect"))))
             pages.append(("icon-choices", AnyView(IconChoices(icon: .constant("😴"), layout: .square).padding(12))))

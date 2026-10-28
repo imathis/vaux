@@ -2,7 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Your effects, each turned on and off by name, holding whatever you put in
-/// it: text or graphics, a push-in, a look, other effects to build on. Also
+/// it: text or graphics, a push-in, a look, a shake, other effects to build
+/// on. Also
 /// the default effect, and the one on while you dictate.
 struct EffectsPage: View {
     let effects: Effects
@@ -54,7 +55,7 @@ struct EffectsPage: View {
                     AddEffectMenu { editing = Editing(id: library.add($0).id, isNew: true) }
                 }
             } header: {
-                SettingsHeader("Effects", "Each turns on by name, with what you put in it: text or a graphic, a push-in, a look, other effects to build on. Effects on together stack, the latest on top.")
+                SettingsHeader("Effects", "Each turns on by name, with what you put in it: text or a graphic, a push-in, a look, a shake, other effects to build on. Effects on together stack, the latest on top.")
             }
             Section {
                 Picker("Default effect", selection: $library.defaultEffect) {
@@ -92,6 +93,7 @@ struct EffectsPage: View {
         parts += effect.overlays.map { $0.kind == .text ? "Text" : "Graphic" }
         if let pushIn = effect.pushIn { parts.append("Push in \(pushIn.zoomText)") }
         if effect.look != nil { parts.append("Look") }
+        if effect.shake != nil { parts.append("Shake") }
         var summary = parts.isEmpty ? "Nothing in it yet" : parts.joined(separator: " + ")
         if let duration = effect.duration { summary += " · off after \(duration.formatted(.number.precision(.fractionLength(0...1)))) s" }
         return summary
@@ -152,6 +154,7 @@ private struct EffectRow: View {
         if let overlay = effect.overlays.first { return overlay.kind == .text ? "textformat" : "photo" }
         if effect.look != nil { return "camera.filters" }
         if effect.pushIn != nil { return "plus.magnifyingglass" }
+        if effect.shake != nil { return "rectangle.on.rectangle.angled" }
         if !effect.includes.isEmpty { return "square.stack.3d.up" }
         return "sparkles"
     }
@@ -166,6 +169,7 @@ private struct AddEffectMenu: View {
             Button("Text") { add(Effect(name: "New Text", overlays: [.newText])) }
             Button("Graphic") { add(Effect(name: "New Graphic", overlays: [.newGraphic])) }
             Button("Push In") { add(Effect(name: "Push In", pushIn: 1.5)) }
+            Button("Shake") { add(Effect(name: "Shake", shake: Effect.Shake())) }
             Menu("Look") {
                 Button("Plain") { add(Effect(name: "New Look", look: Look(name: "Look"))) }
                 Section("Presets") {
@@ -199,12 +203,13 @@ struct EffectEditor: View {
     @State private var opened: (effect: Effect, on: Bool)?
 
     var body: some View {
-        @Bindable var library = effects.library
-        if let index = library.effects.firstIndex(where: { $0.id == id }) {
+        let library = effects.library
+        if let effect = library.effect(id) {
+            let edited = edited(effect)
             EditorSheet(
-                name: $library.effects[index].name,
+                name: edited.name,
                 isOn: library.isOn(id),
-                canTurnOn: !library.effects[index].isEmpty,
+                canTurnOn: !effect.isEmpty,
                 toggle: { effects.triggers.trigger(.effect(id)) },
                 delete: delete,
                 cancel: cancel,
@@ -214,11 +219,24 @@ struct EffectEditor: View {
                 Button(action: duplicate) { Image(systemName: "plus.square.on.square") }
                     .help("Duplicate, to make another version of it")
             } content: {
-                EffectForm(effect: $library.effects[index], library: library)
+                EffectForm(effect: edited, library: library)
             }
             .onAppear {
-                if opened == nil { opened = (library.effects[index], library.isOn(id)) }
+                if opened == nil { opened = (effect, library.isOn(id)) }
             }
+        }
+    }
+
+    /// The effect by its ID, not its place in the list: a field still
+    /// finishing an edit as it goes, once the effect's deleted, changes
+    /// nothing (by place, it would change whatever moved into that place, or
+    /// crash).
+    private func edited(_ effect: Effect) -> Binding<Effect> {
+        let library = effects.library
+        return Binding {
+            library.effect(id) ?? effect
+        } set: { changed in
+            if let index = library.effects.firstIndex(where: { $0.id == id }) { library.effects[index] = changed }
         }
     }
 
@@ -281,8 +299,8 @@ struct EffectForm: View {
                     SettingsHeader("Builds On", "These effects come with this one, under its own parts, in order.")
                 }
             }
-            ForEach($effect.overlays) { $overlay in
-                OverlaySections(overlay: $overlay, variant: variant(of: overlay), importGraphics: library.importGraphics) {
+            ForEach(effect.overlays) { overlay in
+                OverlaySections(overlay: binding(to: overlay), variant: variant(of: overlay), importGraphics: library.importGraphics) {
                     effect.overlays.removeAll { $0.id == overlay.id }
                 }
             }
@@ -306,6 +324,32 @@ struct EffectForm: View {
                     PartHeader("Push In", "Zooms further, on top of each camera's own zoom, up to 2×.") { effect.pushIn = nil }
                 }
             }
+            if let shake = effect.shake {
+                Section {
+                    HStack(spacing: 8) {
+                        Text("Gentle")
+                            .foregroundStyle(.secondary)
+                        Slider(
+                            value: Binding(get: { shake.amount }, set: { effect.shake?.amount = ($0 * 20).rounded() / 20 }),
+                            in: 0...1
+                        )
+                        .labelsHidden()
+                        .controlSize(.small)
+                        Text("Wild")
+                            .foregroundStyle(.secondary)
+                    }
+                    Toggle(isOn: Binding(get: { shake.blur }, set: { effect.shake?.blur = $0 })) {
+                        Text("Motion blur")
+                        Text("Smears the picture the way it's moving, as a camera would.")
+                    }
+                    Toggle(isOn: Binding(get: { shake.overlays }, set: { effect.shake?.overlays = $0 })) {
+                        Text("Shake overlays too")
+                        Text("Off, text and graphics hold still over the moving picture.")
+                    }
+                } header: {
+                    PartHeader("Shake", "Jolts and tilts the picture within the camera's frame, so it pushes in to have room: \(shake.zoom.zoomText) at this amount, unless it's in that far already.") { effect.shake = nil }
+                }
+            }
             if effect.look != nil {
                 LookSections(look: Binding(get: { effect.look ?? Look(name: "Look") }, set: { effect.look = $0 })) {
                     effect.look = nil
@@ -314,7 +358,7 @@ struct EffectForm: View {
             Section {
                 HStack {
                     if effect.isEmpty {
-                        Text("Add text, a graphic, a push-in, a look, or another effect to build on.")
+                        Text("Add text, a graphic, a push-in, a shake, a look, or another effect to build on.")
                             .foregroundStyle(.secondary)
                             .wraps()
                     }
@@ -341,6 +385,17 @@ struct EffectForm: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// An overlay by its ID, not its place: a field still finishing an edit
+    /// as its overlay is taken out (its text, say) changes nothing, where by
+    /// place it crashed.
+    private func binding(to overlay: Overlay) -> Binding<Overlay> {
+        Binding {
+            effect.overlays.first { $0.id == overlay.id } ?? overlay
+        } set: { changed in
+            if let index = effect.overlays.firstIndex(where: { $0.id == overlay.id }) { effect.overlays[index] = changed }
+        }
     }
 
     private func variant(of overlay: Overlay) -> Binding<Int> {
@@ -400,8 +455,8 @@ struct PartHeader: View {
     }
 }
 
-/// More for an effect: text or a graphic, a push-in or a look if it has
-/// none, or another effect to build on.
+/// More for an effect: text or a graphic, a push-in, a shake or a look if it
+/// has none, or another effect to build on.
 private struct AddPartMenu: View {
     @Binding var effect: Effect
     let library: EffectLibrary
@@ -413,6 +468,8 @@ private struct AddPartMenu: View {
             Button("Graphic") { effect.overlays.append(.newGraphic) }
             Button("Push In") { effect.pushIn = 1.5 }
                 .disabled(effect.pushIn != nil)
+            Button("Shake") { effect.shake = Effect.Shake() }
+                .disabled(effect.shake != nil)
             Menu("Look") {
                 Button("Plain") { effect.look = Look(name: "Look") }
                 Section("Presets") {
@@ -639,8 +696,8 @@ private struct EffectPreview: View {
                 .foregroundStyle(.white.opacity(0.07))
                 .frame(width: frame.height * 0.75 * scale)
                 .frame(width: frame.width * scale, height: frame.height * scale, alignment: .bottom)
-            ForEach(images.indices, id: \.self) { index in
-                let (spot, image) = images[index]
+            // By spot (one each), not place: never a place that's gone.
+            ForEach(images, id: \.spot) { spot, image in
                 let size = CGSize(width: image.width, height: image.height)
                 let origin = spot.origin(for: size, in: frame)
                 Image(decorative: image, scale: 1)

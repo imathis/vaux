@@ -28,8 +28,17 @@ final class Feeder {
     /// sent. They're Vaux's own, set in Control Center's Video Effects, and
     /// apply before overlays are drawn.
     private(set) var systemEffects: [String] = []
-    /// The zoom being sent: the camera's own, times the effects' push-in.
+    /// The zoom being sent: the camera's own, times the effects' push-in,
+    /// and at least what a shake needs.
     private(set) var zoom = 1.0
+    /// Frames that arrive from the camera broken are skipped (see
+    /// BrokenFrame): the call sees the frame before a moment longer.
+    var hidesBrokenFrames = UserDefaults.standard.object(forKey: Feeder.hidesBrokenKey) as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(hidesBrokenFrames, forKey: Self.hidesBrokenKey)
+            feed.hideBrokenFrames(hidesBrokenFrames)
+        }
+    }
 
     @ObservationIgnored private let installer: ExtensionInstaller
     @ObservationIgnored private let access: CameraAccess
@@ -59,6 +68,7 @@ final class Feeder {
         let zoomSource: UUID?
         let overlays: [OverlayLayer]
         let look: Look?
+        let shake: Effect.Shake?
     }
 
     init(
@@ -77,6 +87,7 @@ final class Feeder {
             self?.stats = stats
             self?.readSystemEffects()
         }
+        feed.hideBrokenFrames(hidesBrokenFrames)
         observe()
     }
 
@@ -87,17 +98,20 @@ final class Feeder {
         apply(wanted)
     }
 
+    private static let hidesBrokenKey = "hidesBrokenFrames"
+
     private var wanted: Wanted {
         let status = wantedStatus
         let base = if case .sending(let camera, _) = status { cameras.zoom(for: camera.uid) } else { 1.0 }
         let most = CameraZoom.range.upperBound
         return Wanted(
             status: status,
-            zoom: min(base * library.zoom, most),
-            modeZoom: min(base * library.furthest, most),
+            zoom: min(max(base * library.zoom, library.shake?.zoom ?? 1), most),
+            modeZoom: min(max(base * library.furthest, library.furthestShake), most),
             zoomSource: library.zoomSource,
             overlays: library.scene,
-            look: library.look
+            look: library.look,
+            shake: library.shake
         )
     }
 
@@ -114,6 +128,7 @@ final class Feeder {
         zoom = wanted.zoom
         feed.showOverlays(wanted.overlays)
         feed.showLook(wanted.look)
+        feed.showShake(wanted.shake)
         if case .sending(let camera, let format) = wanted.status, let sink = device.sink {
             if let feeding, feeding.camera == camera.uid, feeding.format == format, feeding.sink === sink {
                 // Same camera, same format: only the zoom may have moved. An

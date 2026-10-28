@@ -334,7 +334,7 @@ private struct CameraAccessView: View {
 /// The camera priority list, like the preferred inputs.
 private struct CameraList: View {
     @Bindable var cameras: CameraPriorityModel
-    let feeder: Feeder
+    @Bindable var feeder: Feeder
 
     private let rowHeight: CGFloat = 36
 
@@ -371,6 +371,19 @@ private struct CameraList: View {
             Text("Propped up in landscape and locked, it goes ahead of this list until you pick it up.")
                 .wraps()
         }
+        Toggle(isOn: $feeder.hidesBrokenFrames) {
+            Text("Hide broken frames")
+            Text(brokenFramesNote)
+                .wraps()
+        }
+    }
+
+    /// What it does, and what it's done this call.
+    private var brokenFramesNote: String {
+        let hidden = feeder.stats.hidden
+        let note = "A frame that arrives from the camera damaged, partly gray and striped or shifted, is skipped; the call sees the one before a moment longer. Through a dock or hub, some cameras break a frame now and then."
+        guard case .sending = feeder.status, feeder.hidesBrokenFrames, hidden > 0 else { return note }
+        return note + " \(hidden) hidden since the camera started."
     }
 
     private func isLive(_ entry: CameraEntry) -> Bool {
