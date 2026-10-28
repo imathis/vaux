@@ -2,21 +2,17 @@ import AppKit
 import SwiftUI
 
 /// Live: an effect set up on the spot. Text over your video, in the style
-/// and spot you pick, a push-in and a look; Show puts it all up at once,
-/// Hide takes it down. Opened from the Quick Menu (L), the menu, or its
+/// and spot you pick, a push-in, and another effect to go with them; Show
+/// puts it all up at once, Hide takes it down. Opened from the Quick Menu (L), the menu, or its
 /// shortcut, it floats beside the call until closed, and takes keys
 /// without activating Vaux, so the call app stays in front.
 @MainActor
 final class LivePanel: NSObject, NSWindowDelegate {
-    private let overlays: OverlayLibrary
-    private let zoom: ZoomShortcuts
-    private let looks: LookLibrary
+    private let library: EffectLibrary
     private var panel: NSPanel?
 
-    init(overlays: OverlayLibrary, zoom: ZoomShortcuts, looks: LookLibrary) {
-        self.overlays = overlays
-        self.zoom = zoom
-        self.looks = looks
+    init(library: EffectLibrary) {
+        self.library = library
         super.init()
     }
 
@@ -26,7 +22,7 @@ final class LivePanel: NSObject, NSWindowDelegate {
             return
         }
         let panel = LiveWindow()
-        let host = NSHostingView(rootView: LiveView(library: overlays, zoom: zoom, looks: looks))
+        let host = NSHostingView(rootView: LiveView(library: library))
         panel.contentView = host
         panel.setContentSize(host.fittingSize)
         panel.delegate = self
@@ -68,13 +64,12 @@ private final class LiveWindow: NSPanel {
     }
 }
 
-/// What to say, its style and spot, the zoom and the look, shown and hidden
-/// together. While it's up, all but the text follow changes at once; typed
-/// text waits for Return, since each change would fade in anew.
+/// What to say, its style and spot, the push-in and an effect to go with
+/// them, shown and hidden together. While it's up, all but the text follow
+/// changes at once; typed text waits for Return, since each change would
+/// fade in anew.
 struct LiveView: View {
-    @Bindable var library: OverlayLibrary
-    let zoom: ZoomShortcuts
-    @Bindable var looks: LookLibrary
+    @Bindable var library: EffectLibrary
 
     @State private var draft = ""
     @FocusState private var typing: Bool
@@ -93,14 +88,14 @@ struct LiveView: View {
             IconChoices(icon: icon)
             HStack(alignment: .top, spacing: 14) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Picker("Style", selection: $library.live.style) {
+                    Picker("Style", selection: overlay.style) {
                         Text("Pill").tag(Overlay.Style.pill)
                         Text("Bar").tag(Overlay.Style.bar)
                         Text("Plain").tag(Overlay.Style.plain)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    Picker("Size", selection: $library.live.size) {
+                    Picker("Size", selection: overlay.size) {
                         ForEach(Overlay.Size.textSizes, id: \.self) { size in
                             Text(size.rawValue.capitalized).tag(size)
                         }
@@ -108,33 +103,33 @@ struct LiveView: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                 }
-                SpotGrid(spot: $library.live.spot)
+                SpotGrid(spot: overlay.spot)
             }
             HStack(spacing: 8) {
                 Image(systemName: "plus.magnifyingglass")
                     .foregroundStyle(.secondary)
                     .help("Push in")
-                Slider(value: Binding(get: { zoom.liveLevel }, set: { zoom.liveLevel = ($0 * 20).rounded() / 20 }), in: 1...ZoomShortcuts.range.upperBound)
+                Slider(value: pushIn, in: 1...Effect.pushInRange.upperBound)
                     .controlSize(.small)
-                Text(zoom.liveLevel.zoomText)
+                Text(pushIn.wrappedValue.zoomText)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .frame(width: 44, alignment: .trailing)
-                Button { zoom.liveLevel = 1 } label: {
+                Button { library.live.pushIn = nil } label: {
                     Image(systemName: "arrow.counterclockwise")
                 }
                 .buttonStyle(.borderless)
-                .disabled(zoom.liveLevel <= 1)
+                .disabled(library.live.pushIn == nil)
                 .help("Back to 1×")
             }
             HStack(spacing: 8) {
-                Image(systemName: "camera.filters")
+                Image(systemName: "square.stack.3d.up")
                     .foregroundStyle(.secondary)
-                    .help("Look")
-                Picker("Look", selection: $looks.liveLook) {
-                    Text("No look").tag(UUID?.none)
-                    ForEach(looks.looks) { look in
-                        Text(look.name).tag(UUID?.some(look.id))
+                    .help("With an effect")
+                Picker("Effect", selection: Binding(get: { library.live.includes.first }, set: { library.live.includes = $0.map { [$0] } ?? [] })) {
+                    Text("No effect").tag(UUID?.none)
+                    ForEach(library.effects) { effect in
+                        Text(effect.name).tag(UUID?.some(effect.id))
                     }
                 }
                 .labelsHidden()
@@ -148,32 +143,50 @@ struct LiveView: View {
         .padding(14)
         .frame(width: 380)
         .onAppear {
-            draft = library.live.lines.first?.text ?? ""
+            draft = overlay.wrappedValue.lines.first?.text ?? ""
             typing = true
         }
     }
 
-    /// Its text is up, its zoom, or its look.
-    private var showing: Bool { library.liveOn || zoom.liveZoom != nil || looks.liveApplied }
+    private var showing: Bool { library.liveOn }
+
+    /// Its text overlay (the library keeps it one).
+    private var overlay: Binding<Overlay> {
+        Binding {
+            library.live.overlays.first ?? .live
+        } set: { overlay in
+            if library.live.overlays.isEmpty { library.live.overlays = [overlay] } else { library.live.overlays[0] = overlay }
+        }
+    }
 
     /// The icon goes up (or changes) at once, unlike typed text.
     private var icon: Binding<String?> {
         Binding {
-            library.live.lines.first?.icon
+            overlay.wrappedValue.lines.first?.icon
         } set: { icon in
-            if library.live.lines.isEmpty {
-                library.live.lines = [Overlay.Line(text: "", icon: icon)]
+            if overlay.wrappedValue.lines.isEmpty {
+                overlay.wrappedValue.lines = [Overlay.Line(text: "", icon: icon)]
             } else {
-                library.live.lines[0].icon = icon
+                overlay.wrappedValue.lines[0].icon = icon
             }
         }
     }
 
-    private var hasText: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty || library.live.lines.first?.icon != nil }
+    /// 1× is none.
+    private var pushIn: Binding<Double> {
+        Binding {
+            library.live.pushIn ?? 1
+        } set: { zoom in
+            let rounded = (zoom * 20).rounded() / 20
+            library.live.pushIn = rounded > 1.001 ? rounded : nil
+        }
+    }
 
-    private var canShow: Bool { hasText || zoom.liveLevel > 1.001 || looks.liveLook != nil }
+    private var hasText: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty || overlay.wrappedValue.lines.first?.icon != nil }
 
-    private var edited: Bool { draft != (library.live.lines.first?.text ?? "") }
+    private var canShow: Bool { hasText || library.live.pushIn != nil || !library.live.includes.isEmpty }
+
+    private var edited: Bool { draft != (overlay.wrappedValue.lines.first?.text ?? "") }
 
     private var primaryTitle: String { !showing ? "Show" : edited ? "Update" : "Hide" }
 
@@ -181,15 +194,10 @@ struct LiveView: View {
     private func primary() {
         if showing, !edited {
             library.setLive(false)
-            zoom.applyLive(false)
-            looks.applyLive(false)
             return
         }
-        library.live.lines = [Overlay.Line(text: draft, icon: library.live.lines.first?.icon)]
-        guard !showing else { return }
-        library.setLive(true)
-        zoom.applyLive(true)
-        looks.applyLive(true)
+        overlay.wrappedValue.lines = [Overlay.Line(text: draft, icon: overlay.wrappedValue.lines.first?.icon)]
+        if !showing { library.setLive(true) }
     }
 }
 

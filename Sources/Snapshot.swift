@@ -28,32 +28,35 @@ enum Snapshot {
             let effects = camera.effects ?? Effects(appState: appState)
             pages.append(("effects-on", AnyView(EffectsPage(effects: effects))))
             pages.append(("shortcuts-on", AnyView(EffectShortcuts(effects: effects).frame(width: SettingsHeader.pageWidth))))
-            if let overlay = effects.overlays.overlays.first {
-                pages.append(("editor", AnyView(OverlayEditor(library: effects.overlays, id: overlay.id, delete: {}) {})))
-                let sample = Combo(name: "Big entrance", overlays: [overlay.id], pushIn: effects.zoomShortcuts.levels.first?.id)
-                pages.append(("combo-form", AnyView(
-                    ComboForm(combo: .constant(sample), overlays: effects.overlays.overlays, levels: effects.zoomShortcuts.levels, looks: effects.looks.looks)
-                        .frame(width: 480)
-                )))
+            let library = effects.library
+            if let first = library.effects.first {
+                pages.append(("editor", AnyView(EffectEditor(effects: effects, id: first.id, delete: {}, duplicate: {}, height: 900))))
             }
-            var coffee = Overlay(name: "Coffee", lines: [Overlay.Line(text: "", icon: "cup.and.saucer.fill")], spot: .bottomTrailing)
-            pages.append(("overlay-icon", AnyView(OverlayForm(overlay: .constant(coffee), previewVariant: .constant(0)) { _ in [] }.frame(width: 540))))
-            coffee.size = .large
-            coffee.lines = [Overlay.Line(text: "Back in 5", icon: "cup.and.saucer.fill")]
-            pages.append(("overlay-large", AnyView(OverlayForm(overlay: .constant(coffee), previewVariant: .constant(0)) { _ in [] }.frame(width: 540))))
+            func form(_ effect: Effect) -> AnyView {
+                AnyView(EffectForm(effect: .constant(effect), library: library).frame(width: 560, height: 1100))
+            }
+            let coffee = Overlay(lines: [Overlay.Line(text: "", icon: "cup.and.saucer.fill")], spot: .bottomTrailing)
+            pages.append(("overlay-icon", form(Effect(name: "Coffee", overlays: [coffee]))))
+            var backSoon = coffee
+            backSoon.size = .large
+            backSoon.lines = [Overlay.Line(text: "Back in 5", icon: "cup.and.saucer.fill")]
+            pages.append(("overlay-large", form(Effect(name: "Back Soon", overlays: [backSoon]))))
             // A set whose icon changes with each showing, and a line without one.
             let breaks = Overlay(
-                name: "Break",
                 lines: ["cup.and.saucer.fill", "poop", "😴"].map { Overlay.Line(text: "", icon: $0) } + [Overlay.Line(text: "Back in 5")],
                 spot: .bottomTrailing
             )
-            pages.append(("overlay-icons", AnyView(OverlayForm(overlay: .constant(breaks), previewVariant: .constant(1)) { _ in [] }.frame(width: 540))))
+            pages.append(("overlay-icons", form(Effect(name: "Break", overlays: [breaks]))))
+            // Built on another, with a push-in and a look of its own.
+            if let first = library.effects.first {
+                var look = Look.presets[1].copy
+                look.grain = 0.4
+                pages.append(("effect-stack", form(Effect(name: "Ferociously", includes: [first.id], pushIn: 1.6, look: look))))
+            }
+            pages.append(("effect-empty", form(Effect(name: "New Effect"))))
             pages.append(("icon-choices", AnyView(IconChoices(icon: .constant("😴"), layout: .square).padding(12))))
             pages.append(("quickmenu", AnyView(QuickMenuView(triggers: effects.triggers) { _ in }.padding(20))))
-            if let look = effects.looks.looks.first {
-                pages.append(("look-editor", AnyView(LookEditor(effects: effects, id: look.id, delete: {}, duplicate: {}, height: 1180))))
-            }
-            pages.append(("live", AnyView(LiveView(library: effects.overlays, zoom: effects.zoomShortcuts, looks: effects.looks))))
+            pages.append(("live", AnyView(LiveView(library: library))))
             pages.append(("system-effects", AnyView(
                 Form { Section { SystemEffectsRow(effects: ["Portrait", "Studio Light"]) } }
                     .formStyle(.grouped)
@@ -65,15 +68,13 @@ enum Snapshot {
             for (name, page) in pages {
                 await render(page, to: base.appendingPathExtension("\(name).png"))
             }
-            // The menu with an overlay and a push-in on, in this process only.
-            if let overlay = effects.overlays.overlays.first { effects.overlays.show(overlay.id) }
-            if let level = effects.zoomShortcuts.levels.first { effects.zoomShortcuts.activate(level.id) }
+            // The menu with two effects on, in this process only.
+            for effect in library.effects.prefix(2) { library.turnOn(effect.id) }
             await render(
                 AnyView(MenuContentView(appState: appState, camera: preview, openAbout: {}, openSettings: {}, dismiss: {}, resized: { _ in }, tab: .effects)),
                 to: base.appendingPathExtension("menu-camera-on.png")
             )
-            effects.overlays.clearAll()
-            effects.zoomShortcuts.activate(nil)
+            library.clearAll()
             openSettings()
             // Let the window lay out and size itself to its first tab.
             try? await Task.sleep(for: .seconds(1))

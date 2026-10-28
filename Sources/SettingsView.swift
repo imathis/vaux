@@ -131,7 +131,7 @@ struct EffectsSettings: View {
             ContentUnavailableView {
                 Label("Effects", systemImage: "wand.and.stars")
             } description: {
-                Text("Overlays, push-ins and combos for \(CameraSpec.name), on your keys, and a sign while you dictate.")
+                Text("Text, graphics, push-ins and looks for \(CameraSpec.name), as effects on your keys, and a sign while you dictate.")
             } actions: {
                 Button("Set Up Camera…", action: showCamera)
             }

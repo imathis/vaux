@@ -1,12 +1,12 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import Foundation
-import Observation
 import os
 
 /// A color look over the whole picture: white balance, tone, saturation, a
-/// three-way color grade, and texture, set together. One is on at a time;
-/// switching fades from one to the next.
+/// three-way color grade, and texture, set together, as part of an effect.
+/// Looks on together merge, setting by setting; changing what's on fades
+/// from one to the next.
 struct Look: Codable, Identifiable, Hashable, Sendable {
     /// One range's grade: tinted toward a hue, by how much, and brighter or
     /// darker.
@@ -58,7 +58,7 @@ struct Look: Codable, Identifiable, Hashable, Sendable {
     static let amountRange = 0.0...1.0
     static let hueRange = 0.0...360.0
 
-    /// The looks a first run starts with, and Add Look offers again.
+    /// Looks to start from.
     static let presets = [
         // Silvery black and white: cool, with smoke in the shadows.
         Look(name: "Noir", preset: "noir", saturation: 0, contrast: 1.25, brightness: 0.02, warmth: -0.15, fade: 0.45, vignette: 0.45, grain: 0.3),
@@ -110,160 +110,12 @@ extension Look {
     }
 }
 
-/// The user's looks, and which one is on: the default, unless another is
-/// turned on over it (or it's turned off for now). Stored in UserDefaults.
-@MainActor @Observable
-final class LookLibrary {
-    var looks: [Look] {
-        didSet {
-            save()
-            if let defaultLook, look(defaultLook) == nil { self.defaultLook = nil }
-            if case .look(let id) = override, look(id) == nil { override = nil }
-            if let liveLook, look(liveLook) == nil { self.liveLook = nil }
-        }
-    }
-
-    /// On whenever no other look is: under everything else, kept between
-    /// launches. Choosing one puts it on now, over whatever was turned on.
-    var defaultLook: UUID? {
-        didSet {
-            UserDefaults.standard.set(defaultLook?.uuidString, forKey: Self.defaultKey)
-            if defaultLook != oldValue, override != nil { set(nil) }
-        }
-    }
-
-    /// What's been turned on or off over the default, for now.
-    enum Override: Equatable {
-        case look(UUID)
-        /// The default, turned off.
-        case off
-    }
-
-    private(set) var override: Override?
-
-    /// The look on.
-    var active: UUID? {
-        switch override {
-        case .look(let id): id
-        case .off: nil
-        case nil: defaultLook
-        }
-    }
-
-    /// The Live effect's look, applied while Live is on.
-    var liveLook: UUID? {
-        didSet {
-            UserDefaults.standard.set(liveLook?.uuidString, forKey: Self.liveKey)
-            // Changed while Live is on: the camera follows.
-            if liveApplied {
-                if let liveLook { set(.look(liveLook)) } else { set(beforeLive) }
-                liveApplied = liveLook != nil
-            }
-        }
-    }
-    /// Live put its look on, and it's still the one on.
-    private(set) var liveApplied = false
-    /// What was on before Live's look, to go back to.
-    @ObservationIgnored private var beforeLive: Override?
-
-    private static let key = "looks"
-    private static let defaultKey = "defaultLook"
-    private static let liveKey = "liveLook"
-
-    init() {
-        let stored = UserDefaults.standard.data(forKey: Self.key).flatMap { try? JSONDecoder().decode([Look].self, from: $0) }
-        // Saved before looks knew their preset: matched by name.
-        looks = stored?.map { look in
-            guard look.preset == nil, let preset = Look.presets.first(where: { $0.name == look.name }) else { return look }
-            var matched = look
-            matched.preset = preset.preset
-            return matched
-        } ?? Look.presets
-        defaultLook = UserDefaults.standard.string(forKey: Self.defaultKey).flatMap(UUID.init)
-        liveLook = UserDefaults.standard.string(forKey: Self.liveKey).flatMap(UUID.init)
-        if stored == nil { save() }
-    }
-
-    func look(_ id: UUID) -> Look? { looks.first { $0.id == id } }
-
-    var activeLook: Look? { active.flatMap(look) }
-
-    func toggle(_ id: UUID) {
-        if active == id { turnOff() } else { turnOn(id) }
-    }
-
-    /// Turns a look on over the default (or the default back on).
-    func turnOn(_ id: UUID) {
-        set(id == defaultLook ? nil : .look(id))
-    }
-
-    /// Turns off the look that's on: back to the default, or, if the
-    /// default was on, no look for now.
-    func turnOff() {
-        switch override {
-        case .look: set(nil)
-        case nil where defaultLook != nil: set(.off)
-        default: break
-        }
-    }
-
-    /// What's on over the default, to put back after a held key.
-    var state: Override? { override }
-
-    func restore(_ state: Override?) {
-        set(state)
-    }
-
-    private func set(_ override: Override?) {
-        if self.override != override { self.override = override }
-        liveApplied = false
-    }
-
-    /// The Live effect on (its look, in place of any other) or off: back
-    /// to what was on before.
-    func applyLive(_ on: Bool) {
-        if on, let liveLook {
-            let before = override
-            set(.look(liveLook))
-            beforeLive = before
-            liveApplied = true
-        } else if !on, liveApplied {
-            set(beforeLive)
-        }
-    }
-
-    /// A new plain look, or a fresh copy of a preset (named apart from one
-    /// already in the list).
-    @discardableResult
-    func add(_ preset: Look? = nil) -> Look {
-        var look = preset ?? Look(name: "New Look")
-        look.id = UUID()
-        let names = Set(looks.map(\.name))
-        if names.contains(look.name) {
-            let base = look.name
-            look.name = (2...).lazy.map { "\(base) \($0)" }.first { !names.contains($0) }!
-        }
-        looks.append(look)
-        return look
-    }
-
-    /// A copy beside it, to make another version of it.
-    @discardableResult
-    func duplicate(_ id: UUID) -> Look? {
-        guard let index = looks.firstIndex(where: { $0.id == id }) else { return nil }
-        var copy = looks[index]
+extension Look {
+    /// A preset to start from, as a look of its own.
+    var copy: Look {
+        var copy = self
         copy.id = UUID()
-        copy.name += " Copy"
-        looks.insert(copy, at: index + 1)
         return copy
-    }
-
-    func remove(_ id: UUID) {
-        looks.removeAll { $0.id == id }
-    }
-
-    private func save() {
-        UserDefaults.standard.set(try? JSONEncoder().encode(looks), forKey: Self.key)
     }
 }
 

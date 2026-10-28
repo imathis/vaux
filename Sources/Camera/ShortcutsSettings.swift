@@ -58,46 +58,16 @@ struct EffectShortcuts: View {
             }
             Section {
                 ColumnTitles()
-                ForEach(items.filter { if case .overlay = $0.action { true } else { false } }) { item in
+                let list = items.filter { if case .effect = $0.action { true } else { false } }
+                ForEach(list) { item in
                     TriggerRow(item: item, key: keys[item.id] ?? "", triggers: triggers)
                 }
-                if !items.contains(where: { if case .overlay = $0.action { true } else { false } }) {
-                    Text("Add overlays in the Effects tab.")
+                if list.isEmpty {
+                    Text("Add effects in the Effects tab.")
                         .foregroundStyle(.secondary)
                 }
             } header: {
-                SettingsHeader("Overlays", "Each shows or hides its overlay.")
-            }
-            Section {
-                ColumnTitles()
-                ForEach(items.filter { if case .pushIn = $0.action { true } else { false } }) { item in
-                    TriggerRow(item: item, key: keys[item.id] ?? "", triggers: triggers) { shortcut in
-                        if case .pushIn(let id) = item.action, let level = effects.zoomShortcuts.levels.first(where: { $0.id == id }) {
-                            effects.zoomShortcuts.shortcutChanged(level, to: shortcut)
-                        }
-                    }
-                }
-            } header: {
-                SettingsHeader("Push In", "Each pushes in, and back out. Levels are set in the Effects tab.")
-            }
-            Section {
-                ColumnTitles()
-                ForEach(items.filter { if case .look = $0.action { true } else { false } }) { item in
-                    TriggerRow(item: item, key: keys[item.id] ?? "", triggers: triggers)
-                }
-            } header: {
-                SettingsHeader("Looks", "Each turns its look on, and off. Looks are set in the Effects tab.")
-            }
-            let comboItems = items.filter { if case .combo = $0.action { true } else { false } }
-            if !comboItems.isEmpty {
-                Section {
-                    ColumnTitles()
-                    ForEach(comboItems) { item in
-                        TriggerRow(item: item, key: keys[item.id] ?? "", triggers: triggers)
-                    }
-                } header: {
-                    SettingsHeader("Combos", "Each turns its whole stack on or off. Combos are set in the Effects tab.")
-                }
+                SettingsHeader("Effects", "Each turns its effect on, and off.")
             }
             Section {
                 ForEach(items.filter { $0.action == .live || $0.action == .clearAll }) { item in
@@ -129,7 +99,6 @@ private struct TriggerRow: View {
     let item: Triggers.Item
     let key: String
     let triggers: Triggers
-    var onShortcutChange: ((KeyboardShortcuts.Shortcut?) -> Void)?
 
     var body: some View {
         HStack {
@@ -138,10 +107,7 @@ private struct TriggerRow: View {
             Spacer(minLength: 8)
             QuickKeyField(key: key, custom: triggers.isCustom(item.id)) { triggers.setKey($0, for: item.id) }
                 .frame(width: 70)
-            KeyboardShortcuts.Recorder(for: item.shortcut) { shortcut in
-                triggers.claim(shortcut, for: item.shortcut)
-                onShortcutChange?(shortcut)
-            }
+            KeyboardShortcuts.Recorder(for: item.shortcut) { triggers.claim($0, for: item.shortcut) }
             .frame(width: 150)
         }
     }

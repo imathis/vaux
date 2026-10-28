@@ -104,20 +104,21 @@ on your keys. Video apps see one camera, **Vaux Camera**, that never switches,
 while Vaux decides what goes into it. It's off until you turn it on in
 Settings → Camera.
 
-**The dictation sign.** While solo mode is on, Vaux Camera shows an overlay
+**The dictation sign.** While solo mode is on, Vaux Camera shows an effect
 ("Dictating", or lines of your own, picked at random), so the call can see why
 you're talking but muted. It goes when solo ends.
 
 #### Effects
 
-- **Overlays:** text in a pill, a lower-third bar or plain, with an icon or as
-  just an icon (a coffee cup for a break), or graphics (PNG, PDF, SVG, even
-  full frame). Seven spots, kept inside the middle that apps keep when they
-  crop; one per spot, so a new one replaces what's there. They fade in and
-  out, and can hide on their own after a few seconds.
-- **Push in:** zoom levels on top of each camera's own zoom, up to 2×, eased
-  in and out.
-- **Looks:** a color grade over the whole picture, one at a time:
+An effect is anything you name and turn on, made of any of these:
+
+- **Text and graphics:** text in a pill, a lower-third bar or plain, each line
+  with its own icon (or just an icon: a coffee cup for a break), or graphics
+  (PNG, PDF, SVG, even full frame). Seven spots, kept inside the middle that
+  apps keep when they crop. They fade in and out.
+- **Push in:** zoom on top of each camera's own zoom, up to 2×, eased in and
+  out.
+- **A look:** a color grade over the whole picture:
   - white balance (temperature, tint) and saturation
   - tone: brightness, contrast, highlights and shadows
   - a three-way color grade: hue, saturation and luminance for the shadows,
@@ -125,12 +126,22 @@ you're talking but muted. It goes when solo ends.
   - texture: fade (lifted blacks and a soft glow, for smoke and haze),
     vignette and film grain
 
-  Starts with Noir, Black & White, Warm, Vivid, Faded and Teal & Orange. Set
-  one as the **default look** and it's always on, under everything else; any
-  other look takes its place while it's on, and it comes back after.
-- **Combos:** several overlays, a push-in and a look on one key.
-- **Live:** a small panel for the moment: type a line, pick its style, spot,
-  zoom and look, and Show puts it all up at once; Hide takes it all down.
+  Presets: Noir, Black & White, Warm, Vivid, Faded and Teal & Orange.
+- **Other effects to build on:** "Dictating, ferociously" can be Dictating
+  plus a push-in; edit Dictating and it follows.
+
+An effect can also turn itself off after a few seconds.
+
+**Effects stack.** Turn on several and they layer, the latest on top: text and
+graphics share the screen, one per spot; the latest push-in wins; looks mix,
+each setting from the latest look that changes it, so black and white from one
+and grain from another both show. Turning an effect on that covers all of
+another turns that one off. The **default effect** is always on, under
+everything else.
+
+**Live** is a small panel for the moment: type a line, pick its style and
+spot, a push-in and an effect to go with it, and Show puts it all up at once;
+Hide takes it all down.
 
 Editors show their changes on your camera as you make them; Cancel puts it
 all back. Deletes can be undone.
@@ -140,11 +151,10 @@ all back. Deletes can be undone.
 - **Shortcuts:** each effect can have a global shortcut, which a Stream Deck
   button can press.
 - **The Quick Menu:** one key (⌥. by default) opens a small menu over
-  everything, and a second key picks: numbers for overlays, Q W E for looks,
-  Z X for push-ins, A S for combos, L for Live, M for Mute. Your call app
-  keeps focus.
+  everything, and a second key picks: numbers, then letters, for effects, L
+  for Live, M for Mute. Your call app keeps focus.
 - **Tap or hold:** tap a key to turn its effect on or off; hold it to show the
-  effect only while it's held, then whatever it replaced comes back.
+  effect only while it's held, then whatever it covered shows again.
 - **The menu bar:** while the camera is on, the menu has an **Effects** tab
   with everything to click.
 
@@ -199,11 +209,11 @@ an idle Vaux Camera costs nothing. Effects are drawn only while they show.
   to toggle mute.
 - **Settings** (⌘, from the menu): **Microphone** has dictation (solo mode),
   mute and preferred inputs; **Camera** turns Vaux Camera on and ranks your
-  cameras; **Effects** has overlays, push-ins and combos; **Shortcuts** has
+  cameras; **Effects** has your effects; **Shortcuts** has
   every Vaux key. Launch at Login is a switch in the menu.
 - While the camera is on, the menu has two tabs: **Devices** (mics and
-  cameras; clicking a camera puts it first) and **Effects** (Live, overlays,
-  push-in, looks, combos). Deleting an effect in Settings can be undone (⌘Z).
+  cameras; clicking a camera puts it first) and **Effects** (Live, and your
+  effects). Deleting an effect in Settings can be undone (⌘Z).
 
 ## Build and run
 
@@ -304,12 +314,14 @@ Sources/
     Feeder.swift             #   which camera runs, when
     CameraFeed.swift         #   capture into the sink, zoom, overlay fades
     Compositor.swift         #   crop and scale in hardware, draw overlays
-    Overlay*.swift           #   overlays: model, drawing, library
-    Combo.swift              #   several effects on one key
+    Effect.swift             #   effects: their parts, and looks merged
+    EffectLibrary.swift      #   your effects, the stack of those on, what shows
+    EffectMigration.swift    #   effects from overlays, push-ins, looks and combos kept apart
+    Overlay*.swift           #   text and graphics: model, drawing
     Look.swift               #   looks: model, presets, grading and rendering
-    LookEditor.swift         #   a look's editor
+    LookSections.swift       #   a look's settings, in an effect's editor
+    IconChoices.swift        #   picking a line's icon: offered, or an emoji
     LivePanel.swift          #   the Live panel
-    ZoomShortcuts.swift      #   push-in levels
     Triggers.swift           #   every effect's keys, tap and hold
     QuickMenu.swift          #   the Quick Menu panel
     CameraSettings.swift     #   Settings → Camera

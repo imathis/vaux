@@ -2,13 +2,13 @@ import Foundation
 import KeyboardShortcuts
 import Observation
 
-/// Everything that can be triggered (Mute, Live, each overlay, push-in
-/// level, look and combo, and Clear All) and the keys for it: a global shortcut each,
-/// and a one-key code in the Quick Menu. One list behind the Quick Menu, the
-/// Shortcuts tab and Stream Deck alike.
+/// Everything that can be triggered (Mute, Live, each effect, and Clear All)
+/// and the keys for it: a global shortcut each, and a one-key code in the
+/// Quick Menu. One list behind the Quick Menu, the Shortcuts tab and Stream
+/// Deck alike.
 ///
 /// A key tapped toggles its effect. Held, the effect lasts only while it's
-/// held, then whatever it replaced comes back. Mute just toggles, as its
+/// held, then whatever it covered shows again. Mute just toggles, as its
 /// shortcut always has (AppState listens for that).
 @MainActor @Observable
 final class Triggers {
@@ -17,10 +17,7 @@ final class Triggers {
             case mute
             /// Opens the Live panel.
             case live
-            case overlay(UUID)
-            case pushIn(UUID)
-            case look(UUID)
-            case combo(UUID)
+            case effect(UUID)
             case clearAll
         }
 
@@ -37,10 +34,7 @@ final class Triggers {
     static let quickMenu = KeyboardShortcuts.Name("quickMenu", initial: .init(.period, modifiers: [.option]))
 
     private let appState: AppState
-    private let overlays: OverlayLibrary
-    private let zoom: ZoomShortcuts
-    private let looks: LookLibrary
-    private let combos: ComboLibrary
+    private let library: EffectLibrary
     /// Quick Menu keys set by hand, by item ID; the rest are given in order.
     private(set) var customKeys: [String: String]
     /// Opens the Live panel (set by Effects, which owns it).
@@ -50,29 +44,20 @@ final class Triggers {
     /// Keys down now, by item ID.
     @ObservationIgnored private var presses: [String: Press] = [:]
 
-    /// A key that's down: whether it turned its effect on, and what to put
-    /// back if it turns out to be held.
+    /// A key that's down: when, and the effect it turned on, if it did, to
+    /// take off again if it turns out to be held.
     private struct Press {
         let start = Date.now
-        let turnedOn: Bool
-        /// Overlays it showed, and what each replaced in its spot.
-        var shown: [(overlay: UUID, replaced: OverlayLibrary.Showing?)] = []
-        var pushIn: UUID?
-        var previousZoom: UUID?
-        var look: UUID?
-        var previousLook: LookLibrary.Override?
+        let turnedOn: UUID?
     }
 
     /// Held at least this long, a key's effect lasts only while it's held.
     static let holdSeconds = 0.35
     private static let keysKey = "quickMenuKeys"
 
-    init(appState: AppState, overlays: OverlayLibrary, zoom: ZoomShortcuts, looks: LookLibrary, combos: ComboLibrary) {
+    init(appState: AppState, library: EffectLibrary) {
         self.appState = appState
-        self.overlays = overlays
-        self.zoom = zoom
-        self.looks = looks
-        self.combos = combos
+        self.library = library
         customKeys = UserDefaults.standard.dictionary(forKey: Self.keysKey) as? [String: String] ?? [:]
         KeyboardShortcuts.onKeyDown(for: Item.clearAllName) { [weak self] in self?.press(.clearAll) }
         KeyboardShortcuts.onKeyDown(for: Item.liveName) { [weak self] in self?.press(.live) }
@@ -91,34 +76,23 @@ final class Triggers {
         for other in items.map(\.shortcut) + [Self.quickMenu]
         where other != name && KeyboardShortcuts.getShortcut(for: other) == shortcut {
             KeyboardShortcuts.setShortcut(nil, for: other)
-            if let level = zoom.levels.first(where: { $0.name == other }) { zoom.shortcutChanged(level, to: nil) }
         }
     }
 
     var items: [Item] {
         [
             Item(id: Self.id(of: .mute), action: .mute, title: "Mute", isOn: appState.muted),
-            Item(id: Self.id(of: .live), action: .live, title: "Live…", isOn: overlays.liveOn || zoom.liveZoom != nil || looks.liveApplied),
+            Item(id: Self.id(of: .live), action: .live, title: "Live…", isOn: library.liveOn),
         ]
-        + overlays.overlays.map { overlay in
-            Item(id: "overlay-\(overlay.id)", action: .overlay(overlay.id), title: overlay.name, isOn: overlays.isShowing(overlay.id))
+        + library.effects.map { effect in
+            let action = Item.Action.effect(effect.id)
+            return Item(id: Self.id(of: action), action: action, title: effect.name, isOn: library.isOn(effect.id))
         }
-        + zoom.levels.map { level in
-            Item(id: level.name.rawValue, action: .pushIn(level.id), title: "Push in \(level.zoom.zoomText)", isOn: zoom.active == level.id)
-        }
-        + looks.looks.map { look in
-            Item(id: Self.id(of: .look(look.id)), action: .look(look.id), title: look.name, isOn: looks.active == look.id)
-        }
-        + combos.combos.map { combo in
-            let action = Item.Action.combo(combo.id)
-            return Item(id: Self.id(of: action), action: action, title: combo.name, isOn: effect(of: action).map(isOn) ?? false)
-        }
-        + [Item(id: Item.clearAllName.rawValue, action: .clearAll, title: "Clear all overlays", isOn: false)]
+        + [Item(id: Item.clearAllName.rawValue, action: .clearAll, title: "Clear all", isOn: false)]
     }
 
     /// Each item's Quick Menu key: set by hand, or given in order. Mute gets
-    /// M, Live L, overlays 1–9 then letters, push-ins Z X C V…, looks
-    /// Q W E R…, combos A S D F…, Clear All 0.
+    /// M, Live L, effects 1–9 then letters, Clear All 0.
     var keys: [String: String] {
         var keys: [String: String] = [:]
         let items = items
@@ -132,15 +106,12 @@ final class Triggers {
             return key
         }
         let digits = (1...9).map(String.init)
-        let letters = "QWERTYUIOPASDFGHJKL".map(String.init)
+        let letters = "QWERTYUIOPASDFGHJKLZXCVBNM".map(String.init)
         for item in items where keys[item.id] == nil {
             keys[item.id] = switch item.action {
             case .mute: next(from: ["M"] + letters)
             case .live: next(from: ["L"] + letters)
-            case .overlay: next(from: digits + letters)
-            case .pushIn: next(from: "ZXCVBNM".map(String.init) + letters)
-            case .look: next(from: "QWERTYUIOP".map(String.init) + letters)
-            case .combo: next(from: "ASDFGHJKL".map(String.init) + letters)
+            case .effect: next(from: digits + letters)
             case .clearAll: next(from: ["0"] + letters)
             }
         }
@@ -167,95 +138,34 @@ final class Triggers {
         release(action)
     }
 
-    /// What an item does: overlays, each in its spot, at most one push-in,
-    /// and at most one look. One of them for those items; a combo's members
-    /// (any deleted, or with nothing to show, skipped). Clear All has none.
-    private struct Effect {
-        var overlays: [UUID] = []
-        var pushIn: UUID?
-        var look: UUID?
-
-        var isEmpty: Bool { overlays.isEmpty && pushIn == nil && look == nil }
-    }
-
-    private func effect(of action: Item.Action) -> Effect? {
-        switch action {
-        case .mute, .live:
-            return nil
-        case .overlay(let id):
-            return Effect(overlays: [id])
-        case .pushIn(let id):
-            return Effect(pushIn: id)
-        case .look(let id):
-            return Effect(look: id)
-        case .combo(let id):
-            guard let combo = combos.combo(id) else { return nil }
-            return Effect(
-                overlays: combo.overlays.filter { overlays.overlay($0)?.canShow ?? false },
-                pushIn: combo.pushIn.flatMap { level in zoom.levels.contains { $0.id == level } ? level : nil },
-                look: combo.look.flatMap { looks.look($0)?.id }
-            )
-        case .clearAll:
-            return nil
-        }
-    }
-
-    /// All of it showing.
-    private func isOn(_ effect: Effect) -> Bool {
-        !effect.isEmpty
-            && effect.overlays.allSatisfy(overlays.isShowing)
-            && effect.pushIn.map { zoom.active == $0 } ?? true
-            && effect.look.map { looks.active == $0 } ?? true
-    }
-
-    /// Its key went down: toggles the effect, all of it.
+    /// Its key went down: turns its effect off if it's on, else on, on top.
     func press(_ action: Item.Action) {
         let id = Self.id(of: action)
         // Key repeat while held.
         guard presses[id] == nil else { return }
-        guard let effect = effect(of: action) else {
-            if action == .clearAll { overlays.clearAll() }
-            if action == .mute { appState.toggle() }
-            if action == .live { openLive?() }
-            return
+        switch action {
+        case .mute: appState.toggle()
+        case .live: openLive?()
+        case .clearAll: library.clearAll()
+        case .effect(let effect):
+            if library.isOn(effect) {
+                library.turnOff(effect)
+                presses[id] = Press(turnedOn: nil)
+            } else {
+                presses[id] = Press(turnedOn: library.turnOn(effect))
+            }
         }
-        if isOn(effect) {
-            effect.overlays.forEach(overlays.hide)
-            if let level = effect.pushIn, zoom.active == level { zoom.activate(nil) }
-            if let look = effect.look, looks.active == look { looks.turnOff() }
-            presses[id] = Press(turnedOn: false)
-            return
-        }
-        var press = Press(turnedOn: true)
-        for overlay in effect.overlays where !overlays.isShowing(overlay) {
-            press.shown.append((overlay, overlays.show(overlay)))
-        }
-        if let level = effect.pushIn, zoom.active != level {
-            press.pushIn = level
-            press.previousZoom = zoom.active
-            zoom.activate(level)
-        }
-        if let look = effect.look, looks.active != look {
-            press.look = look
-            press.previousLook = looks.state
-            looks.turnOn(look)
-        }
-        presses[id] = press
     }
 
-    /// Its key came up. Held long enough, what it turned on goes, and what
-    /// that replaced comes back; a tap leaves it on.
+    /// Its key came up. Held long enough, the effect it turned on goes, and
+    /// what it covered shows again; a tap leaves it on.
     func release(_ action: Item.Action) {
-        guard let press = presses.removeValue(forKey: Self.id(of: action)), press.turnedOn,
-              Date.now.timeIntervalSince(press.start) >= Self.holdSeconds
-        else { return }
-        // Last shown first, so overlays sharing a spot unwind in order.
-        for (overlay, replaced) in press.shown.reversed() where overlays.isShowing(overlay) {
-            overlays.hide(overlay)
-            if let replaced { overlays.restore(replaced) }
+        guard let press = presses.removeValue(forKey: Self.id(of: action)), let token = press.turnedOn else { return }
+        if Date.now.timeIntervalSince(press.start) >= Self.holdSeconds {
+            library.takeOff(token)
+        } else {
+            library.settle(token)
         }
-        if let level = press.pushIn, zoom.active == level { zoom.activate(press.previousZoom) }
-        if let look = press.look, looks.active == look { looks.restore(press.previousLook) }
     }
 
     /// An item's ID, which names its shortcut and its Quick Menu key.
@@ -263,23 +173,16 @@ final class Triggers {
         switch action {
         case .mute: KeyboardShortcuts.Name.toggleMicMute.rawValue
         case .live: Item.liveName.rawValue
-        case .overlay(let id): "overlay-\(id)"
-        case .pushIn(let id): ZoomShortcuts.Level.shortcut(for: id).rawValue
-        case .look(let id): "look-\(id)"
-        case .combo(let id): "combo-\(id)"
+        case .effect(let id): "effect-\(id)"
         case .clearAll: Item.clearAllName.rawValue
         }
     }
 
-    /// Listens for each overlay's, push-in level's, look's and combo's
-    /// shortcut, down and up, as they come and go; a deleted one's shortcut
-    /// and Quick Menu key go with it.
+    /// Listens for each effect's shortcut, down and up, as effects come and
+    /// go; a deleted one's shortcut and Quick Menu key go with it.
     private func followItems() {
         let actions = withObservationTracking {
-            overlays.overlays.map { Item.Action.overlay($0.id) }
-                + zoom.levels.map { Item.Action.pushIn($0.id) }
-                + looks.looks.map { Item.Action.look($0.id) }
-                + combos.combos.map { Item.Action.combo($0.id) }
+            library.effects.map { Item.Action.effect($0.id) }
         } onChange: { [weak self] in
             Task { @MainActor in self?.followItems() }
         }

@@ -28,16 +28,14 @@ final class Feeder {
     /// sent. They're Vaux's own, set in Control Center's Video Effects, and
     /// apply before overlays are drawn.
     private(set) var systemEffects: [String] = []
-    /// The zoom being sent: the camera's own, times a zoom shortcut's.
+    /// The zoom being sent: the camera's own, times the effects' push-in.
     private(set) var zoom = 1.0
 
     @ObservationIgnored private let installer: ExtensionInstaller
     @ObservationIgnored private let access: CameraAccess
     @ObservationIgnored private let cameras: CameraPriorityModel
     @ObservationIgnored private let device: CameraDevice
-    @ObservationIgnored private let overlays: OverlayLibrary
-    @ObservationIgnored private let zoomShortcuts: ZoomShortcuts
-    @ObservationIgnored private let looks: LookLibrary
+    @ObservationIgnored private let library: EffectLibrary
     @ObservationIgnored private var feed: CameraFeed!
     /// What the feed is running now.
     @ObservationIgnored private var feeding: Feeding?
@@ -48,16 +46,17 @@ final class Feeder {
         let sink: SinkConnection
         var zoom: Double
         var modeZoom: Double
-        var shortcut: UUID?
+        var zoomSource: UUID?
     }
 
     private struct Wanted {
         let status: Status
         let zoom: Double
-        /// The furthest zoom shortcuts can push this camera; its mode keeps
-        /// that sharp.
+        /// The furthest effects can push this camera; its mode keeps that
+        /// sharp.
         let modeZoom: Double
-        let shortcut: UUID?
+        /// What set the zoom (see EffectLibrary.zoomSource).
+        let zoomSource: UUID?
         let overlays: [OverlayLayer]
         let look: Look?
     }
@@ -67,17 +66,13 @@ final class Feeder {
         access: CameraAccess,
         cameras: CameraPriorityModel,
         device: CameraDevice,
-        overlays: OverlayLibrary,
-        zoomShortcuts: ZoomShortcuts,
-        looks: LookLibrary
+        library: EffectLibrary
     ) {
         self.installer = installer
         self.access = access
         self.cameras = cameras
         self.device = device
-        self.overlays = overlays
-        self.zoomShortcuts = zoomShortcuts
-        self.looks = looks
+        self.library = library
         feed = CameraFeed { [weak self] stats in
             self?.stats = stats
             self?.readSystemEffects()
@@ -98,11 +93,11 @@ final class Feeder {
         let most = CameraZoom.range.upperBound
         return Wanted(
             status: status,
-            zoom: min(base * zoomShortcuts.factor, most),
-            modeZoom: min(base * zoomShortcuts.furthest, most),
-            shortcut: zoomShortcuts.active,
-            overlays: overlays.scene,
-            look: looks.activeLook
+            zoom: min(base * library.zoom, most),
+            modeZoom: min(base * library.furthest, most),
+            zoomSource: library.zoomSource,
+            overlays: library.scene,
+            look: library.look
         )
     }
 
@@ -121,21 +116,22 @@ final class Feeder {
         feed.showLook(wanted.look)
         if case .sending(let camera, let format) = wanted.status, let sink = device.sink {
             if let feeding, feeding.camera == camera.uid, feeding.format == format, feeding.sink === sink {
-                // Same camera, same format: only the zoom may have moved. A
-                // shortcut pushes in or out smoothly; the slider moves at once.
+                // Same camera, same format: only the zoom may have moved. An
+                // effect coming on or off pushes in or out smoothly; a slider
+                // moves at once.
                 if feeding.zoom != wanted.zoom {
-                    feed.setZoom(wanted.zoom, animated: feeding.shortcut != wanted.shortcut)
+                    feed.setZoom(wanted.zoom, animated: feeding.zoomSource != wanted.zoomSource)
                 }
                 if feeding.modeZoom != wanted.modeZoom {
                     feed.setModeZoom(wanted.modeZoom)
                 }
                 self.feeding?.zoom = wanted.zoom
                 self.feeding?.modeZoom = wanted.modeZoom
-                self.feeding?.shortcut = wanted.shortcut
+                self.feeding?.zoomSource = wanted.zoomSource
             } else {
                 feeding = Feeding(
                     camera: camera.uid, format: format, sink: sink,
-                    zoom: wanted.zoom, modeZoom: wanted.modeZoom, shortcut: wanted.shortcut
+                    zoom: wanted.zoom, modeZoom: wanted.modeZoom, zoomSource: wanted.zoomSource
                 )
                 feed.start(cameraID: camera.uid, format: format, zoom: wanted.zoom, modeZoom: wanted.modeZoom, sink: sink)
             }
@@ -143,7 +139,7 @@ final class Feeder {
             feeding = nil
             feed.stop()
             // The next call starts at the camera's own zoom.
-            zoomShortcuts.reset()
+            library.endCall()
         }
     }
 

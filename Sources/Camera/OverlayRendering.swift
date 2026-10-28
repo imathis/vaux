@@ -79,7 +79,7 @@ enum OverlayRenderer {
 
     static func graphic(_ name: String) -> NSImage? {
         if let image = graphics[name] { return image }
-        guard let image = NSImage(contentsOf: OverlayLibrary.graphicsFolder.appending(path: name)),
+        guard let image = NSImage(contentsOf: EffectLibrary.graphicsFolder.appending(path: name)),
               image.size.width > 0, image.size.height > 0
         else { return nil }
         graphics[name] = image

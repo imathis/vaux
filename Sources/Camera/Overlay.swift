@@ -1,9 +1,9 @@
 import CoreGraphics
 import Foundation
 
-/// Something shown over Vaux Camera's video: text or a graphic, in a spot.
-/// Several lines (or images) make a set: each showing picks one at random,
-/// never the same twice running.
+/// Something shown over Vaux Camera's video, as part of an effect: text or
+/// a graphic, in a spot. Several lines (or images) make a set: each showing
+/// picks one at random, never the same twice running.
 struct Overlay: Codable, Identifiable, Hashable, Sendable {
     enum Kind: String, Codable, CaseIterable, Sendable {
         case text, graphic
@@ -45,17 +45,14 @@ struct Overlay: Codable, Identifiable, Hashable, Sendable {
     }
 
     var id = UUID()
-    var name: String
     var kind = Kind.text
     var lines: [Line] = []
-    /// Graphic files, in `OverlayLibrary.graphicsFolder`.
+    /// Graphic files, in `EffectLibrary.graphicsFolder`.
     var images: [String] = []
     var style = Style.pill
     var size = Size.medium
     var spot = Spot.top
     var fit = Fit.fit
-    /// Hides itself after this many seconds; nil stays until turned off.
-    var duration: Double?
 
     /// The lines or images a showing picks from.
     var variants: Int { kind == .text ? lines.count : images.count }
@@ -163,11 +160,17 @@ extension Overlay.Size {
 }
 
 extension Overlay {
-    /// The first overlay: the original dictation badge.
-    static let dictating = Overlay(name: "Dictating", lines: [Line(text: "Dictating", icon: "waveform")])
+    /// The original dictation badge.
+    static let dictating = Overlay(lines: [Line(text: "Dictating", icon: "waveform")])
 
     /// The Live panel's, until you type: big, at the bottom.
-    static let live = Overlay(name: "Live", lines: [Line(text: "")], size: .large, spot: .bottom)
+    static let live = Overlay(lines: [Line(text: "")], size: .large, spot: .bottom)
+
+    /// New text to start from, at the bottom.
+    static var newText: Overlay { Overlay(lines: [Line(text: "Be right back")], spot: .bottom) }
+
+    /// A new graphic, its images still to add, in the corner.
+    static var newGraphic: Overlay { Overlay(kind: .graphic, spot: .bottomTrailing) }
 
     /// Icons offered for lines, kept few. Any emoji can be one too.
     static let icons: [(symbol: String?, label: String)] = [

@@ -264,37 +264,29 @@ struct MenuContentView: View {
         }
     }
 
-    /// Live, then overlays, looks and combos, each a list (names can repeat
-    /// across them), and push-ins as one choice, since one level is on at a
-    /// time. Keys live in the Quick Menu.
+    /// Live, then your effects, each checked while it's on. Keys live in
+    /// the Quick Menu.
     @ViewBuilder private func effectsTab(_ effects: Effects) -> some View {
         let items = effects.triggers.items
-        let overlays = items.filter { if case .overlay = $0.action { true } else { false } }
-        let combos = items.filter { if case .combo = $0.action { true } else { false } }
-        let looks = items.filter { if case .look = $0.action { true } else { false } }
-        let levels = effects.zoomShortcuts.levels.sorted { $0.zoom < $1.zoom }
-        let pushedIn = effects.zoomShortcuts.active
+        let list = items.filter { if case .effect = $0.action { true } else { false } }
         let live = items.first { $0.action == .live }
-        cameraHeader(showingOverlays: !effects.overlays.showing.isEmpty) { effects.overlays.clearAll() }
+        cameraHeader(anythingOn: effects.library.anythingOn) { effects.library.clearAll() }
         if let live {
             effectRow(live) {
                 dismiss()
                 effects.live.show()
             }
         }
-        effectList("Overlays", overlays, effects)
-        if !levels.isEmpty { pushInRow(levels, active: pushedIn, effects) }
-        effectList("Looks", looks, effects)
-        effectList("Combos", combos, effects)
+        effectList("Effects", list, effects)
     }
 
-    /// Camera, its state, and Clear while overlays show.
-    private func cameraHeader(showingOverlays: Bool, clear: @escaping () -> Void) -> some View {
+    /// Camera, its state, and Clear while effects are on.
+    private func cameraHeader(anythingOn: Bool, clear: @escaping () -> Void) -> some View {
         HStack(spacing: 6) {
                 Text("Camera").font(.system(size: 13, weight: .semibold))
                 Text(cameraStatus).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 6)
-                if showingOverlays {
+                if anythingOn {
                     Button(action: clear) {
                         Text("Clear")
                             .font(.system(size: 11))
@@ -303,7 +295,7 @@ struct MenuContentView: View {
                             .background(Capsule().fill(Color(nsColor: .quaternaryLabelColor)))
                     }
                     .buttonStyle(.plain)
-                    .help("Hide every overlay")
+                    .help("Turn every effect off")
                 }
         }
         .padding(.horizontal, contentInset)
@@ -331,41 +323,6 @@ struct MenuContentView: View {
                 Text(item.title).font(.system(size: 13)).lineLimit(1)
             }
         }
-    }
-
-    /// Selected while the Live panel's slider sets the zoom: no segment.
-    private static let liveZoomTag = UUID()
-
-    /// Push in: off (1×) or one of the levels.
-    private func pushInRow(_ levels: [ZoomShortcuts.Level], active: UUID?, _ effects: Effects) -> some View {
-        HStack {
-            Text("Push in").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-            Spacer(minLength: 8)
-            Picker("Push in", selection: Binding(
-                // The Live slider's zoom is none of these.
-                get: { effects.zoomShortcuts.liveZoom == nil ? active : Self.liveZoomTag },
-                set: { level in
-                    // Toggling the level on, or the one that's on, off; 1×
-                    // also drops a zoom the Live panel set.
-                    if let id = level ?? active {
-                        effects.triggers.trigger(.pushIn(id))
-                    } else {
-                        effects.zoomShortcuts.applyLive(false)
-                    }
-                }
-            )) {
-                Text("1×").tag(UUID?.none)
-                ForEach(levels) { level in
-                    Text(level.zoom.zoomText).tag(UUID?.some(level.id))
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-            .fixedSize()
-        }
-        .padding(.horizontal, contentInset)
-        .frame(height: 30)
     }
 
     private func subheader(_ text: String) -> some View {

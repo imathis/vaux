@@ -1,14 +1,13 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Everything you trigger: overlays (show or hide, add, edit), push-in levels,
-/// combos, and the overlay shown while dictating.
+/// Your effects, each turned on and off by name, holding whatever you put in
+/// it: text or graphics, a push-in, a look, other effects to build on. Also
+/// the default effect, and the one on while you dictate.
 struct EffectsPage: View {
     let effects: Effects
 
     @State private var editing: Editing?
-    @State private var editingCombo: Editing?
-    @State private var editingLook: Editing?
     /// The Settings window's: deleting an effect can be undone.
     @Environment(\.undoManager) private var undoManager
 
@@ -18,175 +17,113 @@ struct EffectsPage: View {
         var isNew = false
     }
 
-    private var library: OverlayLibrary { effects.overlays }
+    private var library: EffectLibrary { effects.library }
 
     var body: some View {
         @Bindable var library = library
         Form {
             Section {
-                ForEach(library.overlays) { overlay in
-                    OverlayRow(
-                        overlay: overlay,
-                        showing: library.isShowing(overlay.id),
-                        toggle: { library.toggle(overlay.id) },
-                        edit: { editing = Editing(id: overlay.id) }
+                ForEach(library.effects) { effect in
+                    EffectRow(
+                        effect: effect,
+                        summary: summary(of: effect),
+                        badge: library.defaultEffect == effect.id ? "Default" : library.dictationEffect == effect.id ? "Dictating" : nil,
+                        isOn: library.isOn(effect.id),
+                        toggle: { effects.triggers.trigger(.effect(effect.id)) },
+                        edit: { editing = Editing(id: effect.id) }
                     )
                     .contextMenu {
-                        Button("Edit…") { editing = Editing(id: overlay.id) }
-                        Button("Duplicate") { library.duplicate(overlay.id) }
+                        Button("Edit…") { editing = Editing(id: effect.id) }
+                        Button("Duplicate") { library.duplicate(effect.id) }
                         Divider()
-                        Button("Delete", role: .destructive) { remove(.overlay(overlay.id)) }
+                        Button(library.defaultEffect == effect.id ? "Not the Default" : "Make Default") {
+                            library.defaultEffect = library.defaultEffect == effect.id ? nil : effect.id
+                        }
+                        Button(library.dictationEffect == effect.id ? "Not While Dictating" : "Use While Dictating") {
+                            library.dictationEffect = library.dictationEffect == effect.id ? nil : effect.id
+                        }
+                        Divider()
+                        Button("Delete", role: .destructive) { remove(effect.id) }
                     }
                 }
-                .onMove { library.overlays.move(fromOffsets: $0, toOffset: $1) }
+                .onMove { library.effects.move(fromOffsets: $0, toOffset: $1) }
                 // Under its list, at the trailing edge, as in System
                 // Settings; a menu where there's a choice to make.
                 HStack {
                     Spacer()
-                    Menu("Add Overlay") {
-                        Button("Text") { editing = Editing(id: library.add(.text).id, isNew: true) }
-                        Button("Graphic") { editing = Editing(id: library.add(.graphic).id, isNew: true) }
-                    }
-                    .fixedSize()
+                    AddEffectMenu { editing = Editing(id: library.add($0).id, isNew: true) }
                 }
             } header: {
-                SettingsHeader("Overlays", "Over your video, one per spot: a new one replaces what's there.")
+                SettingsHeader("Effects", "Each turns on by name, with what you put in it: text or a graphic, a push-in, a look, other effects to build on. Effects on together stack, the latest on top.")
             }
             Section {
-                PushInLevels(shortcuts: effects.zoomShortcuts) { remove(.pushIn($0.id)) }
-            } header: {
-                SettingsHeader("Push In", "Zoom further, and back. On top of each camera's zoom, up to 2×.")
-            }
-            Section {
-                ForEach(effects.looks.looks) { look in
-                    LookRow(
-                        look: look,
-                        isDefault: effects.looks.defaultLook == look.id,
-                        isOn: effects.looks.active == look.id,
-                        toggle: { effects.triggers.trigger(.look(look.id)) },
-                        edit: { editingLook = Editing(id: look.id) }
-                    )
-                    .contextMenu {
-                        Button("Edit…") { editingLook = Editing(id: look.id) }
-                        Button(effects.looks.defaultLook == look.id ? "Not the Default" : "Make Default") {
-                            effects.looks.defaultLook = effects.looks.defaultLook == look.id ? nil : look.id
-                        }
-                        Button("Duplicate") { effects.looks.duplicate(look.id) }
-                        Divider()
-                        Button("Delete", role: .destructive) { remove(.look(look.id)) }
-                    }
-                }
-                .onMove { effects.looks.looks.move(fromOffsets: $0, toOffset: $1) }
-                @Bindable var looks = effects.looks
-                Picker("Default look", selection: $looks.defaultLook) {
+                Picker("Default effect", selection: $library.defaultEffect) {
                     Text("None").tag(UUID?.none)
-                    ForEach(looks.looks) { look in
-                        Text(look.name).tag(UUID?.some(look.id))
+                    ForEach(library.effects) { effect in
+                        Text(effect.name).tag(UUID?.some(effect.id))
                     }
                 }
-                HStack {
-                    Spacer()
-                    // The presets again: one deleted, or a fresh copy beside
-                    // one that's been changed.
-                    Menu("Add Look") {
-                        Button("New Look") { editingLook = Editing(id: effects.looks.add().id, isNew: true) }
-                        Section("Presets") {
-                            ForEach(Look.presets) { preset in
-                                Button(preset.name) { editingLook = Editing(id: effects.looks.add(preset).id, isNew: true) }
-                            }
-                        }
-                    }
-                    .fixedSize()
-                }
-            } header: {
-                SettingsHeader("Looks", "Color over the whole picture, one at a time. The default is on whenever no other is.")
-            }
-            Section {
-                let items = effects.triggers.items
-                ForEach(effects.combos.combos) { combo in
-                    ComboRow(
-                        combo: combo,
-                        summary: summary(of: combo),
-                        isOn: items.first { $0.action == .combo(combo.id) }?.isOn ?? false,
-                        toggle: { effects.triggers.trigger(.combo(combo.id)) },
-                        edit: { editingCombo = Editing(id: combo.id) }
-                    )
-                    .contextMenu {
-                        Button("Edit…") { editingCombo = Editing(id: combo.id) }
-                        Button("Duplicate") { effects.combos.duplicate(combo.id) }
-                        Divider()
-                        Button("Delete", role: .destructive) { remove(.combo(combo.id)) }
-                    }
-                }
-                HStack {
-                    Spacer()
-                    Button("Add Combo") { editingCombo = Editing(id: effects.combos.add().id, isNew: true) }
-                }
-            } header: {
-                SettingsHeader("Combos", "Several overlays, a push-in and a look, on one key.")
-            }
-            Section {
-                Picker("While dictating, show", selection: $library.dictationOverlay) {
+                Picker("While dictating", selection: $library.dictationEffect) {
                     Text("Nothing").tag(UUID?.none)
-                    ForEach(library.overlays) { overlay in
-                        Text(overlay.name).tag(UUID?.some(overlay.id))
+                    ForEach(library.effects) { effect in
+                        Text(effect.name).tag(UUID?.some(effect.id))
                     }
                 }
             } header: {
-                SettingsHeader("Dictating", "Shows while solo mode is on, so the call knows why you're muted.")
+                SettingsHeader("Default and Dictating", "The default effect is on under everything else. The dictating one is on while solo mode is, so the call knows why you're muted.")
             }
         }
         .formStyle(.grouped)
         .frame(width: SettingsHeader.pageWidth)
         .sheet(item: $editing) { editing in
-            OverlayEditor(library: library, id: editing.id, isNew: editing.isNew, delete: { remove(.overlay(editing.id)) }) {
+            EffectEditor(effects: effects, id: editing.id, isNew: editing.isNew, delete: { remove(editing.id) }) {
                 if let copy = library.duplicate(editing.id) { self.editing = Editing(id: copy.id, isNew: true) }
             }
         }
-        .sheet(item: $editingCombo) { editing in
-            ComboEditor(effects: effects, id: editing.id, isNew: editing.isNew, delete: { remove(.combo(editing.id)) }) {
-                if let copy = effects.combos.duplicate(editing.id) { editingCombo = Editing(id: copy.id, isNew: true) }
-            }
-        }
-        .sheet(item: $editingLook) { editing in
-            LookEditor(effects: effects, id: editing.id, isNew: editing.isNew, delete: { remove(.look(editing.id)) }, duplicate: {
-                if let copy = effects.looks.duplicate(editing.id) { editingLook = Editing(id: copy.id, isNew: true) }
-            })
-        }
     }
 
-    private func remove(_ action: Triggers.Item.Action) {
-        effects.remove(action, undo: undoManager)
+    private func remove(_ id: UUID) {
+        effects.remove(id, undo: undoManager)
     }
 
-    /// Its overlays' names, its push-in, and its look.
-    private func summary(of combo: Combo) -> String {
-        var parts = combo.overlays.compactMap { library.overlay($0)?.name }
-        if let level = effects.zoomShortcuts.levels.first(where: { $0.id == combo.pushIn }) {
-            parts.append("Push in \(level.zoom.zoomText)")
-        }
-        if let look = combo.look.flatMap(effects.looks.look) { parts.append(look.name) }
-        return parts.isEmpty ? "Nothing in it yet" : parts.joined(separator: " + ")
+    /// What's in it, on hover: the name says enough in the list.
+    private func summary(of effect: Effect) -> String {
+        var parts = effect.includes.compactMap { library.effect($0)?.name }
+        parts += effect.overlays.map { $0.kind == .text ? "Text" : "Graphic" }
+        if let pushIn = effect.pushIn { parts.append("Push in \(pushIn.zoomText)") }
+        if effect.look != nil { parts.append("Look") }
+        var summary = parts.isEmpty ? "Nothing in it yet" : parts.joined(separator: " + ")
+        if let duration = effect.duration { summary += " · off after \(duration.formatted(.number.precision(.fractionLength(0...1)))) s" }
+        return summary
     }
 }
 
-/// A combo in the list, one line: its name (what's in it on hover), and
-/// show or hide.
-private struct ComboRow: View {
-    let combo: Combo
+/// An effect in the list, one line: what it mostly is, its name (what's in
+/// it on hover), Default or Dictating, and on or off.
+private struct EffectRow: View {
+    let effect: Effect
     let summary: String
+    let badge: String?
     let isOn: Bool
     let toggle: () -> Void
     let edit: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "square.stack.3d.up")
+            Image(systemName: Self.symbol(for: effect))
                 .foregroundStyle(.secondary)
                 .frame(width: 20)
-            Text(combo.name)
+            Text(effect.name)
                 .lineLimit(1)
                 .help(summary)
+            if let badge {
+                Text(badge)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(.quaternary, in: Capsule())
+            }
             Spacer(minLength: 8)
             Button(action: toggle) {
                 Image(systemName: isOn ? "eye.fill" : "eye")
@@ -195,7 +132,8 @@ private struct ComboRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(isOn ? "Turn off" : "Turn on")
+            .disabled(effect.isEmpty && !isOn)
+            .help(effect.isEmpty ? "Nothing in it yet" : isOn ? "Turn off" : "Turn on")
             Button(action: edit) {
                 Image(systemName: "chevron.right")
                     .foregroundStyle(.tertiary)
@@ -208,10 +146,44 @@ private struct ComboRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: edit)
     }
+
+    /// By its first part.
+    static func symbol(for effect: Effect) -> String {
+        if let overlay = effect.overlays.first { return overlay.kind == .text ? "textformat" : "photo" }
+        if effect.look != nil { return "camera.filters" }
+        if effect.pushIn != nil { return "plus.magnifyingglass" }
+        if !effect.includes.isEmpty { return "square.stack.3d.up" }
+        return "sparkles"
+    }
 }
 
-/// Picks what a combo stacks: overlays, and a push-in.
-struct ComboEditor: View {
+/// Starting points for a new effect, each with one part to begin from.
+private struct AddEffectMenu: View {
+    let add: (Effect) -> Void
+
+    var body: some View {
+        Menu("Add Effect") {
+            Button("Text") { add(Effect(name: "New Text", overlays: [.newText])) }
+            Button("Graphic") { add(Effect(name: "New Graphic", overlays: [.newGraphic])) }
+            Button("Push In") { add(Effect(name: "Push In", pushIn: 1.5)) }
+            Menu("Look") {
+                Button("Plain") { add(Effect(name: "New Look", look: Look(name: "Look"))) }
+                Section("Presets") {
+                    ForEach(Look.presets) { preset in
+                        Button(preset.name) { add(Effect(name: preset.name, look: preset.copy)) }
+                    }
+                }
+            }
+            Divider()
+            Button("Empty") { add(Effect(name: "New Effect")) }
+        }
+        .fixedSize()
+    }
+}
+
+/// Edits an effect, part by part. Edits show as they're made, on the
+/// camera too while it's on.
+struct EffectEditor: View {
     let effects: Effects
     let id: UUID
     /// Just added: Cancel takes it away again.
@@ -220,332 +192,139 @@ struct ComboEditor: View {
     let delete: () -> Void
     /// Opens a copy to edit, by the page that opened it.
     let duplicate: () -> Void
+    /// Snapshots draw it whole.
+    var height: CGFloat = 720
 
     /// How it was when opened, and whether it was on, for Cancel.
-    @State private var opened: (combo: Combo, on: Bool)?
+    @State private var opened: (effect: Effect, on: Bool)?
 
     var body: some View {
-        @Bindable var combos = effects.combos
-        if let index = combos.combos.firstIndex(where: { $0.id == id }) {
+        @Bindable var library = effects.library
+        if let index = library.effects.firstIndex(where: { $0.id == id }) {
             EditorSheet(
-                name: $combos.combos[index].name,
-                isOn: isOn,
-                toggle: { effects.triggers.trigger(.combo(id)) },
+                name: $library.effects[index].name,
+                isOn: library.isOn(id),
+                canTurnOn: !library.effects[index].isEmpty,
+                toggle: { effects.triggers.trigger(.effect(id)) },
                 delete: delete,
                 cancel: cancel,
-                width: 480,
-                height: 540
+                width: 560,
+                height: height
             ) {
                 Button(action: duplicate) { Image(systemName: "plus.square.on.square") }
                     .help("Duplicate, to make another version of it")
             } content: {
-                ComboForm(combo: $combos.combos[index], overlays: effects.overlays.overlays, levels: effects.zoomShortcuts.levels, looks: effects.looks.looks)
+                EffectForm(effect: $library.effects[index], library: library)
             }
             .onAppear {
-                if opened == nil { opened = (combos.combos[index], isOn) }
+                if opened == nil { opened = (library.effects[index], library.isOn(id)) }
             }
         }
     }
-
-    private var isOn: Bool { effects.triggers.items.first { $0.action == .combo(id) }?.isOn ?? false }
 
     /// Back to how it was, on or off as it was. One just added goes.
     private func cancel() {
-        guard let opened else { return }
-        if isOn != opened.on { effects.triggers.trigger(.combo(id)) }
-        if isNew {
-            effects.combos.remove(id)
-        } else if let index = effects.combos.combos.firstIndex(where: { $0.id == id }) {
-            effects.combos.combos[index] = opened.combo
-        }
-    }
-}
-
-struct ComboForm: View {
-    @Binding var combo: Combo
-    let overlays: [Overlay]
-    let levels: [ZoomShortcuts.Level]
-    let looks: [Look]
-
-    var body: some View {
-        Form {
-            Section {
-                ForEach(overlays) { overlay in
-                    Toggle(isOn: member(overlay.id)) {
-                        Text(overlay.name)
-                        Text(overlay.spot.label)
-                    }
-                }
-                if let clash {
-                    Label(clash, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .wraps()
-                }
-            } header: {
-                SettingsHeader("Overlays", "Each shows in its own spot, together.")
-            }
-            Section {
-                Picker("Push in", selection: $combo.pushIn) {
-                    Text("None").tag(UUID?.none)
-                    ForEach(levels) { level in
-                        Text("Push in \(level.zoom.zoomText)").tag(UUID?.some(level.id))
-                    }
-                }
-                Picker("Look", selection: $combo.look) {
-                    Text("None").tag(UUID?.none)
-                    ForEach(looks) { look in
-                        Text(look.name).tag(UUID?.some(look.id))
-                    }
-                }
-            }
-        }
-        .formStyle(.grouped)
-    }
-
-    /// Checked overlays stay in the order they were checked.
-    private func member(_ id: UUID) -> Binding<Bool> {
-        Binding {
-            combo.overlays.contains(id)
-        } set: { included in
-            if included {
-                if !combo.overlays.contains(id) { combo.overlays.append(id) }
-            } else {
-                combo.overlays.removeAll { $0 == id }
-            }
-        }
-    }
-
-    /// Checked overlays that share a spot: only the last checked shows there.
-    private var clash: String? {
-        let chosen = combo.overlays.compactMap { id in overlays.first { $0.id == id } }
-        let shared = Dictionary(grouping: chosen, by: \.spot).filter { $0.value.count > 1 }
-        guard let (spot, sharing) = shared.first else { return nil }
-        let names = sharing.map(\.name).formatted(.list(type: .and))
-        return "\(names) share the \(spot.label.lowercased()) spot, so only \(sharing.last!.name) shows there."
-    }
-}
-
-/// Push-in levels, each with its Quick Menu key; their shortcuts are in the
-/// Shortcuts tab. The dot shows the one pushed in to, and pushes in by click
-/// too, to try one without a key.
-private struct PushInLevels: View {
-    let shortcuts: ZoomShortcuts
-    let remove: (ZoomShortcuts.Level) -> Void
-
-    var body: some View {
-        ForEach(shortcuts.levels) { level in
-            let on = shortcuts.active == level.id
-            HStack(spacing: 8) {
-                Image(systemName: "plus.magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
-                // Pushed in, the camera follows the slider as it moves.
-                // Rounded to 0.05× here rather than stepped, which draws a
-                // tick mark for every step.
-                Slider(
-                    value: Binding(get: { level.zoom }, set: { shortcuts.setZoom(($0 * 20).rounded() / 20, for: level) }),
-                    in: ZoomShortcuts.range
-                )
-                .labelsHidden()
-                .controlSize(.small)
-                Text(level.zoom.zoomText)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, alignment: .trailing)
-                // On now, as for the other effects.
-                Button { shortcuts.toggle(level.id) } label: {
-                    Image(systemName: on ? "eye.fill" : "eye")
-                        .foregroundStyle(on ? Color.accentColor : .secondary)
-                        .frame(width: 24, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(on ? "Come back" : "Push in")
-                Button { remove(level) } label: {
-                    Image(systemName: "minus.circle")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Remove")
-            }
-        }
-        HStack {
-            Spacer()
-            Button("Add Push-In") { shortcuts.add() }
-        }
-    }
-}
-
-/// An overlay in the list, one line: its name (what and where on hover),
-/// and show or hide.
-private struct OverlayRow: View {
-    let overlay: Overlay
-    let showing: Bool
-    let toggle: () -> Void
-    let edit: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: overlay.kind == .text ? "textformat" : "photo")
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            Text(overlay.name)
-                .lineLimit(1)
-                .help(summary)
-            Spacer(minLength: 8)
-            Button(action: toggle) {
-                Image(systemName: showing ? "eye.fill" : "eye")
-                    .foregroundStyle(showing ? Color.accentColor : .secondary)
-                    .frame(width: 24, height: 22)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!overlay.canShow)
-            .help(!overlay.canShow ? "Nothing to show yet" : showing ? "Hide" : "Show now")
-            Button(action: edit) {
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 20, height: 22)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Edit")
-        }
-        .contentShape(Rectangle())
-        .onTapGesture(perform: edit)
-    }
-
-    /// What it is, on hover: the name says enough in the list.
-    private var summary: String {
-        let content = switch overlay.kind {
-        case .text: overlay.lines.count == 1 ? "1 line" : "\(overlay.lines.count) lines"
-        case .graphic: overlay.images.count == 1 ? "1 image" : "\(overlay.images.count) images"
-        }
-        let duration = overlay.duration.map { "hides after \($0.formatted(.number.precision(.fractionLength(0...1)))) s" } ?? "until turned off"
-        return "\(content) · \(overlay.spot.label) · \(duration)"
-    }
-}
-
-/// Edits one overlay, with a preview of it as others see it.
-struct OverlayEditor: View {
-    @Bindable var library: OverlayLibrary
-    let id: UUID
-    /// Just added: Cancel takes it away again.
-    var isNew = false
-    /// Undoably, by the page that opened it.
-    let delete: () -> Void
-    /// Opens a copy to edit, by the page that opened it.
-    let duplicate: () -> Void
-
-    @State private var previewVariant = 0
-    /// How it was when opened, and whether it was showing, for Cancel.
-    @State private var opened: (overlay: Overlay, showing: Bool)?
-
-    var body: some View {
-        if let index = library.overlays.firstIndex(where: { $0.id == id }) {
-            EditorSheet(
-                name: $library.overlays[index].name,
-                isOn: library.isShowing(id),
-                canTurnOn: library.overlays[index].canShow,
-                toggle: { library.toggle(id) },
-                delete: delete,
-                cancel: cancel,
-                width: 540,
-                height: 680
-            ) {
-                Button(action: duplicate) { Image(systemName: "plus.square.on.square") }
-                    .help("Duplicate, to make another version of it")
-            } content: {
-                OverlayForm(
-                    overlay: $library.overlays[index],
-                    previewVariant: $previewVariant,
-                    importGraphics: library.importGraphics
-                )
-            }
-            .onAppear {
-                if opened == nil { opened = (library.overlays[index], library.isShowing(id)) }
-            }
-        }
-    }
-
-    /// Back to how it was, showing or not as it was. One just added goes.
-    private func cancel() {
+        let library = effects.library
         guard let opened else { return }
         if isNew {
             library.remove(id)
             return
         }
-        if let index = library.overlays.firstIndex(where: { $0.id == id }) {
-            library.overlays[index] = opened.overlay
+        if let index = library.effects.firstIndex(where: { $0.id == id }) {
+            library.effects[index] = opened.effect
         }
-        if library.isShowing(id) != opened.showing { library.toggle(id) }
+        if library.isOn(id) != opened.on { effects.triggers.trigger(.effect(id)) }
     }
 }
 
-struct OverlayForm: View {
-    @Binding var overlay: Overlay
-    @Binding var previewVariant: Int
-    let importGraphics: ([URL]) -> [String]
+/// An effect's parts, each in its own section with a button to take it out,
+/// and a menu to add more.
+struct EffectForm: View {
+    @Binding var effect: Effect
+    let library: EffectLibrary
+
+    /// The line or image each overlay's preview shows.
+    @State private var previewVariants: [UUID: Int] = [:]
 
     var body: some View {
         Form {
-            Section {
-                OverlayPreview(overlay: overlay, variant: $previewVariant)
-            } footer: {
-                Text("As people on the call see it. Your own preview is mirrored, so text reads backwards to you.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .wraps()
-            }
-            Section {
-                Picker("Kind", selection: kind) {
-                    Text("Text").tag(Overlay.Kind.text)
-                    Text("Graphic").tag(Overlay.Kind.graphic)
-                }
-                .pickerStyle(.segmented)
-            }
-            if overlay.kind == .text {
+            // What it builds on shows too, under its own.
+            let overlays = library.parts(of: effect).flatMap(\.overlays)
+            if !overlays.isEmpty {
                 Section {
-                    LinesEditor(lines: $overlay.lines)
-                } header: {
-                    SettingsHeader("Lines", "More than one: each showing picks one at random. Each line has its own icon; leave its text blank to show just the icon.")
-                }
-                Section("Look") {
-                    Picker("Style", selection: $overlay.style) {
-                        Text("Pill").tag(Overlay.Style.pill)
-                        Text("Bar").tag(Overlay.Style.bar)
-                        Text("Plain").tag(Overlay.Style.plain)
-                    }
-                    .pickerStyle(.segmented)
-                    SizePicker(size: $overlay.size, sizes: Overlay.Size.textSizes)
-                }
-            } else {
-                Section {
-                    ImagesEditor(images: $overlay.images, importGraphics: importGraphics)
-                } header: {
-                    SettingsHeader("Images", "PNG, PDF, SVG or any image, transparency kept. More than one: each showing picks one at random.")
-                }
-                Section("Look") {
-                    SizePicker(size: $overlay.size, sizes: Overlay.Size.allCases)
-                        .disabled(overlay.spot == .fullFrame)
+                    EffectPreview(overlays: overlays, variants: previewVariants)
+                } footer: {
+                    Text("As people on the call see it. Your own preview is mirrored, so text reads backwards to you.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .wraps()
                 }
             }
-            Section("Placement") {
-                SpotPicker(spot: $overlay.spot, allowsFullFrame: overlay.kind == .graphic)
-                if overlay.spot == .fullFrame {
-                    Picker("Fit", selection: $overlay.fit) {
-                        Text("Fit: show all of it").tag(Overlay.Fit.fit)
-                        Text("Fill: cover the frame").tag(Overlay.Fit.fill)
+            if !effect.includes.isEmpty {
+                Section {
+                    ForEach(effect.includes, id: \.self) { included in
+                        HStack(spacing: 10) {
+                            Image(systemName: "square.stack.3d.up")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 20)
+                            Text(library.effect(included)?.name ?? "A deleted effect")
+                                .foregroundStyle(library.effect(included) == nil ? .secondary : .primary)
+                            Spacer()
+                            Button { effect.includes.removeAll { $0 == included } } label: {
+                                Image(systemName: "minus.circle")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Don't build on it")
+                        }
                     }
-                    .pickerStyle(.radioGroup)
+                } header: {
+                    SettingsHeader("Builds On", "These effects come with this one, under its own parts, in order.")
+                }
+            }
+            ForEach($effect.overlays) { $overlay in
+                OverlaySections(overlay: $overlay, variant: variant(of: overlay), importGraphics: library.importGraphics) {
+                    effect.overlays.removeAll { $0.id == overlay.id }
+                }
+            }
+            if let pushIn = effect.pushIn {
+                Section {
+                    HStack(spacing: 8) {
+                        // Rounded to 0.05× rather than stepped, which draws
+                        // a tick mark for every step.
+                        Slider(
+                            value: Binding(get: { pushIn }, set: { effect.pushIn = ($0 * 20).rounded() / 20 }),
+                            in: Effect.pushInRange
+                        )
+                        .labelsHidden()
+                        .controlSize(.small)
+                        Text(pushIn.zoomText)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, alignment: .trailing)
+                    }
+                } header: {
+                    PartHeader("Push In", "Zooms further, on top of each camera's own zoom, up to 2×.") { effect.pushIn = nil }
+                }
+            }
+            if effect.look != nil {
+                LookSections(look: Binding(get: { effect.look ?? Look(name: "Look") }, set: { effect.look = $0 })) {
+                    effect.look = nil
                 }
             }
             Section {
-                Toggle("Hide on its own", isOn: hidesOnItsOwn)
-                if let duration = overlay.duration {
+                HStack {
+                    if effect.isEmpty {
+                        Text("Add text, a graphic, a push-in, a look, or another effect to build on.")
+                            .foregroundStyle(.secondary)
+                            .wraps()
+                    }
+                    Spacer()
+                    AddPartMenu(effect: $effect, library: library)
+                }
+            }
+            Section {
+                Toggle("Turn off on its own", isOn: turnsOffOnItsOwn)
+                if let duration = effect.duration {
                     LabeledContent("After") {
                         HStack(spacing: 6) {
                             TextField("Seconds", value: seconds(duration), format: .number.precision(.fractionLength(0...1)))
@@ -558,17 +337,25 @@ struct OverlayForm: View {
                     }
                 }
             } header: {
-                SettingsHeader("Duration", "Off, it stays until you turn it off.")
+                SettingsHeader("Duration", "Off, it stays on until you turn it off.")
             }
         }
         .formStyle(.grouped)
     }
 
-    private var hidesOnItsOwn: Binding<Bool> {
+    private func variant(of overlay: Overlay) -> Binding<Int> {
         Binding {
-            overlay.duration != nil
-        } set: { hides in
-            overlay.duration = hides ? 10 : nil
+            previewVariants[overlay.id] ?? 0
+        } set: { variant in
+            previewVariants[overlay.id] = variant
+        }
+    }
+
+    private var turnsOffOnItsOwn: Binding<Bool> {
+        Binding {
+            effect.duration != nil
+        } set: { turnsOff in
+            effect.duration = turnsOff ? 10 : nil
         }
     }
 
@@ -577,20 +364,138 @@ struct OverlayForm: View {
         Binding {
             duration
         } set: { seconds in
-            overlay.duration = max(seconds, 0.5)
+            effect.duration = max(seconds, 0.5)
+        }
+    }
+}
+
+/// A part's title, a line about it, and a button to take it out (and to
+/// reset it, for a look).
+struct PartHeader: View {
+    let title: String
+    let description: String?
+    var reset: (() -> Void)?
+    let remove: () -> Void
+
+    init(_ title: String, _ description: String? = nil, reset: (() -> Void)? = nil, remove: @escaping () -> Void) {
+        self.title = title
+        self.description = description
+        self.reset = reset
+        self.remove = remove
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            SettingsHeader(title, description)
+            Spacer(minLength: 8)
+            if let reset {
+                Button(action: reset) { Image(systemName: "arrow.counterclockwise") }
+                    .buttonStyle(.borderless)
+                    .help("Back to how it started")
+            }
+            Button(action: remove) { Image(systemName: "minus.circle") }
+                .buttonStyle(.borderless)
+                .help("Take it out of this effect")
+        }
+    }
+}
+
+/// More for an effect: text or a graphic, a push-in or a look if it has
+/// none, or another effect to build on.
+private struct AddPartMenu: View {
+    @Binding var effect: Effect
+    let library: EffectLibrary
+
+    var body: some View {
+        let buildable = library.effects.filter { library.canInclude($0.id, in: effect.id) && !effect.includes.contains($0.id) }
+        Menu("Add to Effect") {
+            Button("Text") { effect.overlays.append(.newText) }
+            Button("Graphic") { effect.overlays.append(.newGraphic) }
+            Button("Push In") { effect.pushIn = 1.5 }
+                .disabled(effect.pushIn != nil)
+            Menu("Look") {
+                Button("Plain") { effect.look = Look(name: "Look") }
+                Section("Presets") {
+                    ForEach(Look.presets) { preset in
+                        Button(preset.name) { effect.look = preset.copy }
+                    }
+                }
+            }
+            .disabled(effect.look != nil)
+            Menu("Effect to Build On") {
+                ForEach(buildable) { other in
+                    Button(other.name) { effect.includes.append(other.id) }
+                }
+            }
+            .disabled(buildable.isEmpty)
+        }
+        .fixedSize()
+    }
+}
+
+/// An overlay in an effect: what it shows (lines or images), then how it
+/// looks and where it goes.
+private struct OverlaySections: View {
+    @Binding var overlay: Overlay
+    @Binding var variant: Int
+    let importGraphics: ([URL]) -> [String]
+    let remove: () -> Void
+
+    var body: some View {
+        Section {
+            if overlay.kind == .text {
+                LinesEditor(lines: $overlay.lines)
+            } else {
+                ImagesEditor(images: $overlay.images, importGraphics: importGraphics)
+            }
+            if overlay.variants > 1 {
+                LabeledContent("Preview") {
+                    HStack {
+                        Button { variant = (shown - 1 + overlay.variants) % overlay.variants } label: {
+                            Image(systemName: "chevron.left")
+                        }
+                        Text("\(overlay.kind == .text ? "Line" : "Image") \(shown + 1) of \(overlay.variants)")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                        Button { variant = (shown + 1) % overlay.variants } label: {
+                            Image(systemName: "chevron.right")
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+        } header: {
+            if overlay.kind == .text {
+                PartHeader("Text", "More than one line: each showing picks one at random. Each line has its own icon; leave its text blank to show just the icon.", remove: remove)
+            } else {
+                PartHeader("Graphic", "PNG, PDF, SVG or any image, transparency kept. More than one: each showing picks one at random.", remove: remove)
+            }
+        }
+        Section {
+            if overlay.kind == .text {
+                Picker("Style", selection: $overlay.style) {
+                    Text("Pill").tag(Overlay.Style.pill)
+                    Text("Bar").tag(Overlay.Style.bar)
+                    Text("Plain").tag(Overlay.Style.plain)
+                }
+                .pickerStyle(.segmented)
+                SizePicker(size: $overlay.size, sizes: Overlay.Size.textSizes)
+            } else {
+                SizePicker(size: $overlay.size, sizes: Overlay.Size.allCases)
+                    .disabled(overlay.spot == .fullFrame)
+            }
+            SpotPicker(spot: $overlay.spot, allowsFullFrame: overlay.kind == .graphic)
+            if overlay.spot == .fullFrame {
+                Picker("Fit", selection: $overlay.fit) {
+                    Text("Fit: show all of it").tag(Overlay.Fit.fit)
+                    Text("Fill: cover the frame").tag(Overlay.Fit.fill)
+                }
+                .pickerStyle(.radioGroup)
+            }
         }
     }
 
-    /// Text can't be full frame: switching to it moves the overlay to the top.
-    private var kind: Binding<Overlay.Kind> {
-        Binding {
-            overlay.kind
-        } set: { kind in
-            overlay.kind = kind
-            if kind == .text, overlay.spot == .fullFrame { overlay.spot = .top }
-            if kind == .text, !Overlay.Size.textSizes.contains(overlay.size) { overlay.size = .medium }
-        }
-    }
+    private var shown: Int { min(max(variant, 0), max(overlay.variants - 1, 0)) }
 }
 
 private struct SizePicker: View {
@@ -686,7 +591,7 @@ private struct ImagesEditor: View {
                 .frame(width: 56, height: 32)
                 .padding(2)
                 .background(Color(white: 0.2), in: RoundedRectangle(cornerRadius: 4))
-                Text(OverlayLibrary.displayName(ofGraphic: name))
+                Text(EffectLibrary.displayName(ofGraphic: name))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 8)
@@ -706,54 +611,46 @@ private struct ImagesEditor: View {
     }
 }
 
-/// The overlay drawn by the same renderer and placement the camera uses, on
-/// a stand-in 720p frame, scaled down.
-private struct OverlayPreview: View {
-    let overlay: Overlay
-    @Binding var variant: Int
+
+/// An effect's overlays drawn by the same renderer and placement the camera
+/// uses, each spot's last, on a stand-in 720p frame, scaled down.
+private struct EffectPreview: View {
+    let overlays: [Overlay]
+    /// The line or image each shows.
+    let variants: [UUID: Int]
 
     private let frame = CGSize(width: 1280, height: 720)
     private let width: CGFloat = 460
 
     var body: some View {
         let scale = width / frame.width
-        let shown = min(max(variant, 0), max(overlay.variants - 1, 0))
-        let image = OverlayRenderer.render(overlay, variant: shown, frame: frame)
-        VStack(spacing: 8) {
-            ZStack(alignment: .topLeading) {
-                LinearGradient(colors: [Color(white: 0.32), Color(white: 0.16)], startPoint: .top, endPoint: .bottom)
-                Image(systemName: "person.fill")
+        let bySpot = Dictionary(overlays.map { ($0.spot, $0) }, uniquingKeysWith: { _, last in last })
+        let order = [Overlay.Spot.fullFrame] + Overlay.Spot.allCases.filter { $0 != .fullFrame }
+        let images = order.compactMap { spot -> (spot: Overlay.Spot, image: CGImage)? in
+            guard let overlay = bySpot[spot] else { return nil }
+            let variant = min(max(variants[overlay.id] ?? 0, 0), max(overlay.variants - 1, 0))
+            return OverlayRenderer.render(overlay, variant: variant, frame: frame).map { (spot, $0) }
+        }
+        ZStack(alignment: .topLeading) {
+            LinearGradient(colors: [Color(white: 0.32), Color(white: 0.16)], startPoint: .top, endPoint: .bottom)
+            Image(systemName: "person.fill")
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(.white.opacity(0.07))
+                .frame(width: frame.height * 0.75 * scale)
+                .frame(width: frame.width * scale, height: frame.height * scale, alignment: .bottom)
+            ForEach(images.indices, id: \.self) { index in
+                let (spot, image) = images[index]
+                let size = CGSize(width: image.width, height: image.height)
+                let origin = spot.origin(for: size, in: frame)
+                Image(decorative: image, scale: 1)
                     .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(.white.opacity(0.07))
-                    .frame(width: frame.height * 0.75 * scale)
-                    .frame(width: frame.width * scale, height: frame.height * scale, alignment: .bottom)
-                if let image {
-                    let size = CGSize(width: image.width, height: image.height)
-                    let origin = overlay.spot.origin(for: size, in: frame)
-                    Image(decorative: image, scale: 1)
-                        .resizable()
-                        .frame(width: size.width * scale, height: size.height * scale)
-                        .offset(x: origin.x * scale, y: (frame.height - origin.y - size.height) * scale)
-                }
-            }
-            .frame(width: frame.width * scale, height: frame.height * scale)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            if overlay.variants > 1 {
-                HStack {
-                    Button { variant = (shown - 1 + overlay.variants) % overlay.variants } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                    Text("\(overlay.kind == .text ? "Line" : "Image") \(shown + 1) of \(overlay.variants)")
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                    Button { variant = (shown + 1) % overlay.variants } label: {
-                        Image(systemName: "chevron.right")
-                    }
-                }
-                .buttonStyle(.borderless)
+                    .frame(width: size.width * scale, height: size.height * scale)
+                    .offset(x: origin.x * scale, y: (frame.height - origin.y - size.height) * scale)
             }
         }
+        .frame(width: frame.width * scale, height: frame.height * scale)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .frame(maxWidth: .infinity)
     }
 }

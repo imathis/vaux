@@ -13,7 +13,7 @@ import os
 final class VauxCamera {
     private(set) var isOn = UserDefaults.standard.bool(forKey: AppStorageKey.cameraOn)
     private(set) var installer: ExtensionInstaller?
-    /// Overlays, push-ins, combos and their keys: no camera API, so ready as
+    /// Effects and their keys: no camera API, so ready as
     /// soon as the camera is on.
     private(set) var effects: Effects?
     /// The camera itself, started once the extension is installed and current.
@@ -125,15 +125,11 @@ final class VauxCamera {
     }
 }
 
-/// Effects: overlays, push-ins, looks and combos, the keys that trigger them (with
-/// Mute), the Quick Menu, the Live panel, and the overlay shown while you
-/// dictate.
+/// Effects and the keys that trigger them (with Mute), the Quick Menu, the
+/// Live panel, and the effect on while you dictate.
 @MainActor
 final class Effects {
-    let overlays = OverlayLibrary()
-    let zoomShortcuts = ZoomShortcuts()
-    let looks = LookLibrary()
-    let combos = ComboLibrary()
+    let library = EffectLibrary()
     let triggers: Triggers
     let quickMenu: QuickMenu
     let live: LivePanel
@@ -142,68 +138,45 @@ final class Effects {
 
     init(appState: AppState) {
         self.appState = appState
-        triggers = Triggers(appState: appState, overlays: overlays, zoom: zoomShortcuts, looks: looks, combos: combos)
+        triggers = Triggers(appState: appState, library: library)
         quickMenu = QuickMenu(triggers: triggers)
-        live = LivePanel(overlays: overlays, zoom: zoomShortcuts, looks: looks)
+        live = LivePanel(library: library)
         triggers.openLive = { [live] in live.show() }
         followSolo()
     }
 
-    /// Deletes an overlay, push-in, look or combo, undoably: undo puts it
-    /// back in its place with its shortcut and Quick Menu key. Combos keep
-    /// pointing at what they hold, so they pick it back up.
-    func remove(_ action: Triggers.Item.Action, undo: UndoManager?) {
-        let id = Triggers.id(of: action)
-        let name = KeyboardShortcuts.Name(id)
+    /// Deletes an effect, undoably: undo puts it back in its place with its
+    /// shortcut and Quick Menu key, the default or dictation effect again if
+    /// it was. Effects built on it skip it meanwhile.
+    func remove(_ id: UUID, undo: UndoManager?) {
+        guard let index = library.effects.firstIndex(where: { $0.id == id }) else { return }
+        let effect = library.effects[index]
+        let triggerID = Triggers.id(of: .effect(id))
+        let name = KeyboardShortcuts.Name(triggerID)
         let shortcut = KeyboardShortcuts.getShortcut(for: name)
-        let key = triggers.customKeys[id]
-        let title = triggers.items.first { $0.action == action }?.title ?? "Effect"
-        let restore: () -> Void
-        switch action {
-        case .overlay(let overlayID):
-            guard let index = overlays.overlays.firstIndex(where: { $0.id == overlayID }) else { return }
-            let overlay = overlays.overlays[index]
-            let dictation = overlays.dictationOverlay == overlayID
-            overlays.remove(overlayID)
-            restore = { [overlays] in overlays.restore(overlay, at: index, dictation: dictation) }
-        case .pushIn(let levelID):
-            guard let index = zoomShortcuts.levels.firstIndex(where: { $0.id == levelID }) else { return }
-            let level = zoomShortcuts.levels[index]
-            zoomShortcuts.remove(level)
-            restore = { [zoomShortcuts] in zoomShortcuts.restore(level, at: index, assigned: shortcut != nil) }
-        case .look(let lookID):
-            guard let index = looks.looks.firstIndex(where: { $0.id == lookID }) else { return }
-            let look = looks.looks[index]
-            looks.remove(lookID)
-            restore = { [looks] in looks.looks.insert(look, at: min(index, looks.looks.count)) }
-        case .combo(let comboID):
-            guard let index = combos.combos.firstIndex(where: { $0.id == comboID }) else { return }
-            let combo = combos.combos[index]
-            combos.remove(comboID)
-            restore = { [combos] in combos.combos.insert(combo, at: min(index, combos.combos.count)) }
-        case .mute, .live, .clearAll:
-            return
-        }
+        let key = triggers.customKeys[triggerID]
+        let isDefault = library.defaultEffect == id
+        let isDictation = library.dictationEffect == id
+        library.remove(id)
         undo?.registerUndo(withTarget: self) { effects in
-            restore()
+            effects.library.restore(effect, at: index, isDefault: isDefault, isDictation: isDictation)
             if let shortcut { KeyboardShortcuts.setShortcut(shortcut, for: name) }
-            if let key { effects.triggers.setKey(key, for: id) }
+            if let key { effects.triggers.setKey(key, for: triggerID) }
             // Redo.
-            undo?.registerUndo(withTarget: effects) { $0.remove(action, undo: undo) }
-            undo?.setActionName("Delete \(title)")
+            undo?.registerUndo(withTarget: effects) { $0.remove(id, undo: undo) }
+            undo?.setActionName("Delete \(effect.name)")
         }
-        undo?.setActionName("Delete \(title)")
+        undo?.setActionName("Delete \(effect.name)")
     }
 
-    /// Solo mode is dictating: the "while dictating" overlay shows while it's
-    /// on.
+    /// Solo mode is dictating: the dictation effect is on while it's on.
     private func followSolo() {
         let active = withObservationTracking { appState.soloActive } onChange: { [weak self] in
             Task { @MainActor in self?.followSolo() }
         }
         guard active != dictating else { return }
         dictating = active
-        overlays.setDictating(active)
+        library.setDictating(active)
     }
 }
 
@@ -222,9 +195,7 @@ final class CameraSide {
             access: access,
             cameras: priority,
             device: device,
-            overlays: effects.overlays,
-            zoomShortcuts: effects.zoomShortcuts,
-            looks: effects.looks
+            library: effects.library
         )
     }
 }
@@ -254,7 +225,7 @@ enum FramesImport {
               let settings = defaults.persistentDomain(forName: frames)
         else { return }
         do {
-            let target = OverlayLibrary.folder
+            let target = EffectLibrary.folder
             try? fileManager.removeItem(at: target)
             try fileManager.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
             try fileManager.copyItem(at: source, to: target)

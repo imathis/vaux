@@ -73,7 +73,7 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     /// Runs the camera with this unique ID into `sink`, in `format`, zoomed
     /// in by `zoom`, switching from what's running, if anything. The camera
     /// runs in a mode that keeps `modeZoom` sharp: at least `zoom`, more when
-    /// zoom shortcuts may push further.
+    /// effects may push further.
     func start(cameraID: String, format: FrameFormat, zoom: Double, modeZoom: Double, sink: SinkConnection) {
         sessionQueue.async { [self] in
             if input?.device.uniqueID != cameraID || configuredFor != format || configuredZoom != modeZoom {
@@ -101,7 +101,7 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     }
 
     /// Zooms the running camera, from the next frame: at once (the slider),
-    /// or eased over a moment (a zoom shortcut pushing in or out).
+    /// or eased over a moment (an effect pushing in or out).
     func setZoom(_ zoom: Double, animated: Bool) {
         videoQueue.async { [self] in
             if animated {
