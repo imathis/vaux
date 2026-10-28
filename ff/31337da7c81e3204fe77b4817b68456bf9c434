@@ -1,0 +1,81 @@
+Sources/Camera/EffectMigration.swift
+  s_c9cb9133d40bef::t_0ce63852875802 1-42,55-142
+  s_c9cb9133d40bef::t_04418f8830702d 43-54
+Sources/Camera/LivePanel.swift
+  s_c9cb9133d40bef::t_999f12bcac3e24 5-6,11,14-15,25,67-70,72,91,98,106,112,114,118,122,126,128-132,146,151-160,165,167-168,170,175-185,187,189,199-200
+README.md
+  s_c9cb9133d40bef::t_0d9d6704ccf218 107,113-121,133,136-138,142-144,154-155,157,212,215-216,317-320,322-323
+  s_c9cb9133d40bef::t_1a3619167da7d7 140-141
+  s_c9cb9133d40bef::t_04783e238e0f13 134,139
+  s_c9cb9133d40bef::t_85e7a9d3fab302 129-132
+  s_c9cb9133d40bef::t_c62f1997f2278b 135
+Sources/SettingsView.swift
+  s_c9cb9133d40bef::t_9c0b9dc1c83f67 134
+Sources/Camera/CameraFeed.swift
+  s_c9cb9133d40bef::t_0d9d6704ccf218 76,104
+Sources/Camera/VauxCamera.swift
+  s_c9cb9133d40bef::t_338ec0d6fdf99e 16
+  s_c9cb9133d40bef::t_56824d106b9759 128-129,132,141,143,148-155,157-160,162,164,166-167,169,172,179,198,228
+Sources/Camera/OverlayRendering.swift
+  s_c9cb9133d40bef::t_dc13de56902713 82
+Sources/Camera/Triggers.swift
+  s_c9cb9133d40bef::t_fc34e7b8398bbb 5-8,11,20,37,47-48,51,58,60,85,87-89,91,95,109,114,141,146-156,160-161,163-164,166-167,176,181-182,185
+  s_c9cb9133d40bef::t_c97d7a848bc6db 165
+Sources/Camera/LookSections.swift
+  s_c9cb9133d40bef::t_55b6af16c015c6 3-4
+  s_c9cb9133d40bef::t_dd996618c8d8f5 1-2,5-24,26-60,62-144
+  s_c9cb9133d40bef::t_3b140469d374a2 25
+  s_c9cb9133d40bef::t_8265b3d04ba334 61
+Sources/MenuContentView.swift
+  s_c9cb9133d40bef::t_d2aa06254ce3ad 267-268,271,273,280,283-284,289,298
+Sources/Camera/Effect.swift
+  s_c9cb9133d40bef::t_85e7a9d3fab302 24-25,29-30,36-52
+  s_c9cb9133d40bef::t_2b0d39c24d8181 1-3,5-21,54-69
+  s_c9cb9133d40bef::t_013011ff7f140a 4,22-23,26-28,31-35,53
+Sources/Camera/Overlay.swift
+  s_c9cb9133d40bef::t_0d9d6704ccf218 50
+  s_c9cb9133d40bef::t_dc13de56902713 169-173
+  s_c9cb9133d40bef::t_cb909203ea1730 4-6,163-164,167
+  s_c9cb9133d40bef::t_640abdc2967080 168
+Sources/Camera/EffectLibrary.swift
+  s_c9cb9133d40bef::t_2238ae15450981 1-20,24-83,87-178,180-200,203-213,216-251,253,255-355,358-404,408-461
+  s_c9cb9133d40bef::t_0397eb851da7c8 22-23
+  s_c9cb9133d40bef::t_c97d7a848bc6db 179,201-202
+  s_c9cb9133d40bef::t_0f791652f71398 21,84-86,252,254,356-357,405-407
+  s_c9cb9133d40bef::t_41840f7e9232fc 214-215
+Sources/Camera/EffectsSettings.swift
+  s_c9cb9133d40bef::t_7b431def3ea72a 202-203,207,283-284
+  s_c9cb9133d40bef::t_879473c64e8432 4,26-33,36-37,39-46,49,54,57,60,62-63,66,68-69,73,79,85-86,89-97,101-104,106,113,116,119-126,135-136,150-156,160-162,165-173,177-178,180,184-187,195-196,198-199,205-206,208,211-212,217,220,225,227,233-234,236,240-247,251-260,263,265-279,285-286,288-289,291-303,308-311,314-319,321-322,326-327,340,346,348-358,367,370,372-400,403-494,497-498,594,614-620,627-646,648-649
+  s_c9cb9133d40bef::t_523ce99ec5a397 5-6,306,401-402
+  s_c9cb9133d40bef::t_063a176d2c318b 20,281,304,652-653
+Sources/Camera/Feeder.swift
+  s_c9cb9133d40bef::t_082795643d78b9 38,49,55-56,58-59,69,75,96-100,119-120
+  s_c9cb9133d40bef::t_92a2711450becc 31
+  s_c9cb9133d40bef::t_d1c4677cbfa343 121,123,130,134,142
+Sources/Camera/ShortcutsSettings.swift
+  s_c9cb9133d40bef::t_ae8bfede5b6f6a 61-62,65-66,70,110
+Sources/Snapshot.swift
+  s_c9cb9133d40bef::t_0233eba2f68bf4 35-36
+  s_c9cb9133d40bef::t_27ba9f64aa224e 55
+  s_c9cb9133d40bef::t_9c0b9dc1c83f67 31-33,37-43,49-54,56,59,71-72,77
+Sources/Camera/Look.swift
+  s_c9cb9133d40bef::t_55b6af16c015c6 7
+  s_c9cb9133d40bef::t_dc13de56902713 8-9,61,113-115
+  s_c9cb9133d40bef::t_3e9ecd132ebef8 116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ff31337da7c81e3204fe77b4817b68456bf9c434",
+  "prompts": {},
+  "sessions": {
+    "s_c9cb9133d40bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46d79b12-ab26-4b09-8d76-66163839d16b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
