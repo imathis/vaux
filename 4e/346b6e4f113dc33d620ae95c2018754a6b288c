@@ -1,0 +1,290 @@
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/keys/more.svg
+  s_c9cb9133d40bef::t_5bf3ded223a2e9 1
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/keys/effect-off.svg
+  s_c9cb9133d40bef::t_5f1c4881ea9dc7 1
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/actions/back.svg
+  s_c9cb9133d40bef::t_5f1c4881ea9dc7 1
+Sources/AppDelegate.swift
+  s_c9cb9133d40bef::t_2ac099bbfd5e2b 18-19,48-49
+Sources/Camera/EffectsSettings.swift
+  s_c9cb9133d40bef::t_dd69b759559a70 273-274
+  s_c9cb9133d40bef::t_dfd6e5d2881bbc 594-599,601-604,740-741,745,747-749,753-755,761-762,775
+  s_c9cb9133d40bef::t_73842891c63198 825-826,829
+  s_c9cb9133d40bef::t_5e6153e6599399 617,635-636
+  s_c9cb9133d40bef::t_bd6f2764cbcd78 680,1011-1017,1028-1029
+  s_c9cb9133d40bef::t_b119787a7172dd 685-690
+  s_c9cb9133d40bef::t_28acc92bdd47cb 733-734
+  s_c9cb9133d40bef::t_a226b093fe1575 278
+  s_c9cb9133d40bef::t_95542977cd15bc 35-38,41,60,62-64,294-297,299-300,310-311,313-314
+  s_c9cb9133d40bef::t_8d2fdbc60e748f 74-88,423-424,445-449
+  s_c9cb9133d40bef::t_55a358ef9bbc04 108,366,431-432,631-634,637-642,644,646,683,823-824,827-828
+  s_c9cb9133d40bef::t_db0806bb7c47af 441-444,450-451
+  s_c9cb9133d40bef::t_9def01efa2a919 127-128,173,258,334-335,338-341,343-344,369-416,776
+  s_c9cb9133d40bef::t_709a4ef63a2c2f 682
+  s_c9cb9133d40bef::t_54b562be0896c0 67
+  s_c9cb9133d40bef::t_f8655b07dfd06c 182-183,186,191,193
+  s_c9cb9133d40bef::t_6e3a52bdc084f0 39-40,42-50,54,57,68,180-181,184-185,187,194-201
+  s_c9cb9133d40bef::t_d5a283f88d3b4a 275,291-293,298,301-309,336-337,348,356
+  s_c9cb9133d40bef::t_6969640922171f 643,647,750-752,766,769
+  s_c9cb9133d40bef::t_ada129610ede97 611-616,618
+  s_c9cb9133d40bef::t_cb919920b45e8d 246
+  s_c9cb9133d40bef::t_db28d0dcdf90f6 679,737,739,742-744,746,756-760,763-765,767-768,772-774
+  s_c9cb9133d40bef::t_2f019cddbba9d7 684,697-702
+  s_c9cb9133d40bef::t_37df78287e01c9 51-53,55-56,65-66
+  s_c9cb9133d40bef::t_2423d2d8ed7d2c 645
+  s_c9cb9133d40bef::t_603f5a5538e5f1 345-347,349-355,357-361,367
+  s_c9cb9133d40bef::t_e2c68aed6f9bf0 91,107,600,606,657,883,885,1122
+  s_c9cb9133d40bef::t_ac4eb610d22e3b 691-694,704
+  s_c9cb9133d40bef::t_14bbed7ee30e88 23-25,109-117,129-172,681
+  s_c9cb9133d40bef::t_1b7750a411bde3 21-22,26-27,34,73,188-190,192,202-245,247-257,279-280,289-290
+  s_c9cb9133d40bef::t_e854df41aea9f1 259,362-365,368
+Sources/Camera/Effect.swift
+  s_c9cb9133d40bef::t_fc00d6c4250397 23-27
+  s_c9cb9133d40bef::t_24b03086418ae5 15-16,33-42,100-140,150,195
+  s_c9cb9133d40bef::t_5763da08894985 51,63,85-91,94
+  s_c9cb9133d40bef::t_6969640922171f 60-62
+  s_c9cb9133d40bef::t_33568d26e69c0f 49-50,52-54
+  s_c9cb9133d40bef::t_5e6153e6599399 57-59,93
+  s_c9cb9133d40bef::t_fbba755d05fa56 21-22,154
+  s_c9cb9133d40bef::t_db6eb8677704f5 70-72
+  s_c9cb9133d40bef::t_63550beaf6401d 155-156
+  s_c9cb9133d40bef::t_2d1a7e2b0e6d1a 28-29,157,183-194
+Sources/Camera/EffectLibrary.swift
+  s_c9cb9133d40bef::t_bd6f2764cbcd78 13-14,116,559-563,573
+  s_c9cb9133d40bef::t_6c7ec4330779ec 50,179,185,190,192,198,201,203,209-210
+  s_c9cb9133d40bef::t_2d1a7e2b0e6d1a 51-54,133-134,145,156-157,159-160,175-176,186-187,223-243,245,248-263,597
+  s_c9cb9133d40bef::t_6969640922171f 100-102,537
+  s_c9cb9133d40bef::t_879a9b7b4440e8 593-594
+  s_c9cb9133d40bef::t_24b03086418ae5 107-109,520,530-533,536,546
+  s_c9cb9133d40bef::t_14bbed7ee30e88 161-164,166-174
+  s_c9cb9133d40bef::t_87462f1b7a7b84 265-269
+  s_c9cb9133d40bef::t_dc1e21bbbf567c 55-61,135,146,158,165,177-178,180-184,188-189,191,193-197,199-200,202,204-208,211-222,244,246-247
+  s_c9cb9133d40bef::t_fbba755d05fa56 110-112,547-548
+  s_c9cb9133d40bef::t_01c46b23db1a0b 103,519,534-535,538,545
+  s_c9cb9133d40bef::t_fe8cb193bc1a86 264
+README.md
+  s_c9cb9133d40bef::t_2d8346319ceee7 135
+  s_c9cb9133d40bef::t_26fb95a72e147e 185-186,251-252,273-274,285,338
+  s_c9cb9133d40bef::t_f002b4bba7eb85 138-140
+  s_c9cb9133d40bef::t_497396674beb8a 117-120
+  s_c9cb9133d40bef::t_8d2fdbc60e748f 150-153,378,396
+  s_c9cb9133d40bef::t_88d4e4fb173a7b 158-166,194
+  s_c9cb9133d40bef::t_cfa6bc20f655c6 143
+  s_c9cb9133d40bef::t_e07253cc20ee9a 189-193,379
+  s_c9cb9133d40bef::t_5e17e6b1d3cf96 339,382-384,387
+  s_c9cb9133d40bef::t_83e665852fa935 381,395
+  s_c9cb9133d40bef::t_2bd26538c5d885 157
+  s_c9cb9133d40bef::t_0a12590b0178db 147-148
+  s_c9cb9133d40bef::t_7471d4bbd1a787 136-137
+  s_c9cb9133d40bef::t_928c7eb0db0cef 121-123
+  s_c9cb9133d40bef::t_ed03e72cb9f360 187-188
+  s_c9cb9133d40bef::t_6969640922171f 141-142
+  s_c9cb9133d40bef::t_9ec474e4598058 154-156
+  s_c9cb9133d40bef::t_8de2125be46e39 133
+  s_c9cb9133d40bef::t_c5701dea47aab5 149
+StreamDeck/src/plugin.ts
+  s_c9cb9133d40bef::t_5b95402569d87d 3,10
+  s_c9cb9133d40bef::t_cf1cd8e6c76b05 1-2,4-9,13-15
+  s_c9cb9133d40bef::t_bef9950840af79 11-12
+Sources/Camera/QuickMenu.swift
+  s_c9cb9133d40bef::t_10681d004abd75 152-155
+  s_c9cb9133d40bef::t_e2c68aed6f9bf0 183
+  s_c9cb9133d40bef::t_f5982421296e3c 148,150-151
+  s_c9cb9133d40bef::t_ac4eb610d22e3b 146-147,149,156-163
+Sources/Camera/Triggers.swift
+  s_c9cb9133d40bef::t_14bbed7ee30e88 127-132
+  s_c9cb9133d40bef::t_1e5c77582be708 29-30,89,91
+  s_c9cb9133d40bef::t_f5982421296e3c 230-235
+  s_c9cb9133d40bef::t_ac4eb610d22e3b 217-229,236
+StreamDeck/dev.imathis.vaux.sdPlugin/ui/effect.html
+  s_c9cb9133d40bef::t_482d81a7458dcf 89,92-93
+  s_c9cb9133d40bef::t_27c972b2b07480 123
+  s_c9cb9133d40bef::t_473844bcb98c50 61-63,65-81,86,88,94,120-121
+  s_c9cb9133d40bef::t_7ab7d4b21abb02 1-60,64,82-85,87,90-91,95-119,122,124-128
+StreamDeck/dev.imathis.vaux.sdPlugin/manifest.json
+  s_c9cb9133d40bef::t_bc8da12a8b8adf 1-2,4,6-30,34-35,44-51,55-56,67-69,93-96,100-101,114-120,124,130,187-188
+  s_c9cb9133d40bef::t_9971c625c50c50 131-135,137-186,189
+  s_c9cb9133d40bef::t_8ac56dcacc9e0c 31-33,36-43,52-54,57-66,97-99,102-113,121-123,125-129
+  s_c9cb9133d40bef::t_45801f56fa6454 3
+  s_c9cb9133d40bef::t_dde5b4f99d3a12 5,70-92,136
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/keys/effect-on.svg
+  s_c9cb9133d40bef::t_41792226f1c2e0 1
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/actions/page.svg
+  s_c9cb9133d40bef::t_373831dca24769 1
+Sources/Camera/CameraFeed.swift
+  s_c9cb9133d40bef::t_85601957e106fd 49-50,437,439-447,449,451-454
+  s_c9cb9133d40bef::t_01c46b23db1a0b 44,47,184-186,223,227-228
+  s_c9cb9133d40bef::t_24b03086418ae5 39,116-119,121-122,149-150
+  s_c9cb9133d40bef::t_6969640922171f 45-46,48,189-190,226
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/keys/back.svg
+  s_c9cb9133d40bef::t_5f1c4881ea9dc7 1
+Makefile
+  s_c9cb9133d40bef::t_e787c6eacfd2da 45,49,54,89-98
+  s_c9cb9133d40bef::t_ac519d7b96f3f4 46-48,50-52
+  s_c9cb9133d40bef::t_6314d6a0a92eb1 53
+Sources/ControlServer.swift
+  s_c9cb9133d40bef::t_cb2dc592c20132 1-6,10-12,17-25,30-46,51-61,64-168,170-215,220-225,251,263-265,267,302-303
+  s_c9cb9133d40bef::t_af4de401bba20e 13-16,26,28-29,230-231,247,250,254-255
+  s_c9cb9133d40bef::t_36ca42d3685ecf 27,62-63,216,226-229,253,256-262
+  s_c9cb9133d40bef::t_05e171259cdafd 219,232-246,248-249,252
+  s_c9cb9133d40bef::t_13fac45858a980 8-9
+  s_c9cb9133d40bef::t_b4ab03a81844a0 7,217-218
+  s_c9cb9133d40bef::t_dec63027914b85 47-50,169,266,268-301
+StreamDeck/package.json
+  s_c9cb9133d40bef::t_3e303985049050 7
+  s_c9cb9133d40bef::t_2877b44fddd4d5 1-6,8-20
+StreamDeck/build.mjs
+  s_c9cb9133d40bef::t_c429f718b28adf 1-14
+StreamDeck/dev.imathis.vaux.sdPlugin/ui/group.html
+  s_c9cb9133d40bef::t_86570f516c8c3c 1-109
+Sources/Camera/VauxCamera.swift
+  s_c9cb9133d40bef::t_b119787a7172dd 138-140,185-194,196-197
+  s_c9cb9133d40bef::t_fbba755d05fa56 141,150,178-184,195,198-201
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/plugin/category.svg
+  s_c9cb9133d40bef::t_41792226f1c2e0 1
+Sources/AppState.swift
+  s_c9cb9133d40bef::t_fbba755d05fa56 132-134
+Sources/Camera/ShakeMotion.swift
+  s_c9cb9133d40bef::t_1211fd8ecdf9f7 1-2,8,12-19,22,25-28,34,38,50-51,55-56,63,69-71,75-78,90,100-101,105-110
+  s_c9cb9133d40bef::t_db6eb8677704f5 29-33,35-37,39-49
+  s_c9cb9133d40bef::t_4c23f68a13e361 3-7,9-11,20-21,23-24,52-54,57-62,64-68,72-74,79-89,91-99,102-104
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/keys/clear.svg
+  s_c9cb9133d40bef::t_5f1c4881ea9dc7 1
+StreamDeck/profiles.mjs
+  s_c9cb9133d40bef::t_6cb1c9215cf952 1-80
+Sources/KeyImages.swift
+  s_c9cb9133d40bef::t_875c520004fe0f 30-32,34,52
+  s_c9cb9133d40bef::t_4d42f9a3538f19 1-29,33,35-51,53-56
+Sources/Camera/LookSections.swift
+  s_c9cb9133d40bef::t_e2c68aed6f9bf0 25,54,62
+Sources/SettingsView.swift
+  s_c9cb9133d40bef::t_e2c68aed6f9bf0 134
+Sources/Snapshot.swift
+  s_c9cb9133d40bef::t_2423d2d8ed7d2c 63
+  s_c9cb9133d40bef::t_879a9b7b4440e8 29-33
+Sources/Camera/Feeder.swift
+  s_c9cb9133d40bef::t_01c46b23db1a0b 76,120-121,138
+  s_c9cb9133d40bef::t_24b03086418ae5 59-61,72,117,142-143,145-146,148,158
+Sources/Camera/Compositor.swift
+  s_c9cb9133d40bef::t_bd6f2764cbcd78 125-135,151-159
+  s_c9cb9133d40bef::t_5e6153e6599399 27-29,33-34,54-55,209-210,212-213,215-216
+  s_c9cb9133d40bef::t_9b1a9d13f77a77 160-161
+Sources/Info.plist
+  s_c9cb9133d40bef::t_14bbed7ee30e88 31-50
+project.yml
+  s_c9cb9133d40bef::t_e787c6eacfd2da 63-76
+Sources/Camera/IconChoices.swift
+  s_c9cb9133d40bef::t_7611b85aaed416 4-5,17-19,27,31,38,59
+Sources/Camera/OverlayVideo.swift
+  s_c9cb9133d40bef::t_f38f09f22eef0c 1-45,47-92,94-98,104,106-110,114-163,165,167-174
+  s_c9cb9133d40bef::t_90d80ae4401162 46
+  s_c9cb9133d40bef::t_bd6f2764cbcd78 93,99-103,105,111-113,164,166
+Sources/Camera/StarterEffects.swift
+  s_c9cb9133d40bef::t_2f67c6c74cc248 70
+  s_c9cb9133d40bef::t_054e3687938a05 4-6,35-39,43-69,71-77,79-93
+  s_c9cb9133d40bef::t_f5ba32d29cfc90 13-18,20,28-29,31-32
+  s_c9cb9133d40bef::t_9ec474e4598058 40-42,78
+  s_c9cb9133d40bef::t_b997b924e8d7a9 24-27,33
+  s_c9cb9133d40bef::t_b119787a7172dd 11
+  s_c9cb9133d40bef::t_90c5eb12552a27 19
+  s_c9cb9133d40bef::t_b049c0c8070b61 1-3,7-10,12,21-23,30,34,94-95
+Sources/Camera/EffectMigration.swift
+  s_c9cb9133d40bef::t_8d2fdbc60e748f 79-80,82,84,86-89
+  s_c9cb9133d40bef::t_8b6711c59781ca 83,85
+Sources/Camera/CameraSettings.swift
+  s_c9cb9133d40bef::t_e2c68aed6f9bf0 167,384,490,521
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/actions/mute.svg
+  s_c9cb9133d40bef::t_373831dca24769 1
+Sources/Camera/EffectIcon.swift
+  s_c9cb9133d40bef::t_2f67c6c74cc248 49
+  s_c9cb9133d40bef::t_18af5011ecb929 1-48,50-93
+  s_c9cb9133d40bef::t_2f019cddbba9d7 94-158
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/keys/group.svg
+  s_c9cb9133d40bef::t_5bf3ded223a2e9 1
+Sources/Camera/EffectsBackup.swift
+  s_c9cb9133d40bef::t_1f895235246563 26
+  s_c9cb9133d40bef::t_14622d7add22ae 1-25,27-116
+Sources/Camera/EffectListRow.swift
+  s_c9cb9133d40bef::t_f8655b07dfd06c 1-2,6-21,23-90
+  s_c9cb9133d40bef::t_37df78287e01c9 3-5,22
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/keys/mute-live.svg
+  s_c9cb9133d40bef::t_373831dca24769 1
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/keys/live-off.svg
+  s_c9cb9133d40bef::t_5f1c4881ea9dc7 1
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/keys/blank.svg
+  s_c9cb9133d40bef::t_8ed1608ab6853f 1
+Sources/Camera/ShortcutsSettings.swift
+  s_c9cb9133d40bef::t_f5982421296e3c 92,94
+  s_c9cb9133d40bef::t_1ef2e73e431f8c 26,114,124-148,150-151,153
+  s_c9cb9133d40bef::t_88d4e4fb173a7b 149
+  s_c9cb9133d40bef::t_e2c68aed6f9bf0 86,107
+  s_c9cb9133d40bef::t_ac4eb610d22e3b 91,95-99
+  s_c9cb9133d40bef::t_e3046377e250d5 152,154-155
+StreamDeck/src/actions.ts
+  s_c9cb9133d40bef::t_71e357ae6f16b5 323-343,357,365,369-372,375-377,382-384
+  s_c9cb9133d40bef::t_5bf3ded223a2e9 362
+  s_c9cb9133d40bef::t_17a666f0bd9774 1-3,5-15,17,21-30,33-38,41-43,64-72,74-81,83-99,101,103-116,118-119,125-126,139-152,157-159,161-162,168-169,173-178,180-181,192-197,242-252,254,319-320,322,389-390
+  s_c9cb9133d40bef::t_d09cc11083f987 212,218
+  s_c9cb9133d40bef::t_488d30230b8cf5 4
+  s_c9cb9133d40bef::t_571bbddcd6315f 16,18,20,31-32,39-40,44-54,56-63,73,82,100,102,155,164-166,170-171,179,182-191,199-208,219-220,222-226,228,231-240,253,255-301,306-318,321,358,360-361,363-364,366-368,374,378,381,385-386
+  s_c9cb9133d40bef::t_8ed1608ab6853f 19,55,117,120-124,127-129,131-137,214-217,241,373,379-380,387-388
+  s_c9cb9133d40bef::t_2ab7659fab2750 153-154,156,160,163,167,172,198,227,229-230
+  s_c9cb9133d40bef::t_76549ea9b43581 130,138,209-211,213,221,302-305,344-356
+  s_c9cb9133d40bef::t_7dd79d0d114c03 359
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/actions/live.svg
+  s_c9cb9133d40bef::t_41792226f1c2e0 1
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/actions/group.svg
+  s_c9cb9133d40bef::t_5bf3ded223a2e9 1
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/actions/effect.svg
+  s_c9cb9133d40bef::t_41792226f1c2e0 1
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/keys/effect-empty.svg
+  s_c9cb9133d40bef::t_5f1c4881ea9dc7 1
+Sources/MenuContentView.swift
+  s_c9cb9133d40bef::t_f5982421296e3c 305-306,309-311,313-314
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/keys/mute-muted.svg
+  s_c9cb9133d40bef::t_373831dca24769 1
+Sources/Camera/OverlayRendering.swift
+  s_c9cb9133d40bef::t_bd6f2764cbcd78 89
+  s_c9cb9133d40bef::t_87357eb044c501 32,34,53-82,86
+StreamDeck/.gitignore
+  s_c9cb9133d40bef::t_2877b44fddd4d5 1-3
+  s_c9cb9133d40bef::t_3e303985049050 4
+StreamDeck/tsconfig.json
+  s_c9cb9133d40bef::t_2877b44fddd4d5 1-15
+StreamDeck/src/vaux.ts
+  s_c9cb9133d40bef::t_a0cff983c23b38 62-64,70-71
+  s_c9cb9133d40bef::t_bc7fe5abba4508 13
+  s_c9cb9133d40bef::t_10681d004abd75 22-25
+  s_c9cb9133d40bef::t_1f3c45d774e732 6,10,12,14-15,65-69
+  s_c9cb9133d40bef::t_70e3d920d83ee3 1-5,7-9,11,16-21,26-61,72-132
+StreamDeck/src/view.ts
+  s_c9cb9133d40bef::t_f7b55771bf0384 1-3,7-20,22-25,31-41,46-47,49-67
+  s_c9cb9133d40bef::t_8ed1608ab6853f 5-6,21
+  s_c9cb9133d40bef::t_d09cc11083f987 26-30
+  s_c9cb9133d40bef::t_44ae6ebb52bede 42-45,48
+  s_c9cb9133d40bef::t_7cf8e36b270417 4
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/actions/clear.svg
+  s_c9cb9133d40bef::t_41792226f1c2e0 1
+StreamDeck/dev.imathis.vaux.sdPlugin/imgs/keys/live-on.svg
+  s_c9cb9133d40bef::t_41792226f1c2e0 1
+Sources/Camera/Look.swift
+  s_c9cb9133d40bef::t_987b94af82d558 67-71
+StreamDeck/package-lock.json
+  s_c9cb9133d40bef::t_db85a6d0f08f20 1-1935
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4e346b6e4f113dc33d620ae95c2018754a6b288c",
+  "prompts": {},
+  "sessions": {
+    "s_c9cb9133d40bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46d79b12-ab26-4b09-8d76-66163839d16b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
