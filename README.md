@@ -138,12 +138,13 @@ An effect is anything you name and turn on, made of any of these:
 
 An effect can also turn itself off after a few seconds.
 
-**Effects stack.** Turn on several and they layer, the latest on top: text and
+**One at a time, over the default.** The **default effect** is always on, and
+one of yours goes over it: turning another on replaces it. To layer effects,
+build one on others in its editor. A held key's effect, the dictation effect
+while you dictate, and Live go on top while they last. Layered, text and
 graphics share the screen, one per spot; the latest push-in and the latest
 shake win; looks mix, each setting from the latest look that changes it, so
-black and white from one and grain from another both show. Turning an effect
-on that covers all of another turns that one off. The **default effect** is
-always on, under everything else.
+black and white from one and grain from another both show.
 
 **Live** is a small panel for the moment: type a line, pick its style and
 spot, a push-in and an effect to go with it, and Show puts it all up at once;

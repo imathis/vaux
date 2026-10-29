@@ -14,13 +14,14 @@ struct OverlayLayer: Equatable, @unchecked Sendable {
     static func == (a: Self, b: Self) -> Bool { a.key == b.key }
 }
 
-/// Your effects, and which are on. Those on make a stack, in the order they
-/// came on: the default effect at the bottom, then each as it's turned on
-/// (the dictation effect while you dictate, the Live panel's while it's up).
-/// What shows comes from the whole stack, each part from the latest effect
-/// that sets it: overlays by spot, the push-in, the shake, and look by look
-/// setting, so looks stack. A held key adds its effect only while held, so
-/// whatever it covered was never gone.
+/// Your effects, and which are on. One of yours is on at a time, over the
+/// default effect: turning another on replaces it. (Layering effects is
+/// done in the editor, an effect building on others.) Over those go, while
+/// they last, a held key's effect, the dictation effect while you dictate,
+/// and the Live panel's while it's up. What shows comes from that stack,
+/// each part from the latest that sets it: overlays by spot, the push-in,
+/// the shake, and look by look setting. A held key adds its effect only
+/// while held, so what it covered was never gone.
 @MainActor @Observable
 final class EffectLibrary {
     var effects: [Effect] {
@@ -162,9 +163,10 @@ final class EffectLibrary {
 
     // MARK: On and off
 
-    /// Turns an effect on, over everything on. Returns its place in the
-    /// stack, to take it off again after a hold; nil if it's the default
-    /// coming back on, which isn't held.
+    /// Turns an effect on, over everything on (a tap then settles it,
+    /// replacing the one that was on). Returns its place in the stack, to
+    /// take it off again after a hold; nil if it's the default coming back
+    /// on, which isn't held.
     @discardableResult
     func turnOn(_ id: UUID) -> UUID? {
         guard let effect = effect(id) else { return nil }
@@ -208,22 +210,14 @@ final class EffectLibrary {
         rebuild()
     }
 
-    /// A turn-on that stays (a tap, not a hold): effects of yours it now
-    /// covers completely go, rather than coming back when it's turned off.
+    /// A turn-on that stays (a tap, not a hold): it replaces the effect of
+    /// yours that was on, so one's on at a time. One that turns itself off
+    /// goes over it instead, like a hold, and what was on shows again after.
     func settle(_ token: UUID) {
-        guard let top = stack.firstIndex(where: { $0.token == token }) else { return }
-        var covered: Set<String> = []
-        var drop: Set<UUID> = []
-        // Top down, gathering what's set above each.
-        for index in stack.indices.reversed() {
-            let slots = slots(of: stack[index])
-            if index < top, stack[index].source == .user, !slots.isEmpty, slots.isSubset(of: covered) {
-                drop.insert(stack[index].token)
-            }
-            covered.formUnion(slots)
-        }
-        guard !drop.isEmpty else { return }
-        stack.removeAll { drop.contains($0.token) }
+        guard let entry = stack.first(where: { $0.token == token }), effect(entry.effect)?.duration == nil,
+              stack.contains(where: { $0.source == .user && $0.token != token })
+        else { return }
+        stack.removeAll { $0.source == .user && $0.token != token }
         rebuild()
     }
 
@@ -353,20 +347,6 @@ final class EffectLibrary {
     private func parts(of entry: Entry) -> [Effect] {
         if entry.source == .live { return parts(of: live) }
         return effect(entry.effect).map { parts(of: $0) } ?? []
-    }
-
-    /// What an entry sets, so a later one can be seen to cover all of it:
-    /// its overlays' spots, a push-in, a shake, and the look settings it
-    /// changes.
-    private func slots(of entry: Entry) -> Set<String> {
-        var slots: Set<String> = []
-        for part in parts(of: entry) {
-            for overlay in part.overlays where overlay.canShow { slots.insert("spot \(overlay.spot)") }
-            if part.pushIn != nil { slots.insert("push-in") }
-            if part.shake != nil { slots.insert("shake") }
-            if let look = part.look { slots.formUnion(look.changes.map { "look \($0)" }) }
-        }
-        return slots
     }
 
     /// Keeps the stack true to edits: an effect deleted goes from it.

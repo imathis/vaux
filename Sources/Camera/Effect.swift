@@ -1,8 +1,8 @@
 import Foundation
 
 /// Something to turn on over your video, by name: overlays, a push-in, a
-/// look, a shake, and other effects it builds on, any of them. Effects on together
-/// stack, each over the ones before it (see `EffectLibrary`).
+/// look, a shake, and other effects it builds on, any of them. One is on at
+/// a time, over the default effect (see `EffectLibrary`).
 struct Effect: Codable, Identifiable, Hashable, Sendable {
     var id = UUID()
     var name: String
@@ -76,15 +76,6 @@ extension Look {
     }
 
     static var grades: [WritableKeyPath<Look, Grade>] { [\.shadowGrade, \.midtoneGrade, \.highlightGrade] }
-
-    /// The settings this look changes from plain, by name.
-    var changes: Set<String> {
-        let plain = Look(name: "")
-        return Set(
-            Self.amounts.filter { self[keyPath: $0] != plain[keyPath: $0] }.map { "\($0)" }
-                + Self.grades.filter { self[keyPath: $0] != plain[keyPath: $0] }.map { "\($0)" }
-        )
-    }
 
     /// Looks on together, as one: each setting from the last that changes
     /// it, so black and white from one and grain from another both show.

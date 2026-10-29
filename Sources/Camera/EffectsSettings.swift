@@ -55,7 +55,7 @@ struct EffectsPage: View {
                     AddEffectMenu { editing = Editing(id: library.add($0).id, isNew: true) }
                 }
             } header: {
-                SettingsHeader("Effects", "Each turns on by name, with what you put in it: text or a graphic, a push-in, a look, a shake, other effects to build on. Effects on together stack, the latest on top.")
+                SettingsHeader("Effects", "Each turns on by name, with what you put in it: text or a graphic, a push-in, a look, a shake, other effects to build on. One is on at a time, over the default effect: turning another on replaces it. To layer effects, build one on others.")
             }
             Section {
                 Picker("Default effect", selection: $library.defaultEffect) {
