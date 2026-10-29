@@ -26,6 +26,8 @@ final class Triggers {
         let action: Action
         let title: String
         let isOn: Bool
+        /// An effect's group, if it's in one.
+        var group: EffectGroup?
 
         var shortcut: KeyboardShortcuts.Name { .init(id) }
     }
@@ -84,9 +86,9 @@ final class Triggers {
             Item(id: Self.id(of: .mute), action: .mute, title: "Mute", isOn: appState.muted),
             Item(id: Self.id(of: .live), action: .live, title: "Live…", isOn: library.liveOn),
         ]
-        + library.effects.map { effect in
+        + library.ordered.map { effect in
             let action = Item.Action.effect(effect.id)
-            return Item(id: Self.id(of: action), action: action, title: effect.name, isOn: library.isOn(effect.id))
+            return Item(id: Self.id(of: action), action: action, title: effect.name, isOn: library.isOn(effect.id), group: effect.group.flatMap(library.group))
         }
         + [Item(id: Item.clearAllName.rawValue, action: .clearAll, title: "Clear all", isOn: false)]
     }
@@ -122,6 +124,12 @@ final class Triggers {
 
     /// Sets an item's Quick Menu key, taking it from any other item that had
     /// it; nil goes back to the one given in order.
+    /// Keys set by hand, from a backup.
+    func restoreKeys(_ keys: [String: String]) {
+        customKeys = keys
+        UserDefaults.standard.set(customKeys, forKey: Self.keysKey)
+    }
+
     func setKey(_ key: String?, for id: String) {
         if let key {
             customKeys = customKeys.filter { $0.value != key }
@@ -205,4 +213,24 @@ final class Triggers {
 extension Triggers.Item {
     static let clearAllName = KeyboardShortcuts.Name("clearAll")
     static let liveName = KeyboardShortcuts.Name("live")
+}
+
+extension [Triggers.Item] {
+    /// The group each item starts, by item ID: where a list shows a group's
+    /// name above its effects.
+    var groupStarts: [String: EffectGroup] {
+        var starts: [String: EffectGroup] = [:]
+        var last: UUID?
+        for item in self {
+            if let group = item.group, group.id != last { starts[item.id] = group }
+            last = item.group?.id
+        }
+        return starts
+    }
+
+    /// Items in no group straight after a group's last: where a list shows
+    /// that the group's ended.
+    var groupEnds: Set<String> {
+        Set(zip(self, dropFirst()).filter { $0.group != nil && $1.group == nil }.map(\.1.id))
+    }
 }

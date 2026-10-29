@@ -1,0 +1,189 @@
+{
+	"Name": "Vaux",
+	"Version": "1.0.0.0",
+	"Author": "Brandon Mathis",
+	"Description": "Your Vaux keys on Stream Deck: Mute, effects, groups, Live and Clear All, lit while they're on, and a ready-made Vaux page. Hold an effect's key to show it only while held.",
+	"URL": "https://github.com/imathis/vaux",
+	"UUID": "dev.imathis.vaux",
+	"Icon": "imgs/plugin/icon",
+	"Category": "Vaux",
+	"CategoryIcon": "imgs/plugin/category",
+	"CodePath": "bin/plugin.mjs",
+	"SDKVersion": 3,
+	"Software": {
+		"MinimumVersion": "7.1"
+	},
+	"OS": [
+		{
+			"Platform": "mac",
+			"MinimumVersion": "13"
+		}
+	],
+	"Nodejs": {
+		"Version": "24"
+	},
+	"Actions": [
+		{
+			"Name": "Mute",
+			"UUID": "dev.imathis.vaux.mute",
+			"Icon": "imgs/actions/mute",
+			"Tooltip": "Mutes and unmutes your mic. Red while muted.",
+			"Controllers": [
+				"Keypad"
+			],
+			"DisableAutomaticStates": true,
+			"States": [
+				{
+					"Image": "imgs/keys/mute-live",
+					"Name": "Live"
+				},
+				{
+					"Image": "imgs/keys/mute-muted",
+					"Name": "Muted"
+				}
+			]
+		},
+		{
+			"Name": "Effect",
+			"UUID": "dev.imathis.vaux.effect",
+			"Icon": "imgs/actions/effect",
+			"Tooltip": "Turns one of your effects on and off; hold it to show the effect only while held. Lit while it's on.",
+			"PropertyInspectorPath": "ui/effect.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"DisableAutomaticStates": true,
+			"States": [
+				{
+					"Image": "imgs/keys/effect-off",
+					"Name": "Off",
+					"TitleAlignment": "bottom"
+				},
+				{
+					"Image": "imgs/keys/effect-on",
+					"Name": "On",
+					"TitleAlignment": "bottom"
+				}
+			]
+		},
+		{
+			"Name": "Vaux Group",
+			"UUID": "dev.imathis.vaux.group",
+			"Icon": "imgs/actions/group",
+			"Tooltip": "Opens one of your Vaux groups: its effects, always as they are in Vaux. Lit while one of them is on.",
+			"PropertyInspectorPath": "ui/group.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"DisableAutomaticStates": true,
+			"States": [
+				{
+					"Image": "imgs/keys/group",
+					"Name": "Off",
+					"TitleAlignment": "bottom"
+				},
+				{
+					"Image": "imgs/keys/group",
+					"Name": "On",
+					"TitleAlignment": "bottom"
+				}
+			]
+		},
+		{
+			"Name": "Live",
+			"UUID": "dev.imathis.vaux.live",
+			"Icon": "imgs/actions/live",
+			"Tooltip": "Opens the Live panel, to put up a line on the spot. Lit while it's up.",
+			"Controllers": [
+				"Keypad"
+			],
+			"DisableAutomaticStates": true,
+			"States": [
+				{
+					"Image": "imgs/keys/live-off",
+					"Name": "Off",
+					"Title": "Live",
+					"TitleAlignment": "bottom"
+				},
+				{
+					"Image": "imgs/keys/live-on",
+					"Name": "On",
+					"Title": "Live",
+					"TitleAlignment": "bottom"
+				}
+			]
+		},
+		{
+			"Name": "Clear All",
+			"UUID": "dev.imathis.vaux.clear",
+			"Icon": "imgs/actions/clear",
+			"Tooltip": "Turns off every effect you turned on.",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/keys/clear",
+					"Title": "Clear",
+					"TitleAlignment": "bottom"
+				}
+			]
+		},
+		{
+			"Name": "Vaux Page",
+			"UUID": "dev.imathis.vaux.page",
+			"Icon": "imgs/actions/page",
+			"Tooltip": "Opens Vaux's page: Mute, Live, Clear All, then your effects and groups, as they are in Vaux. Its first key comes back.",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/keys/page"
+				}
+			]
+		},
+		{
+			"Name": "Back",
+			"UUID": "dev.imathis.vaux.back",
+			"Icon": "imgs/actions/back",
+			"Tooltip": "Back to the profile you came from.",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/keys/back"
+				}
+			],
+			"VisibleInActionsList": false
+		}
+	],
+	"Profiles": [
+		{
+			"Name": "profiles/Vaux",
+			"DeviceType": 0,
+			"DontAutoSwitchWhenInstalled": true
+		},
+		{
+			"Name": "profiles/Vaux Mini",
+			"DeviceType": 1,
+			"DontAutoSwitchWhenInstalled": true
+		},
+		{
+			"Name": "profiles/Vaux XL",
+			"DeviceType": 2,
+			"DontAutoSwitchWhenInstalled": true
+		},
+		{
+			"Name": "profiles/Vaux Plus",
+			"DeviceType": 7,
+			"DontAutoSwitchWhenInstalled": true
+		},
+		{
+			"Name": "profiles/Vaux Neo",
+			"DeviceType": 9,
+			"DontAutoSwitchWhenInstalled": true
+		}
+	]
+}

@@ -23,6 +23,7 @@ struct ShortcutsSettings: View {
                             .foregroundStyle(.secondary)
                             .wraps()
                     }
+                    StreamDeckSection()
                 }
                 .formStyle(.grouped)
             }
@@ -82,12 +83,20 @@ struct EffectShortcuts: View {
                     }
                 }
             } header: {
-                SettingsHeader("Quick Menu", "One key opens a small menu over everything; a second key picks from it. The call app keeps focus. Every effect key, in the menu or a shortcut: tap it to turn the effect on or off, or hold it to show the effect only while held.")
+                SettingsHeader("Quick Menu", "One key opens it, a second picks from it. Your call app keeps focus.")
             }
             Section {
                 ColumnTitles()
                 let list = items.filter { if case .effect = $0.action { true } else { false } }
+                let starts = list.groupStarts
+                let ends = list.groupEnds
                 ForEach(list) { item in
+                    if ends.contains(item.id) { Divider() }
+                    if let group = starts[item.id] {
+                        Text(group.name)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
                     TriggerRow(item: item, key: keys[item.id] ?? "", triggers: triggers)
                 }
                 if list.isEmpty {
@@ -95,18 +104,51 @@ struct EffectShortcuts: View {
                         .foregroundStyle(.secondary)
                 }
             } header: {
-                SettingsHeader("Effects", "Each turns its effect on, and off.")
+                SettingsHeader("Effects", "Tap to turn on or off. Hold to show it only while held.")
             }
             Section {
                 ForEach(items.filter { $0.action == .live || $0.action == .clearAll }) { item in
                     TriggerRow(item: item, key: keys[item.id] ?? "", triggers: triggers)
                 }
             }
+            StreamDeckSection()
         }
         .formStyle(.grouped)
         .onReceive(DistributedNotificationCenter.default().publisher(for: Notification.Name("com.apple.accessibility.api"))) { _ in
             // The new trust state lands a moment after the notification.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { accessibilityTrusted = CallMuter.isTrusted }
+        }
+    }
+}
+
+/// Vaux's Stream Deck plugin, which comes with Vaux: installing it hands it
+/// to Stream Deck, which asks to add it.
+private struct StreamDeckSection: View {
+    @State private var streamDeck = Self.streamDeckApp
+
+    private static let plugin = Bundle.main.url(forResource: "dev.imathis.vaux", withExtension: "streamDeckPlugin")
+    private static var streamDeckApp: URL? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.elgato.StreamDeck")
+    }
+
+    var body: some View {
+        if let plugin = Self.plugin {
+            Section {
+                if let streamDeck {
+                    LabeledContent("Vaux's Stream Deck plugin") {
+                        Button("Install…") {
+                            NSWorkspace.shared.open([plugin], withApplicationAt: streamDeck, configuration: NSWorkspace.OpenConfiguration())
+                        }
+                    }
+                } else {
+                    LabeledContent("Stream Deck isn't installed") {
+                        Link("Get Stream Deck", destination: URL(string: "https://www.elgato.com/downloads")!)
+                    }
+                }
+            } header: {
+                SettingsHeader("Stream Deck", "Mute, Live, effect and group keys, lit while on, and a Vaux page.")
+            }
+            .onAppear { streamDeck = Self.streamDeckApp }
         }
     }
 }

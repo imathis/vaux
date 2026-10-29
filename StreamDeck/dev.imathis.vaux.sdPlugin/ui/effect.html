@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Vaux Effect</title>
+		<style>
+			body {
+				margin: 0;
+				padding: 12px 10px;
+				background: #2d2d2d;
+				color: #d8d8d8;
+				font: 9pt -apple-system, BlinkMacSystemFont, sans-serif;
+			}
+			.row {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+			label {
+				width: 90px;
+				text-align: right;
+				color: #969696;
+			}
+			select {
+				flex: 1;
+				min-width: 0;
+				height: 26px;
+				padding: 0 6px;
+				border: none;
+				border-radius: 3px;
+				background: #3d3d3d;
+				color: #d8d8d8;
+				font: inherit;
+			}
+			.note {
+				margin: 8px 0 0 98px;
+				color: #969696;
+				line-height: 1.4;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="row">
+			<label for="effect">Effect</label>
+			<select id="effect"></select>
+		</div>
+		<p class="note" id="note" hidden></p>
+
+		<script>
+			// Stream Deck's property inspector connection: the key's settings
+			// (the effect chosen, and its name for while Vaux is away), and the
+			// effects to choose from, which the plugin gets from Vaux.
+			const select = document.getElementById("effect");
+			const note = document.getElementById("note");
+			let settings = {};
+			let effects = [];
+			let connected = false;
+
+			function show() {
+				select.replaceChildren();
+				// A key on Vaux's page: it shows whatever's in its place there.
+				const placeholder = new Option(settings.place ? "Follows Vaux's page" : "Choose an effect", "");
+				placeholder.disabled = !settings.place;
+				select.add(placeholder);
+				// Effects in no group, then each group's under its name.
+				const lists = new Map();
+				for (const effect of effects) {
+					const name = effect.group ?? "";
+					if (!lists.has(name)) lists.set(name, []);
+					lists.get(name).push(effect);
+				}
+				for (const [name, list] of lists) {
+					const options = list.map((effect) => new Option(effect.title, effect.id));
+					if (name === "") options.forEach((option) => select.add(option));
+					else {
+						const group = document.createElement("optgroup");
+						group.label = name;
+						group.append(...options);
+						select.add(group);
+					}
+				}
+				// Chosen before, and gone (or Vaux is away): kept, by name.
+				if (settings.effect && !effects.some((effect) => effect.id === settings.effect)) {
+					const gone = new Option(settings.title ? `${settings.title}${connected ? " (deleted)" : ""}` : "An effect", settings.effect);
+					gone.disabled = connected;
+					select.add(gone);
+				}
+				select.value = settings.place ? "" : (settings.effect ?? "");
+				note.hidden = connected && effects.length > 0 && !settings.place;
+				note.textContent = !connected
+					? "Vaux isn't running. Open it, and your effects show up here."
+					: effects.length === 0
+						? "Effects come with Vaux Camera: turn it on in Vaux's Settings → Camera."
+						: "Shows your effects and groups in Vaux's order. Pick one to keep this key on it.";
+			}
+
+			window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, info, actionInfo) => {
+				const action = JSON.parse(actionInfo);
+				settings = action.payload.settings ?? {};
+				show();
+				const socket = new WebSocket(`ws://127.0.0.1:${port}`);
+				const send = (message) => socket.send(JSON.stringify(message));
+				socket.onopen = () => {
+					send({ event: registerEvent, uuid });
+					send({ event: "sendToPlugin", action: action.action, context: uuid, payload: { request: "effects" } });
+				};
+				socket.onmessage = (message) => {
+					const { event, payload } = JSON.parse(message.data);
+					if (event === "sendToPropertyInspector") {
+						connected = payload.connected;
+						effects = payload.effects ?? [];
+						show();
+					} else if (event === "didReceiveSettings") {
+						settings = payload.settings ?? {};
+						show();
+					}
+				};
+				select.onchange = () => {
+					const effect = effects.find((effect) => effect.id === select.value);
+					if (!effect) return;
+					settings = { effect: effect.id, title: effect.title };
+					send({ event: "setSettings", context: uuid, payload: settings });
+					show();
+				};
+			};
+		</script>
+	</body>
+</html>

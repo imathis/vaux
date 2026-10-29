@@ -76,14 +76,17 @@ extension EffectLibrary {
         )
     }
 
-    /// A first run: the original dictation badge, shown while dictating, a
-    /// push-in and a look to start from.
+    /// A first run: the starter effects, Dictating shown while dictating,
+    /// then the AWAY group, its graphics put in place.
     private static var firstRun: Stored {
-        let dictating = Effect(name: "Dictating", overlays: [.dictating])
-        let pushIn = Effect(name: "Push In", pushIn: 1.5)
-        var noir = Effect(name: "Noir")
-        noir.look = Look.presets.first
-        return Stored(effects: [dictating, pushIn, noir], dictationEffect: dictating.id, live: Effect(name: "Live", overlays: [.live]))
+        StarterGraphics.install()
+        let effects = Effect.starters
+        let away = EffectGroup.away
+        let dictating = effects.first { $0.name == "Dictating" }
+        return Stored(
+            effects: effects + away.effects, dictationEffect: dictating?.id, live: Effect(name: "Live", overlays: [.live]),
+            groups: [away.group], outline: effects.map(\.id) + [away.group.id]
+        )
     }
 }
 

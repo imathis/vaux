@@ -15,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuController: MenuPanelController?
     private var iconAnimator: StatusIconAnimator?
     private var settingsWindow: NSWindow?
+    /// For the Stream Deck plugin.
+    private var controlServer: ControlServer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Fixed width reserves room for the active-state oval (drawn behind the
@@ -43,6 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if VauxCamera.continuingSetup || ProcessInfo.processInfo.arguments.contains("-settingsTab") {
             openSettings(tab: .camera)
         }
+        // Not for a snapshot, which would take the running Vaux Dev's socket.
+        if !Snapshot.isRunning { controlServer = ControlServer(appState: appState, camera: camera) }
         Snapshot.runIfAsked(appState: appState, camera: camera) { [weak self] in self?.openSettings() }
         #if DEBUG
         if !Snapshot.isRunning { Snapshot.listenForLive(appState: appState, camera: camera) }

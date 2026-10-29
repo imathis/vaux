@@ -24,11 +24,14 @@ final class Compositor {
 
     /// A shake this frame: the picture moved off center by a share of it
     /// each way and turned (radians), within the room around it that it's
-    /// zoomed in to have (as a zoom); blurred as it moves, or not; overlays
-    /// moving with it, or holding still.
+    /// zoomed in to have (as a zoom); blurred along the way it came from
+    /// where it was a frame before (as call apps take frames), or not;
+    /// overlays moving with it, or holding still.
     struct Shaken {
         let shift: CGPoint
         let tilt: Double
+        let shiftBefore: CGPoint
+        let tiltBefore: Double
         let room: Double
         let blur: Bool
         let overlays: Bool
@@ -48,12 +51,8 @@ final class Compositor {
     private var images: [String: CIImage] = [:]
     /// Frames drawn with a look, which moves its grain.
     private var gradedFrames = 0
-    /// Where the last shaken frame had the picture's middle, off center, to
-    /// blur along the way it's gone since.
-    private var lastShaken: CGPoint?
-
-    /// Motion blur's radius for each pixel moved since the last frame: about
-    /// a film camera's half-frame shutter (the blur reaches a few radii).
+    /// Motion blur's radius for each pixel moved in a frame: about a film
+    /// camera's half-frame shutter (the blur reaches a few radii).
     private static let blurPerPixel = 0.3
 
     init() {
@@ -85,7 +84,6 @@ final class Compositor {
             draw(visible, looks: looks, height: format.height, on: picture, whole: true, moving: shaken.overlays ? move : nil, into: output)
             return output
         }
-        lastShaken = nil
         Self.mark(camera, width: crop.width, height: crop.height)
         guard VTPixelTransferSessionTransferImage(transfer, from: camera, to: output) == noErr else { return nil }
         // The camera's color tags, so apps read its color as it was, and so
@@ -124,9 +122,17 @@ final class Compositor {
         var used = Set<String>()
         for drawn in overlays.sorted(by: { ($0.layer.spot == .fullFrame ? 0 : 1) < ($1.layer.spot == .fullFrame ? 0 : 1) }) {
             let key = "\(drawn.layer.key)-\(height)"
-            guard let image = images[key] ?? drawn.layer.images[height].map({ CIImage(cgImage: $0) }) else { continue }
-            images[key] = image
-            used.insert(key)
+            let image: CIImage
+            if let video = drawn.layer.video {
+                // Nothing until its first frame's ready.
+                guard let frame = video.frame() else { continue }
+                image = Self.place(frame, as: video, in: size)
+            } else {
+                guard let still = images[key] ?? drawn.layer.images[height].map({ CIImage(cgImage: $0) }) else { continue }
+                image = still
+                images[key] = still
+                used.insert(key)
+            }
             let origin = drawn.layer.spot.origin(for: image.extent.size, in: size)
             let placed = image
                 .applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: drawn.alpha)])
@@ -140,6 +146,17 @@ final class Compositor {
         for rect in rects where !rect.isEmpty {
             _ = try? context.startTask(toRender: composite, from: rect, to: destination, at: rect.origin).waitUntilCompleted()
         }
+    }
+
+    /// A video's frame sized and cropped as a still graphic would be, at the
+    /// origin.
+    private static func place(_ frame: CIImage, as video: OverlayVideo, in size: CGSize) -> CIImage {
+        let extent = frame.extent
+        let (canvas, drawn) = OverlayRenderer.layout(extent.size, spot: video.spot, size: video.size, fit: video.fit, in: size)
+        let scaled = frame.transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY)
+            .concatenating(CGAffineTransform(scaleX: drawn.width / extent.width, y: drawn.height / extent.height))
+            .concatenating(CGAffineTransform(translationX: drawn.minX, y: drawn.minY)))
+        return scaled.cropped(to: CGRect(origin: .zero, size: canvas))
     }
 
     /// The picture shaken. The hardware copies the crop with room around it
@@ -189,15 +206,18 @@ final class Compositor {
             ))
         var picture = CIImage(cvPixelBuffer: copy).clampedToExtent().transformed(by: scale.concatenating(shift))
 
+        // The picture's middle, now and a frame before: the same whichever
+        // frames an app takes.
         let middle = CGPoint(x: dx, y: dy).applying(CGAffineTransform(rotationAngle: angle))
+        let before = CGPoint(x: shaken.shiftBefore.x * width * held, y: shaken.shiftBefore.y * height * held)
+            .applying(CGAffineTransform(rotationAngle: shaken.tiltBefore * held))
         var blur: [String: Any]?
-        if shaken.blur, let last = lastShaken {
-            let along = CGVector(dx: middle.x - last.x, dy: middle.y - last.y)
+        if shaken.blur {
+            let along = CGVector(dx: middle.x - before.x, dy: middle.y - before.y)
             let radius = min(hypot(along.dx, along.dy) * Self.blurPerPixel, 40)
             // Barely moving: not worth a blur.
             if radius >= 0.5 { blur = [kCIInputRadiusKey: radius, kCIInputAngleKey: atan2(along.dy, along.dx)] }
         }
-        lastShaken = middle
         if let blur { picture = picture.applyingFilter("CIMotionBlur", parameters: blur) }
 
         let overlays = CGAffineTransform(translationX: -width / 2, y: -height / 2).concatenating(shift)

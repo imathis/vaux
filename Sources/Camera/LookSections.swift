@@ -22,7 +22,7 @@ struct LookSections: View {
             // plain.
             PartHeader(
                 "Look",
-                "Color and texture over the whole picture. Looks on together mix: each setting comes from the latest that changes it.",
+                "Color and texture over the whole picture.",
                 reset: look.isDefault ? nil : { look = defaults },
                 remove: remove
             )
@@ -51,7 +51,7 @@ struct LookSections: View {
             LookSlider(title: "Saturation", value: grade.saturation, defaultValue: gradeDefaults.saturation, range: Look.amountRange, format: .percent)
             LookSlider(title: "Luminance", value: grade.luminance, defaultValue: gradeDefaults.luminance, range: Look.signedRange, format: .signedPercent)
         } header: {
-            SettingsHeader("Color Grading", "The shadows, midtones and highlights apart: tint each toward a hue, and brighten or darken it.")
+            SettingsHeader("Color Grading", "Tint shadows, midtones and highlights each toward a hue, lighter or darker.")
         }
         Section {
             LookSlider(title: "Blur", value: $look.blur, defaultValue: defaults.blur, range: Look.amountRange, format: .percent)
@@ -59,7 +59,7 @@ struct LookSections: View {
             LookSlider(title: "Vignette", value: $look.vignette, defaultValue: defaults.vignette, range: Look.amountRange, format: .percent)
             LookSlider(title: "Grain", value: $look.grain, defaultValue: defaults.grain, range: Look.amountRange, format: .percent)
         } header: {
-            SettingsHeader("Texture", "Blur softens the picture, a touch for soft focus, or all the way, like a frosted shower door, for stepping away; text and graphics stay sharp over it. Fade lifts the blacks with a soft glow, for smoke and haze.")
+            SettingsHeader("Texture", "Blur runs from soft focus to frosted glass. Fade lifts the blacks, like haze.")
         }
     }
 }

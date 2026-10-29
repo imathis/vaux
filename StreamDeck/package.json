@@ -1,0 +1,20 @@
+{
+  "name": "vaux-stream-deck",
+  "description": "Vaux's Stream Deck plugin: Mute, effects, Live and Clear All on your keys.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && node build.mjs && node profiles.mjs",
+    "validate": "streamdeck validate dev.imathis.vaux.sdPlugin",
+    "pack": "streamdeck pack dev.imathis.vaux.sdPlugin --output ../build --force"
+  },
+  "dependencies": {
+    "@elgato/streamdeck": "3.0.2"
+  },
+  "devDependencies": {
+    "@elgato/cli": "1.10.2",
+    "@types/node": "24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}

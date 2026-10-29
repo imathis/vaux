@@ -10,6 +10,8 @@ struct OverlayLayer: Equatable, @unchecked Sendable {
     let spot: Overlay.Spot
     /// By frame height. CGImages are immutable.
     let images: [Int32: CGImage]
+    /// A video instead, drawn frame by frame.
+    var video: OverlayVideo?
 
     static func == (a: Self, b: Self) -> Bool { a.key == b.key }
 }
@@ -42,6 +44,18 @@ final class EffectLibrary {
 
     /// On while you dictate (solo mode), so the call knows why you're muted.
     var dictationEffect: UUID? {
+        didSet { save() }
+    }
+
+    /// Groups effects go in (see `listing`).
+    var groups: [EffectGroup] {
+        didSet { save() }
+    }
+
+    /// Effects in no group, and groups, by ID, in the order they're listed;
+    /// a group's effects go under it, in `effects`' order. Ones it doesn't
+    /// have yet (just added) go at the end.
+    var outline: [UUID] {
         didSet { save() }
     }
 
@@ -83,12 +97,23 @@ final class EffectLibrary {
     /// How far the stack pushes in; 1 for not at all.
     private(set) var zoom = 1.0
     private(set) var shake: Effect.Shake?
+    /// For a shake that builds up, the seconds it takes: three quarters of
+    /// its effect's time on, so it's at full long enough to see. None for one
+    /// that stays on: it eases straight in.
+    private(set) var shakeBuild: Double?
     /// What set the zoom, the push-in and the shake (which needs room): a
     /// new one eases there, an edit to the same one moves at once.
     private(set) var zoomSource: UUID?
+    /// How a new zoom moves there: the push-in's own way (the shake's, for
+    /// one that only needs room).
+    private(set) var zoomMove = Effect.Move()
+    /// One you turned on mutes the mic while it's on (or builds on one that
+    /// does). The default and dictation effects never do.
+    private(set) var mutesMic = false
 
     @ObservationIgnored private var lastVariant: [UUID: Int] = [:]
     @ObservationIgnored private var rendered: [String: [Int32: CGImage]] = [:]
+    @ObservationIgnored private var videos: [String: OverlayVideo] = [:]
     @ObservationIgnored let log = Logger(subsystem: "dev.imathis.vaux", category: "effects")
 
     /// Vaux Dev keeps its own.
@@ -105,6 +130,9 @@ final class EffectLibrary {
         var defaultEffect: UUID?
         var dictationEffect: UUID?
         var live: Effect
+        /// Saved before there were groups: none.
+        var groups: [EffectGroup]?
+        var outline: [UUID]?
     }
 
     init() {
@@ -114,6 +142,8 @@ final class EffectLibrary {
         defaultEffect = stored.defaultEffect
         dictationEffect = stored.dictationEffect
         live = stored.live
+        groups = stored.groups ?? []
+        outline = stored.outline ?? []
         // The Live panel edits its one text overlay.
         if live.overlays.first?.kind != .text { live.overlays.insert(.live, at: 0) }
         if !FileManager.default.fileExists(atPath: Self.file.path) { save() }
@@ -122,6 +152,120 @@ final class EffectLibrary {
     }
 
     func effect(_ id: UUID) -> Effect? { effects.first { $0.id == id } }
+
+    /// Everything that's kept, as saved and backed up.
+    var stored: Stored {
+        Stored(effects: effects, defaultEffect: defaultEffect, dictationEffect: dictationEffect, live: live, groups: groups, outline: outline)
+    }
+
+    /// Replaced by a backup's: effects, groups, Live, and the default and
+    /// dictation ones.
+    func restore(_ stored: Stored) {
+        groups = stored.groups ?? []
+        outline = stored.outline ?? []
+        effects = stored.effects
+        var live = stored.live
+        // The Live panel edits its one text overlay.
+        if live.overlays.first?.kind != .text { live.overlays.insert(.live, at: 0) }
+        self.live = live
+        defaultEffect = stored.defaultEffect
+        dictationEffect = stored.dictationEffect
+    }
+
+    // MARK: Groups
+
+    /// What's listed, in order: effects in no group, and groups with
+    /// theirs.
+    enum Listing {
+        case effect(Effect)
+        case group(EffectGroup, [Effect])
+    }
+
+    /// As `outline` has them; any it doesn't, at the end.
+    var listing: [Listing] {
+        let known = Set(groups.map(\.id))
+        let loose = effects.filter { $0.group.map { !known.contains($0) } ?? true }
+        let looseIDs = Set(loose.map(\.id))
+        var placed = Set<UUID>()
+        var listing: [Listing] = []
+        func place(_ group: EffectGroup) {
+            if placed.insert(group.id).inserted { listing.append(.group(group, effects.filter { $0.group == group.id })) }
+        }
+        for id in outline {
+            if let group = group(id) {
+                place(group)
+            } else if looseIDs.contains(id), let effect = effect(id), placed.insert(id).inserted {
+                listing.append(.effect(effect))
+            }
+        }
+        for effect in loose where placed.insert(effect.id).inserted { listing.append(.effect(effect)) }
+        for group in groups { place(group) }
+        return listing
+    }
+
+    /// Effects in the order they're listed everywhere, groups' in their
+    /// place.
+    var ordered: [Effect] {
+        listing.flatMap { listed -> [Effect] in
+            switch listed {
+            case .effect(let effect): [effect]
+            case .group(_, let effects): effects
+            }
+        }
+    }
+
+    /// The list rearranged at once: effects in their new order and groups,
+    /// the groups in theirs, and the outline of the two.
+    func arrange(effects: [Effect], groups: [EffectGroup], outline: [UUID]) {
+        self.groups = groups
+        self.outline = outline
+        self.effects = effects
+    }
+
+    func group(_ id: UUID) -> EffectGroup? { groups.first { $0.id == id } }
+
+    /// Its color: its own, or the one for its place among the groups.
+    func tint(of group: EffectGroup) -> Effect.Tint {
+        group.color ?? Effect.Tint.byPlace[(groups.firstIndex { $0.id == group.id } ?? 0) % Effect.Tint.byPlace.count]
+    }
+
+    /// A new group at the end, named apart from the others.
+    @discardableResult
+    func addGroup(named name: String = "New Group") -> EffectGroup {
+        let names = Set(groups.map(\.name))
+        var group = EffectGroup(name: name)
+        if names.contains(name) {
+            group.name = (2...).lazy.map { "\(name) \($0)" }.first { !names.contains($0) }!
+        }
+        groups.append(group)
+        return group
+    }
+
+    /// Its effects stay where it was, in no group.
+    func removeGroup(_ id: UUID) {
+        let members = effects.filter { $0.group == id }.map(\.id)
+        if let index = outline.firstIndex(of: id) { outline.replaceSubrange(index...index, with: members) }
+        groups.removeAll { $0.id == id }
+        effects = effects.map { effect in
+            var effect = effect
+            if effect.group == id { effect.group = nil }
+            return effect
+        }
+    }
+
+    /// Into a group (or none), at its end.
+    func move(_ id: UUID, toGroup group: UUID?) {
+        guard var effect = effect(id), effect.group != group else { return }
+        effect.group = group
+        var effects = effects.filter { $0.id != id }
+        effects.append(effect)
+        self.effects = effects
+    }
+
+    /// Its color: its own, or the one for its place in the list.
+    func tint(of effect: Effect) -> Effect.Tint {
+        effect.shownTint(atPlace: effects.firstIndex { $0.id == effect.id } ?? 0)
+    }
 
     /// On: in the stack, as itself (built on by another doesn't count).
     func isOn(_ id: UUID) -> Bool { stack.contains { $0.effect == id && $0.source != .live } }
@@ -372,6 +516,8 @@ final class EffectLibrary {
         var spots: [Overlay.Spot: (overlay: Overlay, variant: Int, token: UUID)] = [:]
         var pushIn: (zoom: Double, source: UUID)?
         var shaking: (shake: Effect.Shake, source: UUID)?
+        var building: Double?
+        var moving = Effect.Move()
         var looks: [(look: Look, source: UUID)] = []
         var entries = stack
         for index in entries.indices {
@@ -381,14 +527,25 @@ final class EffectLibrary {
                     let variant = variant(of: overlay, in: &entries[index])
                     spots[overlay.spot] = (overlay, variant, token)
                 }
-                if let zoom = part.pushIn { pushIn = (zoom, UUID.combining([token, part.id])) }
-                if let shake = part.shake { shaking = (shake, UUID.combining([token, part.id])) }
+                if let zoom = part.pushIn {
+                    pushIn = (zoom, UUID.combining([token, part.id]))
+                    moving = part.pushInMove
+                }
+                if let shake = part.shake {
+                    shaking = (shake, UUID.combining([token, part.id]))
+                    if pushIn == nil { moving = part.pushInMove }
+                    building = shake.builds ? effect(entries[index].effect)?.duration.map { 0.75 * $0 } : nil
+                }
                 if let look = part.look { looks.append((look, part.id)) }
             }
         }
         if entries != stack { stack = entries }
         zoom = pushIn?.zoom ?? 1
         shake = shaking?.shake
+        shakeBuild = building
+        zoomMove = moving
+        let muting = stack.contains { $0.source == .user && parts(of: $0).contains(where: \.mutesMic) }
+        if muting != mutesMic { mutesMic = muting }
         let zoomSources = [pushIn?.source, shaking?.source].compactMap { $0 }
         zoomSource = zoomSources.isEmpty ? nil : UUID.combining(zoomSources)
         look = Look.merged(looks.map(\.look), id: UUID.combining(looks.map(\.source)))
@@ -399,6 +556,11 @@ final class EffectLibrary {
             // Any edit to the overlay changes its hash, so a fresh render.
             let key = "\(token)-\(overlay.id)-\(variant)-\(overlay.hashValue)"
             keys.insert(key)
+            // A video plays on from where it is while it's the same showing.
+            if overlay.kind == .graphic, overlay.images.indices.contains(variant), OverlayVideo.isVideo(overlay.images[variant]) {
+                if videos[key] == nil { videos[key] = OverlayVideo(overlay.images[variant], overlay: overlay) }
+                return videos[key].map { OverlayLayer(key: key, spot: spot, images: [:], video: $0) }
+            }
             if rendered[key] == nil {
                 rendered[key] = Self.frameSizes.reduce(into: [:]) { images, size in
                     images[Int32(size.height)] = OverlayRenderer.render(overlay, variant: variant, frame: size)
@@ -408,6 +570,7 @@ final class EffectLibrary {
             return OverlayLayer(key: key, spot: spot, images: images)
         }
         rendered = rendered.filter { keys.contains($0.key) }
+        videos = videos.filter { keys.contains($0.key) }
     }
 
     /// The line or image an overlay shows for this turn-on: the one it
@@ -427,9 +590,11 @@ final class EffectLibrary {
     private static let frameSizes = CameraSpec.sizes.map { CGSize(width: Int($0.width), height: Int($0.height)) }
 
     func save() {
+        // Snapshots may change things to draw them; yours stay as they are.
+        guard !Snapshot.isRunning else { return }
         do {
             try FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(Stored(effects: effects, defaultEffect: defaultEffect, dictationEffect: dictationEffect, live: live))
+            let data = try JSONEncoder().encode(stored)
             try data.write(to: Self.file, options: .atomic)
         } catch {
             log.error("Couldn't save effects: \(error)")

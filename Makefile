@@ -42,7 +42,16 @@ NOTARY_PROFILE ?= notarytool-profile
 # finds it on disk without an Apple ID session.
 ARCHIVE := build/Vaux.xcarchive
 
-.PHONY: gen open check build run snapshot snapshot-live status logs clean release install notarize publish
+# Vaux's Stream Deck plugin (StreamDeck/), packed into build/ for Vaux to
+# bundle. Stream Deck installs a plugin only over an older version, so it's
+# major.minor.build.0 for a release, and each pack for Vaux Dev goes after
+# that release, numbered by the minute (from 2026).
+STREAMDECK_PLUGIN := build/dev.imathis.vaux.streamDeckPlugin
+STREAMDECK_BASE := $(shell awk -F'"' '/MARKETING_VERSION:/ {split($$2, v, "."); m=v[1]"."v[2]} /CURRENT_PROJECT_VERSION:/ {b=$$2} END {print m"."b}' project.yml)
+STREAMDECK_VERSION = $(STREAMDECK_BASE).$(shell echo $$(( ($$(date +%s) - 1767225600) / 60 )))
+release: STREAMDECK_VERSION = $(STREAMDECK_BASE).0
+
+.PHONY: gen open check build run snapshot snapshot-live status logs clean release install notarize publish streamdeck
 
 gen: ## Generate the Xcode project from project.yml
 	xcodegen generate
@@ -77,7 +86,16 @@ snapshot-live: ## Have the running Vaux Dev draw its pages as they are now (came
 	@for i in $$(seq 1 40); do [ -f $(basename $(SNAPSHOT)).live-menu-effects.png ] && break; sleep 0.25; done
 	@ls $(basename $(SNAPSHOT)).live-*.png
 
-release: gen ## Build Release (Apple silicon and Intel), signed with Developer ID
+streamdeck: ## Build the Stream Deck plugin into build/, for Vaux to bundle (needs Node)
+	cd StreamDeck && npm ci --no-fund --no-audit && npm run build
+	@# Packing writes the version into the manifest: a copy, not the source.
+	rm -rf build/streamdeck && mkdir -p build/streamdeck
+	ditto StreamDeck/dev.imathis.vaux.sdPlugin build/streamdeck/dev.imathis.vaux.sdPlugin
+	rm -rf build/streamdeck/dev.imathis.vaux.sdPlugin/logs
+	cd StreamDeck && npx streamdeck pack ../build/streamdeck/dev.imathis.vaux.sdPlugin \
+	  --output ../build --force --no-update-check --version $(STREAMDECK_VERSION)
+
+release: gen streamdeck ## Build Release (Apple silicon and Intel), signed with Developer ID
 	rm -rf $(ARCHIVE) build/export
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -archivePath $(ARCHIVE) \
 	  -allowProvisioningUpdates DEVELOPMENT_TEAM=$(TEAM) VAUX_CAMERA_BUILD=$(call camera_build,Release) archive

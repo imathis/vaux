@@ -60,6 +60,20 @@ targets:
           rm -rf "$folder"
           mkdir -p "$folder"
           ditto "${BUILT_PRODUCTS_DIR}/$extension" "$folder/$extension"
+      - name: Bundle the Stream Deck plugin
+        # make streamdeck packs it; a release must have it.
+        basedOnDependencyAnalysis: false
+        showEnvVars: false
+        script: |
+          plugin="${SRCROOT}/build/dev.imathis.vaux.streamDeckPlugin"
+          resources="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
+          rm -f "$resources/dev.imathis.vaux.streamDeckPlugin"
+          if [ -f "$plugin" ]; then
+            cp "$plugin" "$resources/"
+          elif [ "$CONFIGURATION" = Release ]; then
+            echo "error: No Stream Deck plugin: run make streamdeck" >&2
+            exit 1
+          fi
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.imathis.vaux

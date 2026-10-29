@@ -26,6 +26,11 @@ enum Snapshot {
             ]
             // Effects' pages, with the camera off too: effects touch no camera.
             let effects = camera.effects ?? Effects(appState: appState)
+            // A group, of the first two effects, to draw it (snapshots don't save).
+            if effects.library.groups.isEmpty, effects.library.effects.count > 2 {
+                let group = effects.library.addGroup(named: "Away")
+                for effect in effects.library.effects.prefix(2) { effects.library.move(effect.id, toGroup: group.id) }
+            }
             pages.append(("effects-on", AnyView(EffectsPage(effects: effects))))
             pages.append(("shortcuts-on", AnyView(EffectShortcuts(effects: effects).frame(width: SettingsHeader.pageWidth))))
             let library = effects.library
@@ -55,7 +60,7 @@ enum Snapshot {
             }
             // Dictating, ferociously: the dictation effect, shaken.
             if let dictating = library.dictationEffect ?? library.effects.first?.id {
-                pages.append(("effect-shake", form(Effect(name: "Dictating Ferociously", includes: [dictating], shake: Effect.Shake(amount: 0.8, overlays: true)))))
+                pages.append(("effect-shake", form(Effect(name: "Dictating Ferociously", includes: [dictating], shake: Effect.Shake(amount: 0.8, builds: true), duration: 2.4), height: 1300)))
             }
             // Stepping away: text over frosted glass, the look whole.
             if let frosted = Look.presets.first(where: { $0.preset == "frosted" }) {

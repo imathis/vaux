@@ -36,13 +36,18 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     private var format: FrameFormat?
     private var zoom = 1.0
     /// A push in or out under way: from, to, and when it began.
-    private var zoomMove: (from: Double, to: Double, start: CMTime)?
+    private var zoomMove: (from: Double, to: Double, start: CMTime, move: Effect.Move)?
     /// Overlays showing and fading: each eases toward shown or gone.
     private var overlays: [(layer: OverlayLayer, alpha: Double, shown: Bool)] = []
     /// Looks fading in and out, by ID: one is shown at a time.
     private var looks: [(look: Look, alpha: Double, shown: Bool)] = []
-    /// The shake on, or the last one settling: it eases in and out too.
-    private var shake: (shake: Effect.Shake, alpha: Double, shown: Bool)?
+    /// The shake on, or the last one settling: it eases in and out too, or
+    /// builds up over `build` seconds, from a quarter (its push-in eases in
+    /// as well, so it never starts from still).
+    private var shake: (shake: Effect.Shake, alpha: Double, shown: Bool, build: Double?)?
+    private static let buildsFrom = 0.25
+    /// When the shake started: its frames count from there.
+    private var shakeStarted: Double?
     private var sent = 0
     private var dropped = 0
     private var hidden = 0
@@ -61,8 +66,6 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     /// When the last frame was taken: fades go by time, so they take as
     /// long at 30 fps as at 60.
     private var lastFaded = CMTime.invalid
-    /// Pushing in or out takes this long, eased.
-    private static let zoomMoveSeconds = 0.3
 
     init(onStats: @escaping @MainActor @Sendable (Stats) -> Void) {
         self.onStats = onStats
@@ -110,12 +113,13 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         }
     }
 
-    /// Zooms the running camera, from the next frame: at once (the slider),
-    /// or eased over a moment (an effect pushing in or out).
-    func setZoom(_ zoom: Double, animated: Bool) {
+    /// Zooms the running camera, from the next frame: at once (the slider,
+    /// or an effect that snaps), or moving its way (an effect pushing in or
+    /// out).
+    func setZoom(_ zoom: Double, moving move: Effect.Move?) {
         videoQueue.async { [self] in
-            if animated {
-                zoomMove = (from: self.zoom, to: zoom, start: CMClockGetTime(CMClockGetHostTimeClock()))
+            if let move, move.curve != .snap, move.seconds > 0 {
+                zoomMove = (from: self.zoom, to: zoom, start: CMClockGetTime(CMClockGetHostTimeClock()), move: move)
             } else {
                 zoomMove = nil
                 self.zoom = zoom
@@ -142,9 +146,8 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     /// Advances a push in or out, per frame.
     private func easeZoom() {
         guard let move = zoomMove else { return }
-        let t = min((CMClockGetTime(CMClockGetHostTimeClock()) - move.start).seconds / Self.zoomMoveSeconds, 1)
-        let eased = t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2
-        zoom = move.from + (move.to - move.from) * eased
+        let t = min((CMClockGetTime(CMClockGetHostTimeClock()) - move.start).seconds / move.move.seconds, 1)
+        zoom = move.from + (move.to - move.from) * move.move.curve.eased(t)
         if t >= 1 { zoomMove = nil }
     }
 
@@ -178,11 +181,13 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     }
 
     /// The shake to show, or none. A new one, or an edit, applies at once;
-    /// it eases in from still, and back to still when it goes.
-    func showShake(_ shake: Effect.Shake?) {
+    /// it eases in from still (or builds up, over `build` seconds), and back
+    /// to still when it goes.
+    func showShake(_ shake: Effect.Shake?, buildingOver build: Double? = nil) {
         videoQueue.async { [self] in
             if let shake {
-                self.shake = (shake: shake, alpha: self.shake?.alpha ?? 0, shown: true)
+                let alpha = self.shake?.alpha ?? 0
+                self.shake = (shake: shake, alpha: build != nil ? max(alpha, Self.buildsFrom) : alpha, shown: true, build: build)
             } else {
                 self.shake?.shown = false
             }
@@ -215,21 +220,12 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         overlays.removeAll { !$0.shown && $0.alpha <= 0 }
     }
 
-    /// Advances the shake's ease, per frame.
+    /// Advances the shake's ease, or its build, per frame.
     private func fadeShake(by fadeStep: Double) {
         guard let shake else { return }
-        let alpha = min(max(shake.alpha + (shake.shown ? fadeStep : -fadeStep), 0), 1)
-        self.shake = shake.shown || alpha > 0 ? (shake: shake.shake, alpha: alpha, shown: shake.shown) : nil
-    }
-
-    /// Where a shake has the picture at a moment, each -1 to 1: across, up
-    /// and down, and turned. A few jolts a second, wandering rather than
-    /// repeating: three waves each, at rates that never line up.
-    private static func wobble(at seconds: Double) -> (x: Double, y: Double, turn: Double) {
-        func wave(_ a: Double, _ b: Double, _ c: Double, _ phase: Double) -> Double {
-            0.5 * sin(2 * .pi * a * seconds + phase) + 0.3 * sin(2 * .pi * b * seconds + phase + 1.3) + 0.2 * sin(2 * .pi * c * seconds + phase + 2.9)
-        }
-        return (wave(3.1, 5.9, 9.7, 0), wave(2.7, 6.7, 11.3, 0), wave(1.9, 4.3, 8.1, 0.7))
+        let step = if shake.shown, let build = shake.build, build > 0 { fadeStep * Self.fadeSeconds * (1 - Self.buildsFrom) / build } else { fadeStep }
+        let alpha = min(max(shake.alpha + (shake.shown ? step : -fadeStep), 0), 1)
+        self.shake = shake.shown || alpha > 0 ? (shake: shake.shake, alpha: alpha, shown: shake.shown, build: shake.build) : nil
     }
 
     /// Skips frames that arrive from the camera broken, or doesn't.
@@ -438,12 +434,24 @@ extension CameraFeed: AVCaptureVideoDataOutputSampleBufferDelegate {
         let drawn = overlays.map { Compositor.Drawn(layer: $0.layer, alpha: $0.alpha) }
         // The one fading out under the one fading in.
         let graded = (looks.filter { !$0.shown } + looks.filter(\.shown)).map { Compositor.Graded(look: $0.look, alpha: $0.alpha) }
+        if shake == nil { shakeStarted = nil }
         let shaken = shake.map { shake in
-            let wobble = Self.wobble(at: captured.seconds)
+            // Frames as call apps take them, counted from the shake's first,
+            // a quarter frame in, so a camera's frames never sit on the line
+            // between two (a 60 fps camera's go two to each).
+            let started = shakeStarted ?? captured.seconds
+            shakeStarted = started
+            let frame = Int(((captured.seconds - started) * Effect.Shake.Motion.framesPerSecond + 0.25).rounded(.down))
+            let motion = shake.shake.motion
+            let now = motion.position(atFrame: frame, pace: shake.shake.pace)
+            let before = motion.position(atFrame: frame - 1, pace: shake.shake.pace)
             let reach = shake.shake.reach * shake.alpha
+            let tilt = shake.shake.tilt * shake.alpha
             return Compositor.Shaken(
-                shift: CGPoint(x: wobble.x * reach, y: wobble.y * reach),
-                tilt: wobble.turn * shake.shake.tilt * shake.alpha,
+                shift: CGPoint(x: now.x * reach, y: now.y * reach),
+                tilt: now.turn * tilt,
+                shiftBefore: CGPoint(x: before.x * reach, y: before.y * reach),
+                tiltBefore: before.turn * tilt,
                 room: shake.shake.zoom,
                 blur: shake.shake.blur,
                 overlays: shake.shake.overlays

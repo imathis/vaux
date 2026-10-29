@@ -302,11 +302,16 @@ struct MenuContentView: View {
         .frame(height: 26)
     }
 
-    /// A titled list of effects, checked while on.
+    /// A titled list of effects, checked while on, each group's under its
+    /// name and set off from what follows.
     @ViewBuilder private func effectList(_ title: String, _ items: [Triggers.Item], _ effects: Effects) -> some View {
         if !items.isEmpty {
-            subheader(title)
+            let starts = items.groupStarts
+            let ends = items.groupEnds
+            if items.first?.group == nil { subheader(title) }
             ForEach(items) { item in
+                if ends.contains(item.id) { divider() }
+                if let group = starts[item.id] { subheader(group.name) }
                 effectRow(item) { effects.triggers.trigger(item.action) }
             }
         }

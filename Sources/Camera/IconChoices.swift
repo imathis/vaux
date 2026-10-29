@@ -1,7 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Picks a line's icon: one of the few offered, or an emoji of your own.
+/// Picks an icon: one of the few offered (a line's, or an effect's), or an
+/// emoji of your own.
 struct IconChoices: View {
     enum Layout {
         /// All in a line, the emoji last: the Live panel's.
@@ -13,6 +14,9 @@ struct IconChoices: View {
 
     @Binding var icon: String?
     var layout = Layout.row
+    var choices = Overlay.icons
+    /// Shown for the choice of none.
+    var noneSymbol = "circle.slash"
     /// An icon was picked, offered or emoji.
     var picked: () -> Void = {}
 
@@ -20,18 +24,18 @@ struct IconChoices: View {
         switch layout {
         case .row:
             HStack(spacing: 2) {
-                ForEach(Overlay.icons, id: \.label) { button(for: $0, size: CGSize(width: 30, height: 24)) }
+                ForEach(choices, id: \.label) { button(for: $0, size: CGSize(width: 30, height: 24)) }
                 EmojiField(icon: $icon, size: CGSize(width: 40, height: 24))
             }
         case .square:
-            let count = Overlay.icons.count
+            let count = choices.count
             let columns = Int(Double(count).squareRoot().rounded(.up))
             let cell = CGSize(width: 36, height: 30)
             VStack(alignment: .leading, spacing: 10) {
                 Grid(horizontalSpacing: 2, verticalSpacing: 2) {
                     ForEach(Array(stride(from: 0, to: count, by: columns)), id: \.self) { start in
                         GridRow {
-                            ForEach(Overlay.icons[start..<min(start + columns, count)], id: \.label) { button(for: $0, size: cell) }
+                            ForEach(choices[start..<min(start + columns, count)], id: \.label) { button(for: $0, size: cell) }
                         }
                     }
                 }
@@ -52,7 +56,7 @@ struct IconChoices: View {
             icon = choice.symbol
             picked()
         } label: {
-            OverlayIcon(icon: choice.symbol ?? "circle.slash")
+            OverlayIcon(icon: choice.symbol ?? noneSymbol)
                 .foregroundStyle(selected ? Color.accentColor : .secondary)
                 .frame(width: size.width, height: size.height)
                 .background(RoundedRectangle(cornerRadius: 5).fill(selected ? Color.accentColor.opacity(0.18) : .clear))

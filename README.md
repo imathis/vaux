@@ -114,10 +114,13 @@ An effect is anything you name and turn on, made of any of these:
 
 - **Text and graphics:** text in a pill, a lower-third bar or plain, each line
   with its own icon (or just an icon: a coffee cup for a break), or graphics
-  (PNG, PDF, SVG, even full frame). Seven spots, kept inside the middle that
-  apps keep when they crop. They fade in and out.
-- **Push in:** zoom on top of each camera's own zoom, up to 2×, eased in and
-  out.
+  (PNG, PDF, SVG, even full frame), or videos (MOV, MP4, animated GIF),
+  playing from the start each time and looping, transparency kept. Seven
+  spots, kept inside the middle that apps keep when they crop. They fade in
+  and out.
+- **Push in:** zoom on top of each camera's own zoom, up to 2×. It moves
+  in as the effect comes on and back out as it goes, its way: snap, ease
+  in, ease out, or ease in and out, over a time you set.
 - **A look:** a color grade over the whole picture:
   - white balance (temperature, tint) and saturation
   - tone: brightness, contrast, highlights and shadows
@@ -127,16 +130,40 @@ An effect is anything you name and turn on, made of any of these:
     stepping away, with text staying sharp over it), fade (lifted blacks and
     a soft glow, for smoke and haze), vignette and film grain
 
-  Presets: Noir, Black & White, Warm, Vivid, Faded, Teal & Orange and
+  Presets: Noir, Black & White, Warm, Vivid, Teal & Orange and
   Frosted (behind a frosted shower door, for a "back in 5" over it).
-- **Shake:** the picture jolts and tilts around, gentle to wild, with motion
-  blur if you like, pushing in just far enough to have room (not at all if
-  it's pushed in that far already). Text and graphics hold still over it, or
-  shake along.
+- **Shake:** the picture moves within the camera's frame, gentle to wild,
+  slow to fast, with motion blur if you like, pushing in just far enough to
+  have room (not at all if it's pushed in that far already). Three motions:
+  Vibrate (jumps, 5 to 30 times a second), Rumble (unbroken jitter) and
+  Wobble (a smooth sway). It moves on the frames call apps take, 30 a
+  second, so no move falls between two and gets lost. One that turns itself off (a new shake does, after 2
+  seconds) can build up, from a quarter to full three quarters of the way
+  through its time. Text and graphics hold still over it, or shake
+  along.
 - **Other effects to build on:** "Dictating, ferociously" can be Dictating
   plus a shake; edit Dictating and it follows.
 
-An effect can also turn itself off after a few seconds.
+An effect can also turn itself off after a few seconds, and mute your mic
+while it's on (unmuting as it goes, unless you were muted already).
+
+**Ready-made.** Vaux starts with a few, a taste of what effects can do:
+Privacy (frosted, mic muted), Hand Raised, Suspicious (pushed in,
+captioned), Intensify (a wild shake, captioned), Noir, Teal & Orange,
+Dictating, and the AWAY group: BRB (frosted, with a sign) and full-frame
+cards for Lunch, Coffee, Intermission, Paused, Poopin and On a call, each
+muting the mic but Paused and On a call. Add Effect → Ready-Made adds any
+of them again.
+
+**Groups.** Effects can go in groups, each with a name and, if you like,
+an icon and color: drag an effect under a group's name in the list. Groups
+show as sections in the Quick Menu and the menu, and as keys on Stream Deck.
+
+**Backup.** Export puts your effects, groups, Live, the graphics and videos
+they show, and their keys (shortcuts, the Quick Menu's) in one
+`.vauxeffects` file. Import adds its effects to yours, as copies, or
+replaces yours with it (yours are saved in Vaux's Backups folder first).
+Your mics and cameras aren't in it: they belong to the Mac.
 
 **One at a time, over the default.** The **default effect** is always on, and
 one of yours goes over it: turning another on replaces it. To layer effects,
@@ -155,8 +182,16 @@ all back. Deletes can be undone.
 
 #### Triggering them
 
-- **Shortcuts:** each effect can have a global shortcut, which a Stream Deck
-  button can press.
+- **Shortcuts:** each effect can have a global shortcut.
+- **Stream Deck:** Vaux comes with a plugin (Settings → Shortcuts →
+  Install): keys for Mute and, while the camera is on, an effect (any but
+  the dictation one, which follows your dictation app), Live and Clear All,
+  lit while they're on. An effect's key taps and holds like any other. A
+  **Vaux Group** key opens one of your groups: its effects, always as they
+  are in Vaux. It comes with a Vaux page for each Stream Deck: Mute, Live
+  and Clear All, then your effects and groups in Vaux's order (More turns
+  the page when they don't all fit). The Vaux Page key opens it from
+  anywhere, and its first key comes back.
 - **The Quick Menu:** one key (⌥. by default), or a right-side modifier
   tapped on its own (right ⇧, say, the way FluidVoice takes right ⌥), opens a
   small menu over everything, and a second key picks: numbers, then letters,
@@ -213,6 +248,8 @@ an idle Vaux Camera costs nothing. Effects are drawn only while they show.
   the camera extension in System Settings, and Vaux asks for camera access.
   Turning it off removes the extension. Opening the Quick Menu by tapping a
   modifier on its own needs Accessibility, and only modifier keys are watched.
+- **Stream Deck plugin:** none. It talks to Vaux over a socket in Vaux's own
+  Application Support folder that only your user can open.
 
 ## Usage
 
@@ -233,6 +270,8 @@ an idle Vaux Camera costs nothing. Effects are drawn only while they show.
 
 Requires macOS 26+, Xcode 26+ and
 [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+The Stream Deck plugin also needs Node.js and npm: `make streamdeck` builds it
+into `build/`, where Vaux's build picks it up (releases build it first).
 
 The Xcode project is generated from [`project.yml`](project.yml) and isn't
 checked in. Generate it first:
@@ -243,6 +282,7 @@ make run       # build Vaux Dev, install it to /Applications and launch it
 make check     # compile without signing
 make snapshot  # draw Settings and the menu to build/snapshot.*.png
 make snapshot-live  # the running Vaux Dev draws its pages as they are (camera live)
+make streamdeck     # build the Stream Deck plugin, for Vaux to bundle
 make status    # installed system extensions (Vaux Camera)
 make logs      # stream Vaux's logs
 ```
@@ -295,6 +335,8 @@ Makefile                     # gen / open / check / build / run / snapshot / cle
 Sources/
   main.swift                 # entry point
   AppDelegate.swift          # status item, clicks, Settings window, app menu
+  ControlServer.swift        # the socket the Stream Deck plugin drives Vaux through
+  KeyImages.swift            # Stream Deck key images, in each effect's icon and color
   StatusIcon.swift           # menu bar glyph: live, muted, solo
   StatusIconAnimator.swift   # springs the glyph between states
   MenuPanelController.swift  # the custom glass menu panel
@@ -333,11 +375,16 @@ Sources/
     BrokenFrame.swift        #   spotting frames that arrive from the camera broken
     Effect.swift             #   effects: their parts, and looks merged
     EffectLibrary.swift      #   your effects, the stack of those on, what shows
+    EffectListRow.swift      #   the Effects list's rows, and dragging in and out of groups
+    EffectsBackup.swift      #   a .vauxeffects file: export, import (add or replace)
     EffectMigration.swift    #   effects from overlays, push-ins, looks and combos kept apart
-    Overlay*.swift           #   text and graphics: model, drawing
+    StarterEffects.swift     #   the effects Vaux starts with, and offers ready-made
+    EffectIcon.swift         #   an effect's icon and color, picked or automatic
+    ShakeMotion.swift        #   how a shake moves, frame by frame
+    Overlay*.swift           #   text, graphics and videos: model, drawing, playing
     Look.swift               #   looks: model, presets, grading and rendering
     LookSections.swift       #   a look's settings, in an effect's editor
-    IconChoices.swift        #   picking a line's icon: offered, or an emoji
+    IconChoices.swift        #   picking an icon: offered, or an emoji
     LivePanel.swift          #   the Live panel
     Triggers.swift           #   every effect's keys, tap and hold
     QuickMenu.swift          #   the Quick Menu panel
@@ -345,6 +392,8 @@ Sources/
     EffectsSettings.swift    #   Settings → Effects
     ShortcutsSettings.swift  #   Settings → Shortcuts
 CameraExtension/             # the camera extension (CMIO): device, streams, placeholder
+StreamDeck/                  # the Stream Deck plugin (TypeScript): keys, their settings, images, Vaux's page
+Sources/StarterGraphics/      # the AWAY group's cards, shipped in the app
 Shared/CameraSpec.swift      # Vaux Camera's name, IDs and formats, for both
 IconSource/                  # app icon layer art
 docs/                        # README images

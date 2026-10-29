@@ -143,7 +143,24 @@ struct QuickMenuView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 10)
                 .padding(.bottom, 4)
-            ForEach(triggers.items) { item in
+            let items = triggers.items
+            let starts = items.groupStarts
+            let ends = items.groupEnds
+            ForEach(items) { item in
+                // A group ended: what's next isn't in it.
+                if ends.contains(item.id) {
+                    Divider()
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                }
+                if let group = starts[item.id] {
+                    Text(group.name)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.top, 6)
+                        .padding(.bottom, 2)
+                }
                 Button { fire(item) } label: {
                     HStack(spacing: 10) {
                         KeyCap(key: keys[item.id] ?? "")
@@ -163,7 +180,7 @@ struct QuickMenuView: View {
                 }
                 .buttonStyle(QuickMenuRowStyle())
             }
-            Text("Tap a key to turn it on or off · hold it to show it only while held")
+            Text("Tap to turn on or off · hold to show while held")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .padding(.horizontal, 10)

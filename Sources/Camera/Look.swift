@@ -64,12 +64,13 @@ struct Look: Codable, Identifiable, Hashable, Sendable {
 
     /// Looks to start from.
     static let presets = [
-        // Silvery black and white: cool, with smoke in the shadows.
-        Look(name: "Noir", preset: "noir", saturation: 0, contrast: 1.25, brightness: 0.02, warmth: -0.15, fade: 0.45, vignette: 0.45, grain: 0.3),
-        Look(name: "Black & White", preset: "blackAndWhite", saturation: 0, contrast: 1.1),
+        // Black & White, gritty: grain, and the edges dark.
+        Look(name: "Noir", preset: "noir", saturation: 0, contrast: 1.6, brightness: -0.03, shadows: 0.7, vignette: 0.49, grain: 0.65),
+        // Punchy: full contrast, the shadows opened back up so faces keep
+        // their detail.
+        Look(name: "Black & White", preset: "blackAndWhite", saturation: 0, contrast: 1.6, brightness: -0.03, shadows: 0.7),
         Look(name: "Warm", preset: "warm", saturation: 1.1, warmth: 0.5),
         Look(name: "Vivid", preset: "vivid", saturation: 1.45, contrast: 1.1),
-        Look(name: "Faded", preset: "faded", saturation: 0.75, contrast: 0.85, fade: 0.4),
         // The film grade: teal in the shadows, warm in the highlights.
         Look(
             name: "Teal & Orange", preset: "tealAndOrange", contrast: 1.1,

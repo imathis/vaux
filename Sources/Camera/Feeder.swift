@@ -56,6 +56,9 @@ final class Feeder {
         var zoom: Double
         var modeZoom: Double
         var zoomSource: UUID?
+        /// How the last effect to push in moved: it moves back out the same
+        /// way when it goes.
+        var zoomMove: Effect.Move
     }
 
     private struct Wanted {
@@ -66,9 +69,11 @@ final class Feeder {
         let modeZoom: Double
         /// What set the zoom (see EffectLibrary.zoomSource).
         let zoomSource: UUID?
+        let zoomMove: Effect.Move
         let overlays: [OverlayLayer]
         let look: Look?
         let shake: Effect.Shake?
+        let shakeBuild: Double?
     }
 
     init(
@@ -109,9 +114,11 @@ final class Feeder {
             zoom: min(max(base * library.zoom, library.shake?.zoom ?? 1), most),
             modeZoom: min(max(base * library.furthest, library.furthestShake), most),
             zoomSource: library.zoomSource,
+            zoomMove: library.zoomMove,
             overlays: library.scene,
             look: library.look,
-            shake: library.shake
+            shake: library.shake,
+            shakeBuild: library.shakeBuild
         )
     }
 
@@ -128,15 +135,17 @@ final class Feeder {
         zoom = wanted.zoom
         feed.showOverlays(wanted.overlays)
         feed.showLook(wanted.look)
-        feed.showShake(wanted.shake)
+        feed.showShake(wanted.shake, buildingOver: wanted.shakeBuild)
         if case .sending(let camera, let format) = wanted.status, let sink = device.sink {
             if let feeding, feeding.camera == camera.uid, feeding.format == format, feeding.sink === sink {
                 // Same camera, same format: only the zoom may have moved. An
-                // effect coming on or off pushes in or out smoothly; a slider
-                // moves at once.
+                // effect coming on pushes in its way, and back out the same
+                // way when it goes; a slider moves at once.
                 if feeding.zoom != wanted.zoom {
-                    feed.setZoom(wanted.zoom, animated: feeding.zoomSource != wanted.zoomSource)
+                    let move = feeding.zoomSource == wanted.zoomSource ? nil : wanted.zoomSource == nil ? feeding.zoomMove : wanted.zoomMove
+                    feed.setZoom(wanted.zoom, moving: move)
                 }
+                if wanted.zoomSource != nil { self.feeding?.zoomMove = wanted.zoomMove }
                 if feeding.modeZoom != wanted.modeZoom {
                     feed.setModeZoom(wanted.modeZoom)
                 }
@@ -146,7 +155,7 @@ final class Feeder {
             } else {
                 feeding = Feeding(
                     camera: camera.uid, format: format, sink: sink,
-                    zoom: wanted.zoom, modeZoom: wanted.modeZoom, zoomSource: wanted.zoomSource
+                    zoom: wanted.zoom, modeZoom: wanted.modeZoom, zoomSource: wanted.zoomSource, zoomMove: wanted.zoomMove
                 )
                 feed.start(cameraID: camera.uid, format: format, zoom: wanted.zoom, modeZoom: wanted.modeZoom, sink: sink)
             }

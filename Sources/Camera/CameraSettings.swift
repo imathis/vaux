@@ -164,7 +164,7 @@ private struct TurnOnView: View {
             }
             Text("Your camera in video calls, with effects on your keys and a sign while you dictate.")
                 .wraps()
-            Text("macOS asks you to approve it, then for camera access. Your camera runs only while an app is using it.")
+            Text("macOS asks you to approve it, then for camera access. It runs only while an app uses it.")
                 .foregroundStyle(.secondary)
                 .wraps()
             Button("Turn On Camera") { camera.turnOn() }
@@ -381,7 +381,7 @@ private struct CameraList: View {
     /// What it does, and what it's done this call.
     private var brokenFramesNote: String {
         let hidden = feeder.stats.hidden
-        let note = "A frame that arrives from the camera damaged, partly gray and striped or shifted, is skipped; the call sees the one before a moment longer. Through a dock or hub, some cameras break a frame now and then."
+        let note = "Skips frames the camera sends garbled, as some do through a dock or hub."
         guard case .sending = feeder.status, feeder.hidesBrokenFrames, hidden > 0 else { return note }
         return note + " \(hidden) hidden since the camera started."
     }
@@ -487,7 +487,7 @@ private struct ZoomPopover: View {
                     .frame(width: 48, alignment: .trailing)
             }
             if let sharp {
-                Text("Stays sharp up to \(sharp.hd.zoomText) at 720p and \(sharp.fullHD.zoomText) at 1080p. Past that, the camera's picture is scaled up and a little softer.")
+                Text("Sharp up to \(sharp.hd.zoomText) at 720p and \(sharp.fullHD.zoomText) at 1080p; softer past that.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -518,7 +518,7 @@ struct SystemEffectsRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Video effects")
-                Text("Set them for \(VauxCamera.appName), not your call app, so overlays stay sharp.")
+                Text("Set here, not in your call app.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .wraps()

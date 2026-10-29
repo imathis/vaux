@@ -18,44 +18,77 @@ struct EffectsPage: View {
         var isNew = false
     }
 
+    /// The group whose name, icon and color are open.
+    @State private var editingGroup: UUID?
+    /// A backup picked to import, before choosing how.
+    @State private var importing: EffectsBackup?
+    @State private var importError: String?
+
+
     private var library: EffectLibrary { effects.library }
 
     var body: some View {
         @Bindable var library = library
         Form {
             Section {
-                ForEach(library.effects) { effect in
-                    EffectRow(
-                        effect: effect,
-                        summary: summary(of: effect),
-                        badge: library.defaultEffect == effect.id ? "Default" : library.dictationEffect == effect.id ? "Dictating" : nil,
-                        isOn: library.isOn(effect.id),
-                        toggle: { effects.triggers.trigger(.effect(effect.id)) },
-                        edit: { editing = Editing(id: effect.id) }
-                    )
-                    .contextMenu {
-                        Button("Edit…") { editing = Editing(id: effect.id) }
-                        Button("Duplicate") { library.duplicate(effect.id) }
-                        Divider()
-                        Button(library.defaultEffect == effect.id ? "Not the Default" : "Make Default") {
-                            library.defaultEffect = library.defaultEffect == effect.id ? nil : effect.id
+                // One list, groups' names in it as headers: an effect dragged
+                // under one goes in that group; above them all, in none. A
+                // List, which drags to reorder (a Form's rows don't), as tall
+                // as its rows, so it never scrolls inside the page.
+                List {
+                    // No row is move-disabled: SwiftUI keeps such a row at its
+                    // place, refusing any drop that would shift it.
+                    ForEach(rows) { row in
+                        switch row {
+                        case .effect(let effect): line(effectRow(effect))
+                        case .group(let group): line(groupRow(group))
+                        case .end(_, empty: true):
+                            line(Text("Drag effects here")
+                                .foregroundStyle(.tertiary)
+                                .padding(.leading, 70)
+                                .frame(maxWidth: .infinity, alignment: .leading))
+                        case .end:
+                            // A boundary, not a gap: dropped over the bottom
+                            // of the group's last effect, an effect lands
+                            // above it; over the top of the next, below it.
+                            Color.clear
+                                .frame(height: 1)
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.hidden)
                         }
-                        Button(library.dictationEffect == effect.id ? "Not While Dictating" : "Use While Dictating") {
-                            library.dictationEffect = library.dictationEffect == effect.id ? nil : effect.id
-                        }
-                        Divider()
-                        Button("Delete", role: .destructive) { remove(effect.id) }
                     }
+                    .onMove(perform: move)
                 }
-                .onMove { library.effects.move(fromOffsets: $0, toOffset: $1) }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .scrollDisabled(true)
+                // Lets a group's end be a line thin.
+                .environment(\.defaultMinListRowHeight, 1)
+                // A little past the last row, so the end takes a drop too.
+                .frame(height: rows.map(\.height).reduce(0, +) + 12)
                 // Under its list, at the trailing edge, as in System
                 // Settings; a menu where there's a choice to make.
                 HStack {
                     Spacer()
-                    AddEffectMenu { editing = Editing(id: library.add($0).id, isNew: true) }
+                    Button("Add Group") { editingGroup = library.addGroup().id }
+                    AddEffectMenu {
+                        editing = Editing(id: library.add($0).id, isNew: true)
+                    } addGroup: { group, members in
+                        // A copy of the group, its effects in it.
+                        StarterGraphics.install()
+                        let copy = library.addGroup(named: group.name)
+                        if let index = library.groups.firstIndex(where: { $0.id == copy.id }) {
+                            library.groups[index].icon = group.icon
+                            library.groups[index].color = group.color
+                        }
+                        for var effect in members {
+                            effect.group = copy.id
+                            library.add(effect)
+                        }
+                    }
                 }
             } header: {
-                SettingsHeader("Effects", "Each turns on by name, with what you put in it: text or a graphic, a push-in, a look, a shake, other effects to build on. One is on at a time, over the default effect: turning another on replaces it. To layer effects, build one on others.")
+                SettingsHeader("Effects", "One at a time, over the default effect. To layer, build one on others.")
             }
             Section {
                 Picker("Default effect", selection: $library.defaultEffect) {
@@ -71,7 +104,17 @@ struct EffectsPage: View {
                     }
                 }
             } header: {
-                SettingsHeader("Default and Dictating", "The default effect is on under everything else. The dictating one is on while solo mode is, so the call knows why you're muted.")
+                SettingsHeader("Default and Dictating", "The default is always on, underneath. The other shows while you dictate.")
+            }
+            Section {
+                LabeledContent("Effects, groups, graphics and keys") {
+                    HStack {
+                        Button("Import…", action: chooseImport)
+                        Button("Export…", action: export)
+                    }
+                }
+            } header: {
+                SettingsHeader("Backup", "One file to keep, or to share. Not your mics and cameras.")
             }
         }
         .formStyle(.grouped)
@@ -81,10 +124,137 @@ struct EffectsPage: View {
                 if let copy = library.duplicate(editing.id) { self.editing = Editing(id: copy.id, isNew: true) }
             }
         }
+        .sheet(isPresented: Binding(get: { editingGroup != nil }, set: { if !$0 { editingGroup = nil } })) {
+            if let editingGroup { GroupEditor(library: library, id: editingGroup) }
+        }
+        .confirmationDialog(
+            importTitle,
+            isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }),
+            titleVisibility: .visible,
+            presenting: importing
+        ) { backup in
+            Button("Add to Your Effects") { effects.add(backup) }
+            Button("Replace Your Effects", role: .destructive) {
+                do { try effects.restore(backup) } catch { importError = error.localizedDescription }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Adding keeps yours and adds copies. Replacing swaps in everything, keys too; yours are saved in Vaux's Backups folder first.")
+        }
+        .alert("Couldn't import", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(importError ?? "")
+        }
+    }
+
+    private var importTitle: String {
+        guard let importing else { return "" }
+        let count = importing.effects.effects.count
+        return "Import \(count) \(count == 1 ? "effect" : "effects")?"
+    }
+
+    private func export() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.vauxEffects]
+        panel.nameFieldStringValue = "\(VauxCamera.appName) Effects"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do { try effects.backup().write(to: url) } catch { importError = error.localizedDescription }
+        }
+    }
+
+    private func chooseImport() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.vauxEffects]
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do { importing = try EffectsBackup.read(url) } catch { importError = "That file isn't a Vaux effects backup." }
+        }
     }
 
     private func remove(_ id: UUID) {
         effects.remove(id, undo: undoManager)
+    }
+
+    /// The list as it's listed: effects in no group, and each group's name,
+    /// its effects, and its end.
+    private var rows: [EffectListRow] {
+        library.listing.flatMap { listed -> [EffectListRow] in
+            switch listed {
+            case .effect(let effect): [.effect(effect)]
+            case .group(let group, let effects): [.group(group)] + effects.map(EffectListRow.effect) + [.end(group, empty: effects.isEmpty)]
+            }
+        }
+    }
+
+    /// Dropped: see EffectListRow.
+    private func move(from offsets: IndexSet, to destination: Int) {
+        let (effects, groups, outline) = EffectListRow.arrangement(of: EffectListRow.moved(rows, offsets, to: destination))
+        library.arrange(effects: effects, groups: groups, outline: outline)
+    }
+
+    /// A row of the list, a line tall.
+    private func line(_ content: some View) -> some View {
+        content
+            .frame(height: 22)
+            .listRowInsets(EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12))
+    }
+
+    private func effectRow(_ effect: Effect) -> some View {
+        EffectRow(
+            effect: effect,
+            tint: library.tint(of: effect),
+            inGroup: effect.group.flatMap(library.group) != nil,
+            summary: summary(of: effect),
+            badge: library.defaultEffect == effect.id ? "Default" : library.dictationEffect == effect.id ? "Dictating" : nil,
+            isOn: library.isOn(effect.id),
+            toggle: { effects.triggers.trigger(.effect(effect.id)) },
+            edit: { editing = Editing(id: effect.id) }
+        )
+        .contextMenu {
+            Button("Edit…") { editing = Editing(id: effect.id) }
+            Button("Duplicate") { library.duplicate(effect.id) }
+            Menu("Move to Group") {
+                Button("No Group") { library.move(effect.id, toGroup: nil) }
+                    .disabled(effect.group == nil)
+                ForEach(library.groups) { group in
+                    Button(group.name) { library.move(effect.id, toGroup: group.id) }
+                        .disabled(effect.group == group.id)
+                }
+                Divider()
+                Button("New Group…") {
+                    let group = library.addGroup()
+                    library.move(effect.id, toGroup: group.id)
+                    editingGroup = group.id
+                }
+            }
+            Divider()
+            Button(library.defaultEffect == effect.id ? "Not the Default" : "Make Default") {
+                library.defaultEffect = library.defaultEffect == effect.id ? nil : effect.id
+            }
+            Button(library.dictationEffect == effect.id ? "Not While Dictating" : "Use While Dictating") {
+                library.dictationEffect = library.dictationEffect == effect.id ? nil : effect.id
+            }
+            Divider()
+            Button("Delete", role: .destructive) { remove(effect.id) }
+        }
+    }
+
+    private func groupRow(_ group: EffectGroup) -> some View {
+        let index = library.groups.firstIndex { $0.id == group.id } ?? 0
+        return GroupRow(group: group, tint: library.tint(of: group)) {
+            editingGroup = group.id
+        }
+        .contextMenu {
+            Button("Edit…") { editingGroup = group.id }
+            Button("Move Up") { library.groups.swapAt(index, index - 1) }
+                .disabled(index == 0)
+            Button("Move Down") { library.groups.swapAt(index, index + 1) }
+                .disabled(index == library.groups.count - 1)
+            Divider()
+            Button("Delete Group", role: .destructive) { library.removeGroup(group.id) }
+        }
     }
 
     /// What's in it, on hover: the name says enough in the list.
@@ -100,10 +270,14 @@ struct EffectsPage: View {
     }
 }
 
-/// An effect in the list, one line: what it mostly is, its name (what's in
-/// it on hover), Default or Dictating, and on or off.
+/// An effect in the list, one line: a handle to drag it by, what it mostly
+/// is, its name (what's in it on hover), Default or Dictating, and on or
+/// off. Click it to edit it.
 private struct EffectRow: View {
     let effect: Effect
+    let tint: Effect.Tint
+    /// Listed under a group's name: set in from it.
+    let inGroup: Bool
     let summary: String
     let badge: String?
     let isOn: Bool
@@ -112,21 +286,32 @@ private struct EffectRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: Self.symbol(for: effect))
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            Text(effect.name)
-                .lineLimit(1)
-                .help(summary)
-            if let badge {
-                Text(badge)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(.quaternary, in: Capsule())
+            Image(systemName: "line.3.horizontal")
+                .foregroundStyle(.tertiary)
+                .help("Drag to reorder, or into a group")
+            // Drag it by its handle; click anywhere else to edit it (a
+            // click across the whole row would swallow the drag).
+            Button(action: edit) {
+                HStack(spacing: 10) {
+                    EffectBadge(icon: effect.shownIcon, tint: tint)
+                        .frame(width: 20)
+                        .padding(.leading, inGroup ? 18 : 0)
+                    Text(effect.name)
+                        .lineLimit(1)
+                    if let badge {
+                        Text(badge)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(.quaternary, in: Capsule())
+                    }
+                    Spacer(minLength: 8)
+                }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 8)
+            .buttonStyle(.plain)
+            .help(summary)
             Button(action: toggle) {
                 Image(systemName: isOn ? "eye.fill" : "eye")
                     .foregroundStyle(isOn ? Color.accentColor : .secondary)
@@ -145,37 +330,123 @@ private struct EffectRow: View {
             .buttonStyle(.plain)
             .help("Edit")
         }
-        .contentShape(Rectangle())
-        .onTapGesture(perform: edit)
     }
+}
 
-    /// By its first part.
-    static func symbol(for effect: Effect) -> String {
-        if let overlay = effect.overlays.first { return overlay.kind == .text ? "textformat" : "photo" }
-        if effect.look != nil { return "camera.filters" }
-        if effect.pushIn != nil { return "plus.magnifyingglass" }
-        if effect.shake != nil { return "rectangle.on.rectangle.angled" }
-        if !effect.includes.isEmpty { return "square.stack.3d.up" }
-        return "sparkles"
+/// A group's name over its effects, and what it shows as: dragged by its
+/// handle, the group moves with them. Click it to edit it.
+private struct GroupRow: View {
+    let group: EffectGroup
+    let tint: Effect.Tint
+    let edit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "line.3.horizontal")
+                .foregroundStyle(.tertiary)
+                .help("Drag to move the group, its effects with it")
+            // Drag it by its handle; click anywhere else to edit it.
+            Button(action: edit) {
+                HStack(spacing: 10) {
+                    EffectBadge(icon: group.shownIcon, tint: tint)
+                        .frame(width: 20)
+                    Text(group.name)
+                        .fontWeight(.semibold)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button(action: edit) {
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 20, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Edit")
+        }
+    }
+}
+
+/// A group's name, icon and color.
+private struct GroupEditor: View {
+    let library: EffectLibrary
+    let id: UUID
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        if let group = library.group(id) {
+            let edited = Binding {
+                library.group(id) ?? group
+            } set: { changed in
+                if let index = library.groups.firstIndex(where: { $0.id == id }) { library.groups[index] = changed }
+            }
+            let place = library.groups.firstIndex { $0.id == id } ?? 0
+            VStack(spacing: 0) {
+                Form {
+                    Section {
+                        TextField("Name", text: edited.name)
+                        LabeledContent("Icon") {
+                            EffectIconPicker(icon: edited.icon, shown: group.shownIcon, tint: library.tint(of: group))
+                        }
+                        LabeledContent("Color") {
+                            TintPicker(color: edited.color, automatic: Effect.Tint.byPlace[place % Effect.Tint.byPlace.count])
+                        }
+                    } header: {
+                        SettingsHeader("Group", "Listed together, and a key on Stream Deck that opens them.")
+                    }
+                }
+                .formStyle(.grouped)
+                Divider()
+                HStack {
+                    Button("Delete Group", role: .destructive) {
+                        dismiss()
+                        library.removeGroup(id)
+                    }
+                    Spacer()
+                    Button("Done") { dismiss() }
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(12)
+            }
+            .frame(width: 480, height: 290)
+        }
     }
 }
 
 /// Starting points for a new effect, each with one part to begin from.
 private struct AddEffectMenu: View {
     let add: (Effect) -> Void
+    /// A ready-made group, with its effects.
+    let addGroup: (EffectGroup, [Effect]) -> Void
 
     var body: some View {
         Menu("Add Effect") {
             Button("Text") { add(Effect(name: "New Text", overlays: [.newText])) }
             Button("Graphic") { add(Effect(name: "New Graphic", overlays: [.newGraphic])) }
             Button("Push In") { add(Effect(name: "Push In", pushIn: 1.5)) }
-            Button("Shake") { add(Effect(name: "Shake", shake: Effect.Shake())) }
+            // A shake's a moment: it turns itself off.
+            Button("Shake") { add(Effect(name: "Shake", shake: Effect.Shake(), duration: 2)) }
             Menu("Look") {
                 Button("Plain") { add(Effect(name: "New Look", look: Look(name: "Look"))) }
                 Section("Presets") {
                     ForEach(Look.presets) { preset in
                         Button(preset.name) { add(Effect(name: preset.name, look: preset.copy)) }
                     }
+                }
+            }
+            // The ones Vaux comes with, again or for the first time.
+            Menu("Ready-Made") {
+                ForEach(Effect.starters.indices, id: \.self) { index in
+                    Button(Effect.starters[index].name) { add(Effect.starters[index]) }
+                }
+                Divider()
+                Button("\(EffectGroup.away.group.name) (a group)") {
+                    let away = EffectGroup.away
+                    addGroup(away.group, away.effects)
                 }
             }
             Divider()
@@ -320,12 +591,31 @@ struct EffectForm: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 44, alignment: .trailing)
                     }
+                    Picker(selection: $effect.pushInMove.curve) {
+                        ForEach(Effect.Move.Curve.allCases, id: \.self) { curve in
+                            Text(curve.label).tag(curve)
+                        }
+                    } label: {
+                        Text("Transition")
+                        Text(effect.pushInMove.curve.summary)
+                    }
+                    if effect.pushInMove.curve != .snap {
+                        SecondsSlider(label: "Over", seconds: $effect.pushInMove.seconds, stops: SecondsSlider.moveStops)
+                    }
                 } header: {
-                    PartHeader("Push In", "Zooms further, on top of each camera's own zoom, up to 2×.") { effect.pushIn = nil }
+                    PartHeader("Push In", "Zooms in as it comes on and out as it goes, up to 2×.") { effect.pushIn = nil }
                 }
             }
             if let shake = effect.shake {
                 Section {
+                    Picker(selection: Binding(get: { shake.motion }, set: { effect.shake?.motion = $0 })) {
+                        ForEach(Effect.Shake.Motion.allCases, id: \.self) { motion in
+                            Text(motion.label).tag(motion)
+                        }
+                    } label: {
+                        Text("Motion")
+                        Text(shake.motion.summary(pace: shake.pace))
+                    }
                     HStack(spacing: 8) {
                         Text("Gentle")
                             .foregroundStyle(.secondary)
@@ -338,6 +628,23 @@ struct EffectForm: View {
                         Text("Wild")
                             .foregroundStyle(.secondary)
                     }
+                    HStack(spacing: 8) {
+                        Text("Slow")
+                            .foregroundStyle(.secondary)
+                        Slider(
+                            value: Binding(get: { shake.pace }, set: { effect.shake?.pace = ($0 * 20).rounded() / 20 }),
+                            in: 0...1
+                        )
+                        .labelsHidden()
+                        .controlSize(.small)
+                        Text("Fast")
+                            .foregroundStyle(.secondary)
+                    }
+                    Toggle(isOn: Binding(get: { shake.builds && effect.duration != nil }, set: { effect.shake?.builds = $0 })) {
+                        Text("Build up")
+                        Text(effect.duration == nil ? "Needs Turn off on its own, below: it builds toward when it turns off." : "From a quarter to full, three quarters of the way through its time.")
+                    }
+                    .disabled(effect.duration == nil)
                     Toggle(isOn: Binding(get: { shake.blur }, set: { effect.shake?.blur = $0 })) {
                         Text("Motion blur")
                         Text("Smears the picture the way it's moving, as a camera would.")
@@ -347,7 +654,7 @@ struct EffectForm: View {
                         Text("Off, text and graphics hold still over the moving picture.")
                     }
                 } header: {
-                    PartHeader("Shake", "Jolts and tilts the picture within the camera's frame, so it pushes in to have room: \(shake.zoom.zoomText) at this amount, unless it's in that far already.") { effect.shake = nil }
+                    PartHeader("Shake", "Pushes in \(shake.zoom.zoomText) to make room for the movement.") { effect.shake = nil }
                 }
             }
             if effect.look != nil {
@@ -369,19 +676,32 @@ struct EffectForm: View {
             Section {
                 Toggle("Turn off on its own", isOn: turnsOffOnItsOwn)
                 if let duration = effect.duration {
-                    LabeledContent("After") {
-                        HStack(spacing: 6) {
-                            TextField("Seconds", value: seconds(duration), format: .number.precision(.fractionLength(0...1)))
-                                .labelsHidden()
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 64)
-                            Text("seconds")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    SecondsSlider(label: "After", seconds: Binding(get: { duration }, set: { effect.duration = $0 }))
                 }
             } header: {
-                SettingsHeader("Duration", "Off, it stays on until you turn it off.")
+                SettingsHeader("Duration", effect.duration == nil ? "Off, it stays on until you turn it off." : "It turns itself off after the time below.")
+            }
+            Section {
+                Toggle(isOn: $effect.mutesMic) {
+                    Text("Mute while on")
+                    Text("Unmutes as it goes, unless you were muted already.")
+                }
+            }
+            Section {
+                Picker("Group", selection: $effect.group) {
+                    Text("None").tag(UUID?.none)
+                    ForEach(library.groups) { group in
+                        Text(group.name).tag(UUID?.some(group.id))
+                    }
+                }
+                LabeledContent("Icon") {
+                    EffectIconPicker(icon: $effect.icon, shown: effect.shownIcon, tint: library.tint(of: effect))
+                }
+                LabeledContent("Color") {
+                    TintPicker(color: $effect.color, automatic: effect.shownTint(atPlace: library.effects.firstIndex { $0.id == effect.id } ?? 0))
+                }
+            } header: {
+                SettingsHeader("Group, Icon and Color", "How it's listed, and how its Stream Deck key looks.")
             }
         }
         .formStyle(.grouped)
@@ -410,17 +730,49 @@ struct EffectForm: View {
         Binding {
             effect.duration != nil
         } set: { turnsOff in
-            effect.duration = turnsOff ? 10 : nil
+            // A shake's a moment.
+            effect.duration = turnsOff ? (effect.shake != nil ? 2 : 10) : nil
+        }
+    }
+}
+
+/// A time in seconds, on a slider: stops close together where a little
+/// makes a difference, further apart as it gets longer. Arrow keys move a
+/// stop at a time.
+private struct SecondsSlider: View {
+    let label: String
+    @Binding var seconds: Double
+    var stops = Self.durationStops
+
+    /// How long an effect stays on: tenths to 3 seconds, quarters to 5,
+    /// halves to 10, then wider.
+    static let durationStops: [Double] = stride(from: 0.5, to: 3, by: 0.1).map { ($0 * 10).rounded() / 10 }
+        + stride(from: 3, to: 5, by: 0.25).map { $0 }
+        + stride(from: 5, to: 10, by: 0.5).map { $0 }
+        + [10, 12, 15, 20, 30, 45, 60]
+    /// How long a push in or out takes: a tenth of a second to 3.
+    static let moveStops: [Double] = stride(from: 0.1, to: 1, by: 0.05).map { ($0 * 100).rounded() / 100 }
+        + stride(from: 1, through: 3, by: 0.25).map { $0 }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label)
+            Slider(
+                value: Binding(get: { Double(nearest) }, set: { seconds = stops[Int($0.rounded())] }),
+                in: 0...Double(stops.count - 1)
+            )
+            .labelsHidden()
+            .controlSize(.small)
+            Text("\(seconds.formatted(.number.precision(.fractionLength(0...2)))) s")
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(width: 48, alignment: .trailing)
         }
     }
 
-    /// At least half a second, so it shows at all.
-    private func seconds(_ duration: Double) -> Binding<Double> {
-        Binding {
-            duration
-        } set: { seconds in
-            effect.duration = max(seconds, 0.5)
-        }
+    /// The stop it's at, or closest to (one set before there were stops).
+    private var nearest: Int {
+        stops.indices.min { abs(stops[$0] - seconds) < abs(stops[$1] - seconds) } ?? 0
     }
 }
 
@@ -468,8 +820,13 @@ private struct AddPartMenu: View {
             Button("Graphic") { effect.overlays.append(.newGraphic) }
             Button("Push In") { effect.pushIn = 1.5 }
                 .disabled(effect.pushIn != nil)
-            Button("Shake") { effect.shake = Effect.Shake() }
-                .disabled(effect.shake != nil)
+            Button("Shake") {
+                effect.shake = Effect.Shake()
+                // A shake's a moment: it turns itself off, unless the effect
+                // already does.
+                if effect.duration == nil { effect.duration = 2 }
+            }
+            .disabled(effect.shake != nil)
             Menu("Look") {
                 Button("Plain") { effect.look = Look(name: "Look") }
                 Section("Presets") {
@@ -523,9 +880,9 @@ private struct OverlaySections: View {
             }
         } header: {
             if overlay.kind == .text {
-                PartHeader("Text", "More than one line: each showing picks one at random. Each line has its own icon; leave its text blank to show just the icon.", remove: remove)
+                PartHeader("Text", "Several lines: each showing picks one at random. Blank text shows just the icon.", remove: remove)
             } else {
-                PartHeader("Graphic", "PNG, PDF, SVG or any image, transparency kept. More than one: each showing picks one at random.", remove: remove)
+                PartHeader("Graphic", "An image, video or GIF, transparency kept. Several: each showing picks one.", remove: remove)
             }
         }
         Section {
@@ -651,6 +1008,13 @@ private struct ImagesEditor: View {
                 Text(EffectLibrary.displayName(ofGraphic: name))
                     .lineLimit(1)
                     .truncationMode(.middle)
+                // A video's length, to set the effect to play it once.
+                if OverlayVideo.isVideo(name), let seconds = VideoPosters.shared.poster(name)?.seconds {
+                    Text("\(seconds.formatted(.number.precision(.fractionLength(0...1)))) s")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .help("A video, looping. To play it once, turn the effect off on its own after this long.")
+                }
                 Spacer(minLength: 8)
                 Button {
                     images.removeAll { $0 == name }
@@ -661,8 +1025,8 @@ private struct ImagesEditor: View {
                 .help("Remove this image")
             }
         }
-        Button("Add Images…") { choosing = true }
-            .fileImporter(isPresented: $choosing, allowedContentTypes: [.image, .pdf, .svg], allowsMultipleSelection: true) { result in
+        Button("Add Images or Videos…") { choosing = true }
+            .fileImporter(isPresented: $choosing, allowedContentTypes: [.image, .pdf, .svg, .movie], allowsMultipleSelection: true) { result in
                 if case .success(let urls) = result { images += importGraphics(urls) }
             }
     }
@@ -755,7 +1119,7 @@ private struct SpotPicker: View {
                         set: { spot = $0 ? .fullFrame : .bottomTrailing }
                     ))
                 }
-                Text("Spots sit inside the middle of the frame that apps keep when they crop.")
+                Text("Inside the part of the frame apps keep when they crop.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .wraps()

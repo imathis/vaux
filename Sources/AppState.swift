@@ -129,8 +129,9 @@ final class AppState {
 
     /// Set the mute intent and write it to the current input, if any. A
     /// device that won't take it (no mute and no settable volume) keeps its
-    /// state, and the icon shows that rather than the intent.
-    private func setMuted(_ next: Bool) {
+    /// state, and the icon shows that rather than the intent. Also for an
+    /// effect that mutes while it's on.
+    func setMuted(_ next: Bool) {
         muted = next
         if let dev = currentDevice ?? AudioController.defaultInputDevice(), !writeMuteIntent(to: dev) {
             muted = currentMutedState(dev)

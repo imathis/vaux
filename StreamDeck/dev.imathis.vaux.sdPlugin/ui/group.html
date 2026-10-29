@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Vaux Group</title>
+		<style>
+			body {
+				margin: 0;
+				padding: 12px 10px;
+				background: #2d2d2d;
+				color: #d8d8d8;
+				font: 9pt -apple-system, BlinkMacSystemFont, sans-serif;
+			}
+			.row {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+			label {
+				width: 90px;
+				text-align: right;
+				color: #969696;
+			}
+			select {
+				flex: 1;
+				min-width: 0;
+				height: 26px;
+				padding: 0 6px;
+				border: none;
+				border-radius: 3px;
+				background: #3d3d3d;
+				color: #d8d8d8;
+				font: inherit;
+			}
+			.note {
+				margin: 8px 0 0 98px;
+				color: #969696;
+				line-height: 1.4;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="row">
+			<label for="group">Group</label>
+			<select id="group"></select>
+		</div>
+		<p class="note" id="note" hidden></p>
+
+		<script>
+			// Stream Deck's property inspector connection: the key's settings
+			// (the group chosen, and its name for while Vaux is away), and the
+			// groups to choose from, which the plugin gets from Vaux.
+			const select = document.getElementById("group");
+			const note = document.getElementById("note");
+			let settings = {};
+			let groups = [];
+			let connected = false;
+
+			function show() {
+				select.replaceChildren();
+				const placeholder = new Option("Choose a group", "");
+				placeholder.disabled = true;
+				select.add(placeholder);
+				for (const group of groups) select.add(new Option(group.title, group.id));
+				// Chosen before, and gone (or Vaux is away): kept, by name.
+				if (settings.group && !groups.some((group) => group.id === settings.group)) {
+					const gone = new Option(settings.title ? `${settings.title}${connected ? " (deleted)" : ""}` : "A group", settings.group);
+					gone.disabled = connected;
+					select.add(gone);
+				}
+				select.value = settings.group ?? "";
+				note.hidden = connected && groups.length > 0;
+				note.textContent = !connected
+					? "Vaux isn't running. Open it, and your groups show up here."
+					: "Make groups in Vaux's Settings → Effects.";
+			}
+
+			window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, info, actionInfo) => {
+				const action = JSON.parse(actionInfo);
+				settings = action.payload.settings ?? {};
+				show();
+				const socket = new WebSocket(`ws://127.0.0.1:${port}`);
+				const send = (message) => socket.send(JSON.stringify(message));
+				socket.onopen = () => {
+					send({ event: registerEvent, uuid });
+					send({ event: "sendToPlugin", action: action.action, context: uuid, payload: { request: "groups" } });
+				};
+				socket.onmessage = (message) => {
+					const { event, payload } = JSON.parse(message.data);
+					if (event === "sendToPropertyInspector") {
+						connected = payload.connected;
+						groups = payload.groups ?? [];
+						show();
+					} else if (event === "didReceiveSettings") {
+						settings = payload.settings ?? {};
+						show();
+					}
+				};
+				select.onchange = () => {
+					const group = groups.find((group) => group.id === select.value);
+					if (!group) return;
+					settings = { group: group.id, title: group.title };
+					send({ event: "setSettings", context: uuid, payload: settings });
+					show();
+				};
+			};
+		</script>
+	</body>
+</html>

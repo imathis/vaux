@@ -29,33 +29,9 @@ enum OverlayRenderer {
         }
     }
 
-    /// Positioned: its size's share of the frame's height, no wider than the
-    /// spot allows. Full frame: fit (all of it shows) or fill (covers the
-    /// frame, edges cropped). Vector graphics (PDF, SVG) draw sharp at any
-    /// size.
+    /// Vector graphics (PDF, SVG) draw sharp at any size.
     private static func draw(_ image: NSImage, for overlay: Overlay, in frame: CGSize) -> CGImage? {
-        let aspect = image.size.width / image.size.height
-        var canvas: CGSize
-        var drawn: CGRect
-        if overlay.spot == .fullFrame {
-            let scale = overlay.fit == .fit
-                ? min(frame.width / image.size.width, frame.height / image.size.height)
-                : max(frame.width / image.size.width, frame.height / image.size.height)
-            let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-            canvas = overlay.fit == .fit ? size : frame
-            drawn = CGRect(x: (canvas.width - size.width) / 2, y: (canvas.height - size.height) / 2, width: size.width, height: size.height)
-        } else {
-            var height = frame.height * overlay.size.graphicScale
-            var width = height * aspect
-            let widest = Overlay.Spot.maxWidth(in: frame)
-            if width > widest {
-                width = widest
-                height = width / aspect
-            }
-            canvas = CGSize(width: width, height: height)
-            drawn = CGRect(origin: .zero, size: canvas)
-        }
-        canvas = CGSize(width: canvas.width.rounded(), height: canvas.height.rounded())
+        let (canvas, drawn) = layout(image.size, spot: overlay.spot, size: overlay.size, fit: overlay.fit, in: frame)
         guard canvas.width >= 1, canvas.height >= 1,
               let context = CGContext(
                   data: nil,
@@ -74,11 +50,43 @@ enum OverlayRenderer {
         return context.makeImage()
     }
 
+    /// A graphic of `size` placed for a frame: the image it's drawn into
+    /// (`canvas`), and where in that it goes (`drawn`). Positioned: its
+    /// size's share of the frame's height, no wider than the spot allows.
+    /// Full frame: fit (all of it shows) or fill (covers the frame, edges
+    /// cropped). Videos are placed the same way, frame by frame.
+    nonisolated static func layout(_ size: CGSize, spot: Overlay.Spot, size scale: Overlay.Size, fit: Overlay.Fit, in frame: CGSize) -> (canvas: CGSize, drawn: CGRect) {
+        let aspect = size.width / size.height
+        var canvas: CGSize
+        var drawn: CGRect
+        if spot == .fullFrame {
+            let fitted = fit == .fit
+                ? min(frame.width / size.width, frame.height / size.height)
+                : max(frame.width / size.width, frame.height / size.height)
+            let sized = CGSize(width: size.width * fitted, height: size.height * fitted)
+            canvas = fit == .fit ? sized : frame
+            drawn = CGRect(x: (canvas.width - sized.width) / 2, y: (canvas.height - sized.height) / 2, width: sized.width, height: sized.height)
+        } else {
+            var height = frame.height * scale.graphicScale
+            var width = height * aspect
+            let widest = Overlay.Spot.maxWidth(in: frame)
+            if width > widest {
+                width = widest
+                height = width / aspect
+            }
+            canvas = CGSize(width: width, height: height)
+            drawn = CGRect(origin: .zero, size: canvas)
+        }
+        return (CGSize(width: canvas.width.rounded(), height: canvas.height.rounded()), drawn)
+    }
+
     /// Graphics are read once and kept: previews redraw often.
     private static var graphics: [String: NSImage] = [:]
 
+    /// A graphic's image; a movie's first frame, once it's been read.
     static func graphic(_ name: String) -> NSImage? {
         if let image = graphics[name] { return image }
+        if OverlayVideo.isMovie(name) { return VideoPosters.shared.poster(name)?.image }
         guard let image = NSImage(contentsOf: EffectLibrary.graphicsFolder.appending(path: name)),
               image.size.width > 0, image.size.height > 0
         else { return nil }

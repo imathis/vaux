@@ -135,6 +135,10 @@ final class Effects {
     let live: LivePanel
     private let appState: AppState
     private var dictating = false
+    /// An effect that mutes is on.
+    private var muting = false
+    /// It muted the mic, and you haven't unmuted it since.
+    private var mutedByEffect = false
 
     init(appState: AppState) {
         self.appState = appState
@@ -143,6 +147,7 @@ final class Effects {
         live = LivePanel(library: library)
         triggers.openLive = { [live] in live.show() }
         followSolo()
+        followMuting()
     }
 
     /// Deletes an effect, undoably: undo puts it back in its place with its
@@ -170,6 +175,30 @@ final class Effects {
     }
 
     /// Solo mode is dictating: the dictation effect is on while it's on.
+    /// An effect that mutes while it's on mutes the mic as it comes on, and
+    /// unmutes it as it goes: only if it did the muting, and you haven't
+    /// unmuted since (then the mic's yours again).
+    private func followMuting() {
+        let (wanted, muted) = withObservationTracking { (library.mutesMic, appState.muted) } onChange: { [weak self] in
+            Task { @MainActor in self?.followMuting() }
+        }
+        if wanted, !muting {
+            // Coming on: muted already stays yours.
+            muting = true
+            if !muted {
+                mutedByEffect = true
+                appState.setMuted(true)
+            }
+        } else if !wanted, muting {
+            muting = false
+            if mutedByEffect, muted { appState.setMuted(false) }
+            mutedByEffect = false
+        } else if mutedByEffect, !muted {
+            // You unmuted while it was on.
+            mutedByEffect = false
+        }
+    }
+
     private func followSolo() {
         let active = withObservationTracking { appState.soloActive } onChange: { [weak self] in
             Task { @MainActor in self?.followSolo() }

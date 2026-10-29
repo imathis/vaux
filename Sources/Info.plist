@@ -28,6 +28,26 @@
 	<string>Vaux sends your camera through Vaux Camera, with effects while you dictate. It asks only once you turn on the camera.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Brandon Mathis</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>dev.imathis.vaux.effects</string>
+			<key>UTTypeDescription</key>
+			<string>Vaux Effects</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>vauxeffects</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 	<key>VauxRelease</key>
 	<string>$(VAUX_RELEASE)</string>
 </dict>
