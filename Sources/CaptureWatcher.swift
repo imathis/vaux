@@ -21,6 +21,11 @@ struct MicUser: Sendable, Hashable {
 /// changes nothing there, so while any process has IO running their input
 /// is checked twice a second as well. Who a process works for is worked out
 /// once, when it appears.
+///
+/// What the listeners kept is checked again whenever the list changes, on
+/// wake, and before solo acts (`refresh`): the audio server hands an ID
+/// freed by a process quitting straight to the next one, and a missed
+/// running change would hide a call for as long as it lasts.
 @MainActor
 final class CaptureWatcher {
     /// The apps on the mic now. Readable from any thread: solo's call work
@@ -36,6 +41,8 @@ final class CaptureWatcher {
 
     private struct Process {
         let user: MicUser
+        /// The process the ID was read for: IDs are handed on.
+        let pid: pid_t
         let listener: AudioPropertyListener?
     }
 
@@ -45,6 +52,7 @@ final class CaptureWatcher {
     private var running: Set<AudioObjectID> = []
     private var listListener: AudioPropertyListener?
     private var poll: Timer?
+    private var wake: NSObjectProtocol?
 
     /// Reports the apps on the mic right away, then changes.
     func start(onChange: @escaping (_ user: MicUser, _ capturing: Bool) -> Void) {
@@ -55,31 +63,40 @@ final class CaptureWatcher {
             selector: kAudioHardwarePropertyProcessObjectList,
             scope: kAudioObjectPropertyScopeGlobal
         ) { [weak self] in
-            MainActor.assumeIsolated { self?.rescan() }
+            MainActor.assumeIsolated { self?.refresh() }
         }
-        rescan()
+        // Changes while asleep may not have been told.
+        wake = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh() }
+        }
+        refresh()
     }
 
-    private func rescan() {
+    /// Reads every process again: which are which, and which are running.
+    func refresh() {
         var next: [AudioObjectID: Process] = [:]
+        running = []
         for process in AudioController.processObjects() {
-            if let known = processes[process] {
+            let pid = AudioController.pid(ofProcess: process)
+            if let known = processes[process], known.pid == pid {
                 next[process] = known
-                continue
+            } else {
+                next[process] = Process(
+                    user: Self.user(of: process, pid: pid),
+                    pid: pid,
+                    listener: AudioPropertyListener(
+                        objectID: process,
+                        selector: kAudioProcessPropertyIsRunning,
+                        scope: kAudioObjectPropertyScopeGlobal
+                    ) { [weak self] in
+                        MainActor.assumeIsolated { self?.runningChanged(process) }
+                    })
             }
-            next[process] = Process(
-                user: Self.user(of: process),
-                listener: AudioPropertyListener(
-                    objectID: process,
-                    selector: kAudioProcessPropertyIsRunning,
-                    scope: kAudioObjectPropertyScopeGlobal
-                ) { [weak self] in
-                    MainActor.assumeIsolated { self?.runningChanged(process) }
-                })
             if AudioController.isRunning(process) { running.insert(process) }
         }
         processes = next // dropped listeners unregister on deinit
-        running.formIntersection(next.keys)
         evaluate()
     }
 
@@ -118,9 +135,9 @@ final class CaptureWatcher {
     }
 
     /// The app a process works for.
-    private static func user(of process: AudioObjectID) -> MicUser {
+    private static func user(of process: AudioObjectID, pid: pid_t) -> MicUser {
         let bundle = AudioController.bundleID(ofProcess: process)
-        let pid = AudioController.responsiblePID(AudioController.pid(ofProcess: process))
+        let pid = AudioController.responsiblePID(pid)
         let app = NSRunningApplication(processIdentifier: pid)
         let id = app?.bundleIdentifier ?? bundle
         return MicUser(bundleID: id, name: app?.localizedName ?? id, pid: pid)

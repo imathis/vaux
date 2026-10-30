@@ -301,6 +301,10 @@ final class AppState {
         soloBusy = true
         soloProblems = []
         notify()
+        // Who's on the mic, read fresh: a call the watcher lost track of
+        // would go unmuted.
+        micWatcher.refresh()
+        Self.log.notice("solo: on the mic: \(CaptureWatcher.current.map(\.name).joined(separator: ", "), privacy: .public)")
         // Other apps on the mic: browsers maybe in a web call, or apps solo
         // can't mute. Read now, before a dictation app sharing the trigger
         // starts listening too.
