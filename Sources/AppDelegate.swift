@@ -123,9 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openAbout()
     }
 
-    /// While Settings is open, Vaux is an app like any other, in the Dock and
-    /// ⌘-Tab so its window can be found and focused; closing it puts Vaux back
-    /// in the menu bar only.
+    /// A window of Vaux's own (see AppWindows).
     @objc private func openSettings() {
         openSettings(tab: nil)
     }
@@ -143,7 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow = window
         }
         if let tab { (settingsWindow?.contentViewController as? SettingsTabController)?.select(tab) }
-        NSApp.setActivationPolicy(.regular)
+        if let settingsWindow { AppWindows.opened(settingsWindow) }
         // Forced: the menu panel doesn't activate Vaux, so another app is in front.
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
@@ -197,7 +195,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension AppDelegate: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
-        guard (notification.object as? NSWindow) === settingsWindow else { return }
-        NSApp.setActivationPolicy(.accessory)
+        guard let window = notification.object as? NSWindow, window === settingsWindow else { return }
+        AppWindows.closed(window)
+    }
+}
+
+/// Vaux's own windows, Settings and Preview: while one's open, Vaux is an
+/// app like any other, in the Dock, ⌘-Tab and Mission Control, so they can
+/// be found and focused; when the last closes, Vaux goes back to the menu
+/// bar only.
+@MainActor
+enum AppWindows {
+    private static var open: Set<ObjectIdentifier> = []
+
+    static func opened(_ window: NSWindow) {
+        open.insert(ObjectIdentifier(window))
+        NSApp.setActivationPolicy(.regular)
+    }
+
+    static func closed(_ window: NSWindow) {
+        open.remove(ObjectIdentifier(window))
+        if open.isEmpty { NSApp.setActivationPolicy(.accessory) }
     }
 }

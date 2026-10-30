@@ -31,8 +31,8 @@ Or download the zip from the latest
 [release](https://github.com/imathis/vaux/releases/latest), unzip it, and move
 Vaux to Applications. Requires macOS 26 or later.
 
-Vaux lives in the menu bar. While its Settings window is open, it's in the
-Dock and ⌘-Tab like any app. To update: `brew upgrade --cask vaux`.
+Vaux lives in the menu bar. While its Settings or Preview window is open,
+it's in the Dock and ⌘-Tab like any app. To update: `brew upgrade --cask vaux`.
 `brew uninstall --cask vaux` removes Vaux Camera too, if it was turned on.
 (Removing Vaux by hand, turn the camera off in Settings first.)
 
@@ -179,6 +179,11 @@ Hide takes it all down.
 
 Editors show their changes on your camera as you make them; Cancel puts it
 all back. Deletes can be undone.
+
+**Preview.** Preview (under the effects list, or in an editor) opens a window
+with your camera in it. While it's open, effects you turn on, and edits,
+show there, not on your call: try things out without your coworkers
+watching. Your call stays as it was until you close it.
 
 #### Triggering them
 

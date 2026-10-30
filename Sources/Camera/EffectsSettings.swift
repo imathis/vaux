@@ -67,8 +67,13 @@ struct EffectsPage: View {
                 // A little past the last row, so the end takes a drop too.
                 .frame(height: rows.map(\.height).reduce(0, +) + 12)
                 // Under its list, at the trailing edge, as in System
-                // Settings; a menu where there's a choice to make.
+                // Settings; a menu where there's a choice to make. Preview
+                // at the leading edge, apart.
                 HStack {
+                    Button { effects.preview.show() } label: {
+                        Label("Preview", systemImage: "play.rectangle")
+                    }
+                    .help("Try effects in a window of their own, where the call can't see them")
                     Spacer()
                     Button("Add Group") { editingGroup = library.addGroup().id }
                     AddEffectMenu {
@@ -457,7 +462,7 @@ private struct AddEffectMenu: View {
 }
 
 /// Edits an effect, part by part. Edits show as they're made, on the
-/// camera too while it's on.
+/// camera too while it's on (or in Preview, while that's open).
 struct EffectEditor: View {
     let effects: Effects
     let id: UUID
@@ -482,6 +487,8 @@ struct EffectEditor: View {
                 isOn: library.isOn(id),
                 canTurnOn: !effect.isEmpty,
                 toggle: { effects.triggers.trigger(.effect(id)) },
+                previewing: library.preview != nil,
+                preview: { effects.preview.show(id) },
                 delete: delete,
                 cancel: cancel,
                 width: 560,

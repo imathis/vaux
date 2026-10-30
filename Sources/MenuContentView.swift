@@ -342,6 +342,7 @@ struct MenuContentView: View {
 
     /// The camera's state, in a word or two.
     private var cameraStatus: String {
+        if camera.effects?.library.preview != nil { return "Effects in Preview" }
         switch camera.installer?.state {
         case .ready: break
         case .awaitingApproval: return "Needs your approval"

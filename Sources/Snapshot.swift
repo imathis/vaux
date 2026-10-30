@@ -71,6 +71,10 @@ enum Snapshot {
             pages.append(("icon-choices", AnyView(IconChoices(icon: .constant("😴"), layout: .square).padding(12))))
             pages.append(("quickmenu", AnyView(QuickMenuView(triggers: effects.triggers) { _ in }.padding(20))))
             pages.append(("live", AnyView(LiveView(library: library))))
+            pages.append(("preview", AnyView(
+                PreviewView(preview: EffectsPreview(library: library), library: library, screen: PreviewScreen())
+                    .frame(width: 640, height: 360 + PreviewView.footerHeight)
+            )))
             pages.append(("system-effects", AnyView(
                 Form { Section { SystemEffectsRow(effects: ["Portrait", "Studio Light"]) } }
                     .formStyle(.grouped)

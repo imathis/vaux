@@ -2,8 +2,15 @@ import AVFoundation
 import os
 
 /// Runs a camera and feeds its frames, fitted to the format Vaux Camera is
-/// sending, into Vaux Camera's sink.
+/// sending, into Vaux Camera's sink; and, while the preview's open, into its
+/// screen too, with the preview's effects.
 final class CameraFeed: NSObject, @unchecked Sendable {
+    /// Where frames go: the call (through Vaux Camera), or the preview.
+    enum Output {
+        case call
+        case preview
+    }
+
     struct Stats: Equatable, Sendable {
         var format: FrameFormat?
         var fps = 0
@@ -34,20 +41,11 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     private let compositor: Compositor
     private var sink: SinkConnection?
     private var format: FrameFormat?
-    private var zoom = 1.0
-    /// A push in or out under way: from, to, and when it began.
-    private var zoomMove: (from: Double, to: Double, start: CMTime, move: Effect.Move)?
-    /// Overlays showing and fading: each eases toward shown or gone.
-    private var overlays: [(layer: OverlayLayer, alpha: Double, shown: Bool)] = []
-    /// Looks fading in and out, by ID: one is shown at a time.
-    private var looks: [(look: Look, alpha: Double, shown: Bool)] = []
-    /// The shake on, or the last one settling: it eases in and out too, or
-    /// builds up over `build` seconds, from a quarter (its push-in eases in
-    /// as well, so it never starts from still).
-    private var shake: (shake: Effect.Shake, alpha: Double, shown: Bool, build: Double?)?
-    private static let buildsFrom = 0.25
-    /// When the shake started: its frames count from there.
-    private var shakeStarted: Double?
+    private var call = Showing()
+    /// The preview's, drawn at 720p, while it has a screen.
+    private let previewCompositor = Compositor()
+    private var preview = Showing()
+    private var screen: PreviewScreen?
     private var sent = 0
     private var dropped = 0
     private var hidden = 0
@@ -60,12 +58,6 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     /// The last frame taken: ones closer together than Vaux Camera's
     /// fastest rate are skipped, should a camera run faster than asked.
     private var lastTaken = CMTime.invalid
-
-    /// Overlays fade in and out over a quarter second.
-    private static let fadeSeconds = 0.25
-    /// When the last frame was taken: fades go by time, so they take as
-    /// long at 30 fps as at 60.
-    private var lastFaded = CMTime.invalid
 
     init(onStats: @escaping @MainActor @Sendable (Stats) -> Void) {
         self.onStats = onStats
@@ -85,8 +77,8 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     /// Runs the camera with this unique ID into `sink`, in `format`, zoomed
     /// in by `zoom`, switching from what's running, if anything. The camera
     /// runs in a mode that keeps `modeZoom` sharp: at least `zoom`, more when
-    /// effects may push further.
-    func start(cameraID: String, format: FrameFormat, zoom: Double, modeZoom: Double, sink: SinkConnection) {
+    /// effects may push further. No sink: the preview's alone.
+    func start(cameraID: String, format: FrameFormat, zoom: Double, modeZoom: Double, sink: SinkConnection?) {
         sessionQueue.async { [self] in
             if input?.device.uniqueID != cameraID || configuredFor != format || configuredZoom != modeZoom {
                 use(cameraID, for: format, zoom: modeZoom)
@@ -101,14 +93,18 @@ final class CameraFeed: NSObject, @unchecked Sendable {
                 defer {
                     self.sink = sink
                     self.format = format
-                    self.zoom = zoom
-                    zoomMove = nil
+                    call.setZoom(zoom, moving: nil)
                     hidden = 0
                 }
                 return self.sink
             }
             if previous !== sink { previous?.stop() }
-            sink.start()
+            if let sink {
+                sink.start()
+            } else {
+                let onStats = self.onStats
+                Task { @MainActor in onStats(Stats()) }
+            }
             if !session.isRunning { session.startRunning() }
         }
     }
@@ -116,15 +112,8 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     /// Zooms the running camera, from the next frame: at once (the slider,
     /// or an effect that snaps), or moving its way (an effect pushing in or
     /// out).
-    func setZoom(_ zoom: Double, moving move: Effect.Move?) {
-        videoQueue.async { [self] in
-            if let move, move.curve != .snap, move.seconds > 0 {
-                zoomMove = (from: self.zoom, to: zoom, start: CMClockGetTime(CMClockGetHostTimeClock()), move: move)
-            } else {
-                zoomMove = nil
-                self.zoom = zoom
-            }
-        }
+    func setZoom(_ zoom: Double, moving move: Effect.Move?, on output: Output = .call) {
+        videoQueue.async { [self] in change(output) { $0.setZoom(zoom, moving: move) } }
     }
 
     /// Picks the camera mode that keeps `zoom` sharp, if the camera has one,
@@ -143,89 +132,39 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         }
     }
 
-    /// Advances a push in or out, per frame.
-    private func easeZoom() {
-        guard let move = zoomMove else { return }
-        let t = min((CMClockGetTime(CMClockGetHostTimeClock()) - move.start).seconds / move.move.seconds, 1)
-        zoom = move.from + (move.to - move.from) * move.move.curve.eased(t)
-        if t >= 1 { zoomMove = nil }
-    }
-
     /// The overlays to show. New ones fade in; ones no longer listed fade out.
-    func showOverlays(_ layers: [OverlayLayer]) {
-        videoQueue.async { [self] in
-            let keys = Set(layers.map(\.key))
-            for index in overlays.indices { overlays[index].shown = keys.contains(overlays[index].layer.key) }
-            for layer in layers where !overlays.contains(where: { $0.layer.key == layer.key }) {
-                overlays.append((layer: layer, alpha: 0, shown: true))
-            }
-        }
+    func showOverlays(_ layers: [OverlayLayer], on output: Output = .call) {
+        videoQueue.async { [self] in change(output) { $0.showOverlays(layers) } }
     }
 
     /// The look to show, or none. It fades in over the last; an edit to the
     /// one showing applies at once, so its sliders can be watched.
-    func showLook(_ look: Look?) {
-        videoQueue.async { [self] in
-            for index in looks.indices {
-                if looks[index].look.id == look?.id, let look {
-                    looks[index].look = look
-                    looks[index].shown = true
-                } else {
-                    looks[index].shown = false
-                }
-            }
-            if let look, !looks.contains(where: { $0.look.id == look.id }) {
-                looks.append((look: look, alpha: 0, shown: true))
-            }
-        }
+    func showLook(_ look: Look?, on output: Output = .call) {
+        videoQueue.async { [self] in change(output) { $0.showLook(look) } }
     }
 
     /// The shake to show, or none. A new one, or an edit, applies at once;
     /// it eases in from still (or builds up, over `build` seconds), and back
     /// to still when it goes.
-    func showShake(_ shake: Effect.Shake?, buildingOver build: Double? = nil) {
+    func showShake(_ shake: Effect.Shake?, buildingOver build: Double? = nil, on output: Output = .call) {
+        videoQueue.async { [self] in change(output) { $0.showShake(shake, buildingOver: build) } }
+    }
+
+    /// Where the preview's frames go, or nowhere. A new screen starts from
+    /// nothing showing; what to show follows.
+    func showPreview(on screen: PreviewScreen?) {
         videoQueue.async { [self] in
-            if let shake {
-                let alpha = self.shake?.alpha ?? 0
-                self.shake = (shake: shake, alpha: build != nil ? max(alpha, Self.buildsFrom) : alpha, shown: true, build: build)
-            } else {
-                self.shake?.shown = false
-            }
+            guard screen !== self.screen else { return }
+            self.screen = screen
+            preview = Showing()
         }
     }
 
-    /// How far this frame's fades move: the time since the last frame, as
-    /// a share of a fade (a first frame counts as a 30 fps one).
-    private func fadeStep(at time: CMTime) -> Double {
-        defer { lastFaded = time }
-        let elapsed = lastFaded.isValid ? (time - lastFaded).seconds : CameraSpec.slowestFrameDuration.seconds
-        return min(max(elapsed, 0), 0.1) / Self.fadeSeconds
-    }
-
-    /// Advances look fades, per frame.
-    private func fadeLooks(by fadeStep: Double) {
-        for index in looks.indices {
-            let alpha = looks[index].alpha + (looks[index].shown ? fadeStep : -fadeStep)
-            looks[index].alpha = min(max(alpha, 0), 1)
+    private func change(_ output: Output, _ change: (inout Showing) -> Void) {
+        switch output {
+        case .call: change(&call)
+        case .preview: change(&preview)
         }
-        looks.removeAll { !$0.shown && $0.alpha <= 0 }
-    }
-
-    /// Advances overlay fades, per frame.
-    private func fadeOverlays(by fadeStep: Double) {
-        for index in overlays.indices {
-            let alpha = overlays[index].alpha + (overlays[index].shown ? fadeStep : -fadeStep)
-            overlays[index].alpha = min(max(alpha, 0), 1)
-        }
-        overlays.removeAll { !$0.shown && $0.alpha <= 0 }
-    }
-
-    /// Advances the shake's ease, or its build, per frame.
-    private func fadeShake(by fadeStep: Double) {
-        guard let shake else { return }
-        let step = if shake.shown, let build = shake.build, build > 0 { fadeStep * Self.fadeSeconds * (1 - Self.buildsFrom) / build } else { fadeStep }
-        let alpha = min(max(shake.alpha + (shake.shown ? step : -fadeStep), 0), 1)
-        self.shake = shake.shown || alpha > 0 ? (shake: shake.shake, alpha: alpha, shown: shake.shown, build: shake.build) : nil
     }
 
     /// Skips frames that arrive from the camera broken, or doesn't.
@@ -426,6 +365,109 @@ extension CameraFeed: AVCaptureVideoDataOutputSampleBufferDelegate {
         } else {
             brokenInARow = 0
         }
+        guard let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            if sink != nil { count(sent: false) }
+            return
+        }
+        let drawing = call.advance(to: captured)
+        // The preview's alone: nothing's sent, so nothing's counted.
+        if let sink, let format {
+            if let frame = compositor.fit(pixels, to: format, zoom: drawing.zoom, shaken: drawing.shaken, overlays: drawing.overlays, looks: drawing.looks),
+               sink.enqueue(frame, presentationTime: captured) {
+                // Capture times are host time on macOS.
+                count(sent: true, latency: (CMClockGetTime(CMClockGetHostTimeClock()) - captured).seconds)
+            } else {
+                count(sent: false)
+            }
+        }
+        // After the call's, which can't wait.
+        if let screen {
+            let previewing = preview.advance(to: captured)
+            if let frame = previewCompositor.fit(pixels, to: .hd, zoom: previewing.zoom, shaken: previewing.shaken, overlays: previewing.overlays, looks: previewing.looks) {
+                screen.show(frame, at: captured)
+            }
+        }
+    }
+
+    func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        if sink != nil { count(sent: false) }
+    }
+}
+
+/// What's drawn over one output's frames, eased frame by frame: the zoom
+/// pushing in and out, overlays and looks fading, the shake. The call has
+/// one, the preview another. Video queue only.
+private struct Showing {
+    var zoom = 1.0
+    /// A push in or out under way: from, to, and when it began.
+    private var zoomMove: (from: Double, to: Double, start: CMTime, move: Effect.Move)?
+    /// Overlays showing and fading: each eases toward shown or gone.
+    private var overlays: [(layer: OverlayLayer, alpha: Double, shown: Bool)] = []
+    /// Looks fading in and out, by ID: one is shown at a time.
+    private var looks: [(look: Look, alpha: Double, shown: Bool)] = []
+    /// The shake on, or the last one settling: it eases in and out too, or
+    /// builds up over `build` seconds, from a quarter (its push-in eases in
+    /// as well, so it never starts from still).
+    private var shake: (shake: Effect.Shake, alpha: Double, shown: Bool, build: Double?)?
+    private static let buildsFrom = 0.25
+    /// When the shake started: its frames count from there.
+    private var shakeStarted: Double?
+    /// Overlays fade in and out over a quarter second.
+    private static let fadeSeconds = 0.25
+    /// When the last frame was taken: fades go by time, so they take as
+    /// long at 30 fps as at 60.
+    private var lastFaded = CMTime.invalid
+
+    /// What to draw on a frame.
+    struct Drawing {
+        let zoom: Double
+        let shaken: Compositor.Shaken?
+        let overlays: [Compositor.Drawn]
+        let looks: [Compositor.Graded]
+    }
+
+    mutating func setZoom(_ zoom: Double, moving move: Effect.Move?) {
+        if let move, move.curve != .snap, move.seconds > 0 {
+            zoomMove = (from: self.zoom, to: zoom, start: CMClockGetTime(CMClockGetHostTimeClock()), move: move)
+        } else {
+            zoomMove = nil
+            self.zoom = zoom
+        }
+    }
+
+    mutating func showOverlays(_ layers: [OverlayLayer]) {
+        let keys = Set(layers.map(\.key))
+        for index in overlays.indices { overlays[index].shown = keys.contains(overlays[index].layer.key) }
+        for layer in layers where !overlays.contains(where: { $0.layer.key == layer.key }) {
+            overlays.append((layer: layer, alpha: 0, shown: true))
+        }
+    }
+
+    mutating func showLook(_ look: Look?) {
+        for index in looks.indices {
+            if looks[index].look.id == look?.id, let look {
+                looks[index].look = look
+                looks[index].shown = true
+            } else {
+                looks[index].shown = false
+            }
+        }
+        if let look, !looks.contains(where: { $0.look.id == look.id }) {
+            looks.append((look: look, alpha: 0, shown: true))
+        }
+    }
+
+    mutating func showShake(_ shake: Effect.Shake?, buildingOver build: Double?) {
+        if let shake {
+            let alpha = self.shake?.alpha ?? 0
+            self.shake = (shake: shake, alpha: build != nil ? max(alpha, Self.buildsFrom) : alpha, shown: true, build: build)
+        } else {
+            self.shake?.shown = false
+        }
+    }
+
+    /// Fades, eases and shakes on to the frame captured at `captured`.
+    mutating func advance(to captured: CMTime) -> Drawing {
         let fadeStep = fadeStep(at: captured)
         fadeOverlays(by: fadeStep)
         fadeLooks(by: fadeStep)
@@ -457,21 +499,46 @@ extension CameraFeed: AVCaptureVideoDataOutputSampleBufferDelegate {
                 overlays: shake.shake.overlays
             )
         }
-        guard let sink, let format, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer),
-              let frame = compositor.fit(pixels, to: format, zoom: zoom, shaken: shaken, overlays: drawn, looks: graded)
-        else {
-            count(sent: false)
-            return
-        }
-        guard sink.enqueue(frame, presentationTime: captured) else {
-            count(sent: false)
-            return
-        }
-        // Capture times are host time on macOS.
-        count(sent: true, latency: (CMClockGetTime(CMClockGetHostTimeClock()) - captured).seconds)
+        return Drawing(zoom: zoom, shaken: shaken, overlays: drawn, looks: graded)
     }
 
-    func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        count(sent: false)
+    /// How far this frame's fades move: the time since the last frame, as
+    /// a share of a fade (a first frame counts as a 30 fps one).
+    private mutating func fadeStep(at time: CMTime) -> Double {
+        defer { lastFaded = time }
+        let elapsed = lastFaded.isValid ? (time - lastFaded).seconds : CameraSpec.slowestFrameDuration.seconds
+        return min(max(elapsed, 0), 0.1) / Self.fadeSeconds
+    }
+
+    /// Advances a push in or out, per frame.
+    private mutating func easeZoom() {
+        guard let move = zoomMove else { return }
+        let t = min((CMClockGetTime(CMClockGetHostTimeClock()) - move.start).seconds / move.move.seconds, 1)
+        zoom = move.from + (move.to - move.from) * move.move.curve.eased(t)
+        if t >= 1 { zoomMove = nil }
+    }
+
+    private mutating func fadeLooks(by fadeStep: Double) {
+        for index in looks.indices {
+            let alpha = looks[index].alpha + (looks[index].shown ? fadeStep : -fadeStep)
+            looks[index].alpha = min(max(alpha, 0), 1)
+        }
+        looks.removeAll { !$0.shown && $0.alpha <= 0 }
+    }
+
+    private mutating func fadeOverlays(by fadeStep: Double) {
+        for index in overlays.indices {
+            let alpha = overlays[index].alpha + (overlays[index].shown ? fadeStep : -fadeStep)
+            overlays[index].alpha = min(max(alpha, 0), 1)
+        }
+        overlays.removeAll { !$0.shown && $0.alpha <= 0 }
+    }
+
+    /// Advances the shake's ease, or its build.
+    private mutating func fadeShake(by fadeStep: Double) {
+        guard let shake else { return }
+        let step = if shake.shown, let build = shake.build, build > 0 { fadeStep * Self.fadeSeconds * (1 - Self.buildsFrom) / build } else { fadeStep }
+        let alpha = min(max(shake.alpha + (shake.shown ? step : -fadeStep), 0), 1)
+        self.shake = shake.shown || alpha > 0 ? (shake: shake.shake, alpha: alpha, shown: shake.shown, build: shake.build) : nil
     }
 }

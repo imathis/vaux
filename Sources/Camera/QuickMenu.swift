@@ -38,14 +38,7 @@ final class QuickMenu: NSObject, NSWindowDelegate {
         panel.delegate = self
         panel.onKey = { [weak self] event in self?.handle(event) ?? false }
         panel.onKeyUp = { [weak self] event in self?.handleUp(event) ?? false }
-        // Centered on the screen you're on, in its upper third.
-        let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
-        if let area = screen?.visibleFrame {
-            panel.setFrameOrigin(NSPoint(
-                x: area.midX - panel.frame.width / 2,
-                y: area.minY + area.height * 0.72 - panel.frame.height / 2
-            ))
-        }
+        panel.placeHigh()
         panel.makeKeyAndOrderFront(nil)
         self.panel = panel
     }
@@ -117,6 +110,7 @@ private final class QuickMenuPanel: NSPanel {
         backgroundColor = .clear
         isOpaque = false
         hasShadow = true
+        isMovableByWindowBackground = true
     }
 
     override var canBecomeKey: Bool { true }
@@ -130,6 +124,21 @@ private final class QuickMenuPanel: NSPanel {
     }
 }
 
+extension NSWindow {
+    /// Centered on the screen you're on, in its upper third, as far as it
+    /// fits: never past the screen's edges, and too tall for it, its top at
+    /// the top.
+    func placeHigh() {
+        let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
+        guard let area = screen?.visibleFrame else { return }
+        let y = area.minY + area.height * 0.72 - frame.height / 2
+        setFrameOrigin(NSPoint(
+            x: area.midX - frame.width / 2,
+            y: min(max(y, area.minY), area.maxY - frame.height)
+        ))
+    }
+}
+
 /// The items and their keys.
 struct QuickMenuView: View {
     let triggers: Triggers
@@ -138,7 +147,7 @@ struct QuickMenuView: View {
     var body: some View {
         let keys = triggers.keys
         VStack(alignment: .leading, spacing: 2) {
-            Text(VauxCamera.appName)
+            Text(triggers.previewing ? "\(VauxCamera.appName) · Preview" : VauxCamera.appName)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 10)
@@ -189,6 +198,9 @@ struct QuickMenuView: View {
         }
         .padding(8)
         .frame(width: 280)
+        // Dragged by anything but its rows, it moves.
+        .contentShape(Rectangle())
+        .gesture(WindowDragGesture())
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.1)))
     }

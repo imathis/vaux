@@ -57,6 +57,9 @@ final class Triggers {
     static let holdSeconds = 0.35
     private static let keysKey = "quickMenuKeys"
 
+    /// Preview's open: effects go there, not to the call.
+    var previewing: Bool { library.preview != nil }
+
     init(appState: AppState, library: EffectLibrary) {
         self.appState = appState
         self.library = library

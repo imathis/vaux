@@ -16,29 +16,23 @@ struct OverlayLayer: Equatable, @unchecked Sendable {
     static func == (a: Self, b: Self) -> Bool { a.key == b.key }
 }
 
-/// Your effects, and which are on. One of yours is on at a time, over the
-/// default effect: turning another on replaces it. (Layering effects is
-/// done in the editor, an effect building on others.) Over those go, while
-/// they last, a held key's effect, the dictation effect while you dictate,
-/// and the Live panel's while it's up. What shows comes from that stack,
-/// each part from the latest that sets it: overlays by spot, the push-in,
-/// the shake, and look by look setting. A held key adds its effect only
-/// while held, so what it covered was never gone.
+/// Your effects, and which are on: the call's (see EffectStage), or, while
+/// the preview's open, the preview's. Effects you turn on show there then,
+/// and the call stays as it was, edits and all, until it closes.
 @MainActor @Observable
 final class EffectLibrary {
     var effects: [Effect] {
         didSet {
             save()
-            reconcile()
+            for stage in stages { stage.edited() }
         }
     }
 
     /// On under everything else, unless turned off for now.
     var defaultEffect: UUID? {
         didSet {
-            if defaultEffect != oldValue { defaultOff = false }
             save()
-            rebuild()
+            for stage in stages { stage.edited(newDefault: defaultEffect != oldValue) }
         }
     }
 
@@ -64,56 +58,15 @@ final class EffectLibrary {
     var live: Effect {
         didSet {
             save()
-            rebuild()
+            for stage in stages { stage.edited() }
         }
     }
 
-    struct Entry: Equatable {
-        enum Source {
-            /// The default effect, at the bottom.
-            case base
-            /// Turned on by you.
-            case user
-            case dictation
-            case live
-        }
+    /// What the call shows.
+    @ObservationIgnored private(set) var call: EffectStage!
+    /// The preview window's, while it's open.
+    private(set) var preview: EffectStage?
 
-        let effect: UUID
-        let source: Source
-        var token = UUID()
-        /// The line or image each of its overlays picked when it came on.
-        var variants: [UUID: Int] = [:]
-    }
-
-    /// Effects on, bottom first.
-    private(set) var stack: [Entry] = []
-    /// The default effect, turned off for now.
-    private(set) var defaultOff = false
-
-    /// What to draw, full frame first.
-    private(set) var scene: [OverlayLayer] = []
-    /// The looks on, merged.
-    private(set) var look: Look?
-    /// How far the stack pushes in; 1 for not at all.
-    private(set) var zoom = 1.0
-    private(set) var shake: Effect.Shake?
-    /// For a shake that builds up, the seconds it takes: three quarters of
-    /// its effect's time on, so it's at full long enough to see. None for one
-    /// that stays on: it eases straight in.
-    private(set) var shakeBuild: Double?
-    /// What set the zoom, the push-in and the shake (which needs room): a
-    /// new one eases there, an edit to the same one moves at once.
-    private(set) var zoomSource: UUID?
-    /// How a new zoom moves there: the push-in's own way (the shake's, for
-    /// one that only needs room).
-    private(set) var zoomMove = Effect.Move()
-    /// One you turned on mutes the mic while it's on (or builds on one that
-    /// does). The default and dictation effects never do.
-    private(set) var mutesMic = false
-
-    @ObservationIgnored private var lastVariant: [UUID: Int] = [:]
-    @ObservationIgnored private var rendered: [String: [Int32: CGImage]] = [:]
-    @ObservationIgnored private var videos: [String: OverlayVideo] = [:]
     @ObservationIgnored let log = Logger(subsystem: "dev.imathis.vaux", category: "effects")
 
     /// Vaux Dev keeps its own.
@@ -148,7 +101,7 @@ final class EffectLibrary {
         if live.overlays.first?.kind != .text { live.overlays.insert(.live, at: 0) }
         if !FileManager.default.fileExists(atPath: Self.file.path) { save() }
         pruneGraphics(keeping: Set((effects + [live]).flatMap(\.overlays).flatMap(\.images)))
-        rebuild()
+        call = EffectStage(library: self)
     }
 
     func effect(_ id: UUID) -> Effect? { effects.first { $0.id == id } }
@@ -267,14 +220,6 @@ final class EffectLibrary {
         effect.shownTint(atPlace: effects.firstIndex { $0.id == effect.id } ?? 0)
     }
 
-    /// On: in the stack, as itself (built on by another doesn't count).
-    func isOn(_ id: UUID) -> Bool { stack.contains { $0.effect == id && $0.source != .live } }
-
-    /// Something's on besides the default and dictation.
-    var anythingOn: Bool { stack.contains { $0.source == .user || $0.source == .live } }
-
-    var liveOn: Bool { stack.contains { $0.source == .live } }
-
     /// The furthest any effect (or Live) pushes in: the camera runs in a
     /// mode that keeps it sharp, so pushing in never switches modes mid-call.
     var furthest: Double { max((effects + [live]).compactMap(\.pushIn).max() ?? 1, 1) }
@@ -285,13 +230,16 @@ final class EffectLibrary {
     /// An effect and what it builds on, in the order they stack: what it
     /// includes first (each with what that includes), then itself. Each
     /// once, so one that would include itself stops there.
-    func parts(of effect: Effect) -> [Effect] {
+    func parts(of effect: Effect) -> [Effect] { Self.parts(of: effect, finding: self.effect) }
+
+    /// The same, finding what it includes by ID among a given set.
+    static func parts(of effect: Effect, finding: (UUID) -> Effect?) -> [Effect] {
         var seen: Set<UUID> = []
         var parts: [Effect] = []
         func add(_ effect: Effect) {
             guard seen.insert(effect.id).inserted else { return }
             for id in effect.includes {
-                if let included = self.effect(id) { add(included) }
+                if let included = finding(id) { add(included) }
             }
             parts.append(effect)
         }
@@ -307,96 +255,58 @@ final class EffectLibrary {
 
     // MARK: On and off
 
-    /// Turns an effect on, over everything on (a tap then settles it,
-    /// replacing the one that was on). Returns its place in the stack, to
-    /// take it off again after a hold; nil if it's the default coming back
-    /// on, which isn't held.
+    /// Where effects you turn on go: the preview while it's open, else the
+    /// call.
+    var stage: EffectStage { preview ?? call }
+
+    private var stages: [EffectStage] { [call] + (preview.map { [$0] } ?? []) }
+
+    /// On: in the stack, as itself (built on by another doesn't count).
+    func isOn(_ id: UUID) -> Bool { stage.isOn(id) }
+
+    /// Something's on besides the default and dictation.
+    var anythingOn: Bool { stage.anythingOn }
+
+    var liveOn: Bool { stage.liveOn }
+
+    /// See EffectStage.turnOn.
     @discardableResult
-    func turnOn(_ id: UUID) -> UUID? {
-        guard let effect = effect(id) else { return nil }
-        if id == defaultEffect, defaultOff {
-            defaultOff = false
-            rebuild()
-            return nil
-        }
-        let entry = Entry(effect: id, source: .user)
-        stack.append(entry)
-        rebuild()
-        if let duration = effect.duration {
-            Task { [weak self] in
-                try? await Task.sleep(for: .seconds(duration))
-                self?.takeOff(entry.token)
-            }
-        }
-        return entry.token
-    }
+    func turnOn(_ id: UUID) -> UUID? { stage.turnOn(id) }
 
-    /// Turns an effect off, wherever it is in the stack (the default, for
-    /// now).
-    func turnOff(_ id: UUID) {
-        if id == defaultEffect { defaultOff = true }
-        stack.removeAll { $0.effect == id && $0.source != .live && $0.source != .base }
-        rebuild()
-    }
+    func turnOff(_ id: UUID) { stage.turnOff(id) }
 
-    func toggle(_ id: UUID) {
-        if isOn(id) {
-            turnOff(id)
-        } else if let token = turnOn(id) {
-            settle(token)
-        }
-    }
-
-    /// Takes one turn-on back off: a held key let go, or a duration up.
+    /// A held key let go, or a duration up, wherever it went.
     func takeOff(_ token: UUID) {
-        guard stack.contains(where: { $0.token == token }) else { return }
-        stack.removeAll { $0.token == token }
-        rebuild()
+        for stage in stages { stage.takeOff(token) }
     }
 
-    /// A turn-on that stays (a tap, not a hold): it replaces the effect of
-    /// yours that was on, so one's on at a time. One that turns itself off
-    /// goes over it instead, like a hold, and what was on shows again after.
+    /// A tap, not a hold: see EffectStage.settle.
     func settle(_ token: UUID) {
-        guard let entry = stack.first(where: { $0.token == token }), effect(entry.effect)?.duration == nil,
-              stack.contains(where: { $0.source == .user && $0.token != token })
-        else { return }
-        stack.removeAll { $0.source == .user && $0.token != token }
-        rebuild()
+        for stage in stages { stage.settle(token) }
     }
 
-    /// The Live panel's effect up, on top (or back on top), or down.
-    func setLive(_ on: Bool) {
-        stack.removeAll { $0.source == .live }
-        if on { stack.append(Entry(effect: live.id, source: .live)) }
-        rebuild()
+    func setLive(_ on: Bool) { stage.setLive(on) }
+
+    /// Dictating is for real: the call shows it.
+    func setDictating(_ dictating: Bool) { call.setDictating(dictating) }
+
+    func clearAll() { stage.clearAll() }
+
+    func endCall() { call.endCall() }
+
+    /// The preview opens with what the call has on, and from then on takes
+    /// what you turn on; the call holds still, edits and all.
+    func openPreview() {
+        guard preview == nil else { return }
+        call.freeze()
+        preview = EffectStage(library: self, copying: call)
     }
 
-    /// Dictation started or ended: the dictation effect, on top while it
-    /// lasts.
-    func setDictating(_ dictating: Bool) {
-        stack.removeAll { $0.source == .dictation }
-        if dictating, let dictationEffect, effect(dictationEffect) != nil {
-            stack.append(Entry(effect: dictationEffect, source: .dictation))
-        }
-        rebuild()
-    }
-
-    /// Everything you turned on, off (the Live text too).
-    func clearAll() {
-        guard anythingOn else { return }
-        stack.removeAll { $0.source == .user || $0.source == .live }
-        rebuild()
-    }
-
-    /// A call ended: the next starts at each camera's own zoom, so effects
-    /// that push in (or shake) go.
-    func endCall() {
-        let pushing = stack.filter { ($0.source == .user || $0.source == .live) && parts(of: $0).contains { $0.pushIn != nil || $0.shake != nil } }
-        guard !pushing.isEmpty else { return }
-        let tokens = Set(pushing.map(\.token))
-        stack.removeAll { tokens.contains($0.token) }
-        rebuild()
+    /// The call picks up edits made meanwhile.
+    func closePreview() {
+        guard preview != nil else { return }
+        preview = nil
+        call.thaw()
     }
 
     // MARK: The list
@@ -485,109 +395,6 @@ final class EffectLibrary {
             try? FileManager.default.removeItem(at: Self.graphicsFolder.appending(path: file))
         }
     }
-
-    // MARK: What shows
-
-    private func parts(of entry: Entry) -> [Effect] {
-        if entry.source == .live { return parts(of: live) }
-        return effect(entry.effect).map { parts(of: $0) } ?? []
-    }
-
-    /// Keeps the stack true to edits: an effect deleted goes from it.
-    private func reconcile() {
-        let ids = Set(effects.map(\.id))
-        stack.removeAll { $0.source != .live && !ids.contains($0.effect) }
-        rebuild()
-    }
-
-    /// The default effect at the bottom, unless it's off for now.
-    private func placeDefault() {
-        let wanted = defaultOff ? nil : defaultEffect.flatMap(effect)?.id
-        if let first = stack.first, first.source == .base {
-            if first.effect == wanted { return }
-            stack.removeFirst()
-        }
-        if let wanted { stack.insert(Entry(effect: wanted, source: .base), at: 0) }
-    }
-
-    /// Works out what shows from the stack.
-    private func rebuild() {
-        placeDefault()
-        var spots: [Overlay.Spot: (overlay: Overlay, variant: Int, token: UUID)] = [:]
-        var pushIn: (zoom: Double, source: UUID)?
-        var shaking: (shake: Effect.Shake, source: UUID)?
-        var building: Double?
-        var moving = Effect.Move()
-        var looks: [(look: Look, source: UUID)] = []
-        var entries = stack
-        for index in entries.indices {
-            let token = entries[index].token
-            for part in parts(of: entries[index]) {
-                for overlay in part.overlays where overlay.canShow {
-                    let variant = variant(of: overlay, in: &entries[index])
-                    spots[overlay.spot] = (overlay, variant, token)
-                }
-                if let zoom = part.pushIn {
-                    pushIn = (zoom, UUID.combining([token, part.id]))
-                    moving = part.pushInMove
-                }
-                if let shake = part.shake {
-                    shaking = (shake, UUID.combining([token, part.id]))
-                    if pushIn == nil { moving = part.pushInMove }
-                    building = shake.builds ? effect(entries[index].effect)?.duration.map { 0.75 * $0 } : nil
-                }
-                if let look = part.look { looks.append((look, part.id)) }
-            }
-        }
-        if entries != stack { stack = entries }
-        zoom = pushIn?.zoom ?? 1
-        shake = shaking?.shake
-        shakeBuild = building
-        zoomMove = moving
-        let muting = stack.contains { $0.source == .user && parts(of: $0).contains(where: \.mutesMic) }
-        if muting != mutesMic { mutesMic = muting }
-        let zoomSources = [pushIn?.source, shaking?.source].compactMap { $0 }
-        zoomSource = zoomSources.isEmpty ? nil : UUID.combining(zoomSources)
-        look = Look.merged(looks.map(\.look), id: UUID.combining(looks.map(\.source)))
-        let order = [Overlay.Spot.fullFrame] + Overlay.Spot.allCases.filter { $0 != .fullFrame }
-        var keys = Set<String>()
-        scene = order.compactMap { spot in
-            guard let (overlay, variant, token) = spots[spot] else { return nil }
-            // Any edit to the overlay changes its hash, so a fresh render.
-            let key = "\(token)-\(overlay.id)-\(variant)-\(overlay.hashValue)"
-            keys.insert(key)
-            // A video plays on from where it is while it's the same showing.
-            if overlay.kind == .graphic, overlay.images.indices.contains(variant), OverlayVideo.isVideo(overlay.images[variant]) {
-                if videos[key] == nil { videos[key] = OverlayVideo(overlay.images[variant], overlay: overlay) }
-                return videos[key].map { OverlayLayer(key: key, spot: spot, images: [:], video: $0) }
-            }
-            if rendered[key] == nil {
-                rendered[key] = Self.frameSizes.reduce(into: [:]) { images, size in
-                    images[Int32(size.height)] = OverlayRenderer.render(overlay, variant: variant, frame: size)
-                }
-            }
-            guard let images = rendered[key], !images.isEmpty else { return nil }
-            return OverlayLayer(key: key, spot: spot, images: images)
-        }
-        rendered = rendered.filter { keys.contains($0.key) }
-        videos = videos.filter { keys.contains($0.key) }
-    }
-
-    /// The line or image an overlay shows for this turn-on: the one it
-    /// picked, if it still can, else a fresh pick, at random, never the one
-    /// shown last time.
-    private func variant(of overlay: Overlay, in entry: inout Entry) -> Int {
-        if let picked = entry.variants[overlay.id], overlay.shows(picked) { return picked }
-        let showable = (0..<overlay.variants).filter(overlay.shows)
-        let choices = showable.count > 1 ? showable.filter { $0 != lastVariant[overlay.id] } : showable
-        let choice = choices.randomElement() ?? 0
-        lastVariant[overlay.id] = choice
-        entry.variants[overlay.id] = choice
-        return choice
-    }
-
-    /// Frame sizes Vaux Camera sends.
-    private static let frameSizes = CameraSpec.sizes.map { CGSize(width: Int($0.width), height: Int($0.height)) }
 
     func save() {
         // Snapshots may change things to draw them; yours stay as they are.

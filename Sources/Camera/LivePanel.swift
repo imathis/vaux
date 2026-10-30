@@ -26,14 +26,8 @@ final class LivePanel: NSObject, NSWindowDelegate {
         panel.contentView = host
         panel.setContentSize(host.fittingSize)
         panel.delegate = self
-        // Where the Quick Menu opens: the upper third of the screen you're on.
-        let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
-        if let area = screen?.visibleFrame {
-            panel.setFrameOrigin(NSPoint(
-                x: area.midX - panel.frame.width / 2,
-                y: area.minY + area.height * 0.72 - panel.frame.height / 2
-            ))
-        }
+        // Where the Quick Menu opens.
+        panel.placeHigh()
         panel.makeKeyAndOrderFront(nil)
         self.panel = panel
     }

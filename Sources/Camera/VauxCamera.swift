@@ -133,6 +133,7 @@ final class Effects {
     let triggers: Triggers
     let quickMenu: QuickMenu
     let live: LivePanel
+    let preview: EffectsPreview
     private let appState: AppState
     private var dictating = false
     /// An effect that mutes is on.
@@ -145,6 +146,7 @@ final class Effects {
         triggers = Triggers(appState: appState, library: library)
         quickMenu = QuickMenu(triggers: triggers)
         live = LivePanel(library: library)
+        preview = EffectsPreview(library: library)
         triggers.openLive = { [live] in live.show() }
         followSolo()
         followMuting()
@@ -179,7 +181,7 @@ final class Effects {
     /// unmutes it as it goes: only if it did the muting, and you haven't
     /// unmuted since (then the mic's yours again).
     private func followMuting() {
-        let (wanted, muted) = withObservationTracking { (library.mutesMic, appState.muted) } onChange: { [weak self] in
+        let (wanted, muted) = withObservationTracking { (library.call.mutesMic, appState.muted) } onChange: { [weak self] in
             Task { @MainActor in self?.followMuting() }
         }
         if wanted, !muting {
@@ -226,6 +228,7 @@ final class CameraSide {
             device: device,
             library: effects.library
         )
+        effects.preview.feeder = feeder
     }
 }
 
