@@ -80,14 +80,13 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     /// effects may push further. No sink: the preview's alone.
     func start(cameraID: String, format: FrameFormat, zoom: Double, modeZoom: Double, sink: SinkConnection?) {
         sessionQueue.async { [self] in
-            if input?.device.uniqueID != cameraID || configuredFor != format || configuredZoom != modeZoom {
+            if openCamera != cameraID || configuredFor != format || configuredZoom != modeZoom {
                 use(cameraID, for: format, zoom: modeZoom)
             } else if !session.isRunning, let device = input?.device {
                 // Starting again: while stopped, the camera may have been
                 // used by another app in its own mode (or reset to its
                 // default, 30 fps), so set Vaux's again.
                 configure(device, for: format, zoom: modeZoom)
-                logMode(of: device, for: format)
             }
             let previous = videoQueue.sync {
                 defer {
@@ -106,6 +105,14 @@ final class CameraFeed: NSObject, @unchecked Sendable {
                 Task { @MainActor in onStats(Stats()) }
             }
             if !session.isRunning { session.startRunning() }
+            // Vaux's mode again, once running: as the session builds its
+            // pipeline (a camera switched mid-call), macOS may pick the mode
+            // that best matches the output's pixel format instead, the
+            // Facecam's MJPEG one over its uncompressed.
+            if let device = input?.device {
+                configure(device, for: format, zoom: modeZoom)
+                logMode(of: device, for: format)
+            }
         }
     }
 
@@ -186,9 +193,17 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         }
     }
 
+    /// The camera open, unless it's been unplugged since: plugged back in,
+    /// it's a new device, and the old one runs nothing (the session starts
+    /// with no picture).
+    private var openCamera: String? {
+        guard let device = input?.device, device.isConnected else { return nil }
+        return device.uniqueID
+    }
+
     private func use(_ cameraID: String, for format: FrameFormat, zoom: Double) {
         session.beginConfiguration()
-        if input?.device.uniqueID != cameraID {
+        if openCamera != cameraID {
             if let input {
                 session.removeInput(input)
                 self.input = nil
@@ -213,7 +228,6 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         configuredFor = format
         configuredZoom = zoom
         session.commitConfiguration()
-        if let device = input?.device { logMode(of: device, for: format) }
     }
 
     private func logMode(of device: AVCaptureDevice, for format: FrameFormat) {
@@ -271,7 +285,7 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         // A duration the mode itself reports, never one worked out: one a
         // hair outside its range (60 against a 59.94 fps mode) throws, and
         // takes Vaux down with it.
-        if let duration = Self.frameDuration(of: best) { device.activeVideoMinFrameDuration = duration }
+        if let duration = Self.frameDuration(of: best), duration != device.activeVideoMinFrameDuration { device.activeVideoMinFrameDuration = duration }
         device.unlockForConfiguration()
     }
 
