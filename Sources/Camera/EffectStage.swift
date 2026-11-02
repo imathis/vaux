@@ -63,6 +63,8 @@ final class EffectStage {
     @ObservationIgnored private var lastVariant: [UUID: Int] = [:]
     @ObservationIgnored private var rendered: [String: [Int32: CGImage]] = [:]
     @ObservationIgnored private var videos: [String: OverlayVideo] = [:]
+    /// Turn-ons that go as their videos end, and the videos still playing.
+    @ObservationIgnored private var awaitingVideos: [UUID: Set<String>] = [:]
 
     /// Empty but for the default, or with what `stage` has on (but
     /// dictating, which the call's alone follows).
@@ -127,7 +129,8 @@ final class EffectStage {
         let entry = Entry(effect: id, source: .user)
         stack.append(entry)
         rebuild()
-        if let duration = effect.duration {
+        // One that goes as its videos end needs no timer, unless none shows.
+        if let duration = effect.duration, awaitingVideos[entry.token] == nil {
             // From every stage: the preview may have picked it up.
             Task { [weak library] in
                 try? await Task.sleep(for: .seconds(duration))
@@ -230,9 +233,13 @@ final class EffectStage {
         var building: Double?
         var moving = Effect.Move()
         var looks: [(look: Look, source: UUID)] = []
+        var endsWithVideo = Set<UUID>()
         var entries = stack
         for index in entries.indices {
             let token = entries[index].token
+            if entries[index].source == .user, let effect = effect(entries[index].effect), effect.duration != nil, effect.untilVideoEnds {
+                endsWithVideo.insert(token)
+            }
             for part in parts(of: entries[index]) {
                 for overlay in part.overlays where overlay.canShow {
                     let variant = variant(of: overlay, in: &entries[index])
@@ -269,7 +276,9 @@ final class EffectStage {
             keys.insert(key)
             // A video plays on from where it is while it's the same showing.
             if overlay.kind == .graphic, overlay.images.indices.contains(variant), OverlayVideo.isVideo(overlay.images[variant]) {
-                if videos[key] == nil { videos[key] = OverlayVideo(overlay.images[variant], overlay: overlay) }
+                if videos[key] == nil {
+                    videos[key] = video(overlay.images[variant], of: overlay, key: key, ending: endsWithVideo.contains(token) ? token : nil)
+                }
                 return videos[key].map { OverlayLayer(key: key, spot: spot, images: [:], video: $0) }
             }
             if rendered[key] == nil {
@@ -282,6 +291,30 @@ final class EffectStage {
         }
         rendered = rendered.filter { keys.contains($0.key) }
         videos = videos.filter { keys.contains($0.key) }
+        // Covered, or gone with their turn-on: one showing again starts over.
+        awaitingVideos = awaitingVideos.compactMapValues { awaited in
+            let showing = awaited.filter { keys.contains($0) }
+            return showing.isEmpty ? nil : showing
+        }
+    }
+
+    /// A showing's video. One for a turn-on that goes as its videos end
+    /// plays once, and is waited on.
+    private func video(_ name: String, of overlay: Overlay, key: String, ending token: UUID?) -> OverlayVideo? {
+        guard let token else { return OverlayVideo(name, overlay: overlay, once: !overlay.loops) }
+        let video = OverlayVideo(name, overlay: overlay, once: true) { [weak self] in
+            self?.videoEnded(key, of: token)
+        }
+        if video != nil { awaitingVideos[token, default: []].insert(key) }
+        return video
+    }
+
+    /// One of a turn-on's videos played through: it goes once they all
+    /// have. In this stage only: the call's and the preview's play apart.
+    private func videoEnded(_ key: String, of token: UUID) {
+        guard var awaited = awaitingVideos[token], awaited.remove(key) != nil else { return }
+        awaitingVideos[token] = awaited.isEmpty ? nil : awaited
+        if awaited.isEmpty { takeOff(token) }
     }
 
     /// The line or image an overlay shows for this turn-on: the one it

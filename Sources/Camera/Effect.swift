@@ -18,6 +18,10 @@ struct Effect: Codable, Identifiable, Hashable, Sendable {
     var shake: Shake?
     /// Turns itself off after this many seconds; nil stays until turned off.
     var duration: Double?
+    /// With a duration: turns itself off when its videos have played through
+    /// once, rather than after it (see EffectStage). The duration stands in
+    /// when no video shows.
+    var untilVideoEnds = false
     /// Mutes the mic while it's on (see Effects.followMuting).
     var mutesMic = false
     /// On its keys and in lists: an SF Symbol or an emoji. None picks one
@@ -151,6 +155,7 @@ extension Effect {
         look = try values.decodeIfPresent(Look.self, forKey: .look)
         shake = try values.decodeIfPresent(Shake.self, forKey: .shake)
         duration = try values.decodeIfPresent(Double.self, forKey: .duration)
+        untilVideoEnds = try values.decodeIfPresent(Bool.self, forKey: .untilVideoEnds) ?? untilVideoEnds
         mutesMic = try values.decodeIfPresent(Bool.self, forKey: .mutesMic) ?? mutesMic
         icon = try values.decodeIfPresent(String.self, forKey: .icon)
         color = try values.decodeIfPresent(Tint.self, forKey: .color)

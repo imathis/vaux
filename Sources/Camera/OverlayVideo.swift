@@ -6,7 +6,8 @@ import Observation
 import UniformTypeIdentifiers
 
 /// A graphic that moves: a movie (MOV, MP4) or an animated GIF, playing
-/// from its start when its effect comes on, round and round. A movie with
+/// from its start when its effect comes on, round and round, or once,
+/// holding its last frame. A movie with
 /// an alpha channel (HEVC with alpha, ProRes 4444) keeps its transparency,
 /// as a GIF does. No sound: Vaux Camera is video only.
 ///
@@ -25,20 +26,31 @@ final class OverlayVideo: @unchecked Sendable {
 
     private let source: Source
     private let started = CACurrentMediaTime()
+    /// Plays through once, then holds its last frame.
+    private let once: Bool
     private var looping: NSObjectProtocol?
     /// The frame showing, kept until there's a newer one.
     private var last: CIImage?
     private var lastGIFFrame = -1
 
+    /// Once: `ended` is called as it gets to the end, while it's still
+    /// showing.
     @MainActor
-    init?(_ name: String, overlay: Overlay) {
+    init?(_ name: String, overlay: Overlay, once: Bool, ended: (@MainActor @Sendable () -> Void)? = nil) {
         let url = EffectLibrary.graphicsFolder.appending(path: name)
         spot = overlay.spot
         size = overlay.size
         fit = overlay.fit
+        self.once = once
         if Self.isGIF(name) {
             guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), CGImageSourceGetCount(source) > 1 else { return nil }
-            self.source = .gif(source, delays: Self.delays(of: source))
+            let delays = Self.delays(of: source)
+            self.source = .gif(source, delays: delays)
+            if once, let ended {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delays.reduce(0, +)) { [weak self] in
+                    MainActor.assumeIsolated { if self != nil { ended() } }
+                }
+            }
         } else {
             let item = AVPlayerItem(url: url)
             let output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
@@ -48,11 +60,15 @@ final class OverlayVideo: @unchecked Sendable {
             item.add(output)
             let player = AVPlayer(playerItem: item)
             player.isMuted = true
-            player.actionAtItemEnd = .none
+            player.actionAtItemEnd = once ? .pause : .none
             source = .movie(player, output)
-            // Round and round.
+            // Round and round, or done.
             looping = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main) { [weak player] _ in
-                player?.seek(to: .zero)
+                if once {
+                    MainActor.assumeIsolated { ended?() }
+                } else {
+                    player?.seek(to: .zero)
+                }
             }
             player.play()
         }
@@ -74,7 +90,7 @@ final class OverlayVideo: @unchecked Sendable {
                 last = CIImage(cvPixelBuffer: buffer)
             }
         case .gif(let source, let delays):
-            let index = Self.index(at: CACurrentMediaTime() - started, delays: delays)
+            let index = Self.index(at: CACurrentMediaTime() - started, delays: delays, once: once)
             if index != lastGIFFrame, let image = CGImageSourceCreateImageAtIndex(source, index, nil) {
                 last = CIImage(cgImage: image)
                 lastGIFFrame = index
@@ -119,10 +135,11 @@ final class OverlayVideo: @unchecked Sendable {
         }
     }
 
-    private static func index(at elapsed: Double, delays: [Double]) -> Int {
+    /// Once, past the end: the last frame.
+    private static func index(at elapsed: Double, delays: [Double], once: Bool) -> Int {
         let total = delays.reduce(0, +)
         guard total > 0 else { return 0 }
-        var time = elapsed.truncatingRemainder(dividingBy: total)
+        var time = once ? elapsed : elapsed.truncatingRemainder(dividingBy: total)
         for (index, delay) in delays.enumerated() {
             if time < delay { return index }
             time -= delay

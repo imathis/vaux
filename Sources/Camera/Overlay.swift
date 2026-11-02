@@ -53,6 +53,9 @@ struct Overlay: Codable, Identifiable, Hashable, Sendable {
     var size = Size.medium
     var spot = Spot.top
     var fit = Fit.fit
+    /// A video or GIF plays round and round; off, once, then holds its last
+    /// frame.
+    var loops = true
 
     /// The lines or images a showing picks from.
     var variants: Int { kind == .text ? lines.count : images.count }
@@ -69,6 +72,23 @@ struct Overlay: Codable, Identifiable, Hashable, Sendable {
 
     /// Has something to show.
     var canShow: Bool { (0..<variants).contains(where: shows) }
+}
+
+extension Overlay {
+    /// Settings added since an overlay was saved take their defaults.
+    init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init()
+        id = try values.decodeIfPresent(UUID.self, forKey: .id) ?? id
+        kind = try values.decodeIfPresent(Kind.self, forKey: .kind) ?? kind
+        lines = try values.decodeIfPresent([Line].self, forKey: .lines) ?? lines
+        images = try values.decodeIfPresent([String].self, forKey: .images) ?? images
+        style = try values.decodeIfPresent(Style.self, forKey: .style) ?? style
+        size = try values.decodeIfPresent(Size.self, forKey: .size) ?? size
+        spot = try values.decodeIfPresent(Spot.self, forKey: .spot) ?? spot
+        fit = try values.decodeIfPresent(Fit.self, forKey: .fit) ?? fit
+        loops = try values.decodeIfPresent(Bool.self, forKey: .loops) ?? loops
+    }
 }
 
 extension Overlay.Line {

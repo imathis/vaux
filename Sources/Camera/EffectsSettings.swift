@@ -270,7 +270,11 @@ struct EffectsPage: View {
         if effect.look != nil { parts.append("Look") }
         if effect.shake != nil { parts.append("Shake") }
         var summary = parts.isEmpty ? "Nothing in it yet" : parts.joined(separator: " + ")
-        if let duration = effect.duration { summary += " · off after \(duration.formatted(.number.precision(.fractionLength(0...1)))) s" }
+        if let duration = effect.duration {
+            summary += effect.untilVideoEnds && !library.videos(in: effect).isEmpty
+                ? " · off when its video ends"
+                : " · off after \(duration.formatted(.number.precision(.fractionLength(0...1)))) s"
+        }
         return summary
     }
 }
@@ -578,7 +582,7 @@ struct EffectForm: View {
                 }
             }
             ForEach(effect.overlays) { overlay in
-                OverlaySections(overlay: binding(to: overlay), variant: variant(of: overlay), importGraphics: library.importGraphics) {
+                OverlaySections(overlay: binding(to: overlay), variant: variant(of: overlay), endsWithVideo: endsWithVideo, importGraphics: library.importGraphics) {
                     effect.overlays.removeAll { $0.id == overlay.id }
                 }
             }
@@ -683,10 +687,19 @@ struct EffectForm: View {
             Section {
                 Toggle("Turn off on its own", isOn: turnsOffOnItsOwn)
                 if let duration = effect.duration {
-                    SecondsSlider(label: "After", seconds: Binding(get: { duration }, set: { effect.duration = $0 }))
+                    if !library.videos(in: effect).isEmpty {
+                        Picker("Turns off", selection: untilVideoEnds) {
+                            Text("When its video ends").tag(true)
+                            Text("After a set time").tag(false)
+                        }
+                        .pickerStyle(.radioGroup)
+                    }
+                    if !endsWithVideo {
+                        SecondsSlider(label: "After", seconds: Binding(get: { duration }, set: { effect.duration = $0 }))
+                    }
                 }
             } header: {
-                SettingsHeader("Duration", effect.duration == nil ? "Off, it stays on until you turn it off." : "It turns itself off after the time below.")
+                SettingsHeader("Duration", durationNote)
             }
             Section {
                 Toggle(isOn: $effect.mutesMic) {
@@ -737,8 +750,31 @@ struct EffectForm: View {
         Binding {
             effect.duration != nil
         } set: { turnsOff in
-            // A shake's a moment.
+            // A shake's a moment; a video, as long as it plays.
             effect.duration = turnsOff ? (effect.shake != nil ? 2 : 10) : nil
+            if turnsOff, !library.videos(in: effect).isEmpty { untilVideoEnds.wrappedValue = true }
+        }
+    }
+
+    /// Turns itself off as its videos end (one with none goes by its time).
+    private var endsWithVideo: Bool {
+        effect.duration != nil && effect.untilVideoEnds && !library.videos(in: effect).isEmpty
+    }
+
+    private var durationNote: String {
+        if effect.duration == nil { return "Off, it stays on until you turn it off." }
+        return endsWithVideo ? "It turns itself off once its video has played through." : "It turns itself off after the time below."
+    }
+
+    /// Its video's end sets its time to the video's length too (the longest,
+    /// for several): what a shake that builds up goes by.
+    private var untilVideoEnds: Binding<Bool> {
+        Binding {
+            effect.untilVideoEnds
+        } set: { ends in
+            effect.untilVideoEnds = ends
+            let lengths = library.videos(in: effect).compactMap { VideoPosters.shared.poster($0)?.seconds }
+            if ends, let longest = lengths.max() { effect.duration = longest }
         }
     }
 }
@@ -859,6 +895,8 @@ private struct AddPartMenu: View {
 private struct OverlaySections: View {
     @Binding var overlay: Overlay
     @Binding var variant: Int
+    /// Its effect turns off as its videos end, so they play once.
+    let endsWithVideo: Bool
     let importGraphics: ([URL]) -> [String]
     let remove: () -> Void
 
@@ -868,6 +906,15 @@ private struct OverlaySections: View {
                 LinesEditor(lines: $overlay.lines)
             } else {
                 ImagesEditor(images: $overlay.images, importGraphics: importGraphics)
+                if overlay.images.contains(where: OverlayVideo.isVideo) {
+                    Toggle(isOn: endsWithVideo ? .constant(false) : $overlay.loops) {
+                        Text("Loop")
+                        Text(endsWithVideo
+                            ? "Plays once: the effect turns off as it ends (see Duration)."
+                            : overlay.loops ? "Plays round and round while it's on." : "Plays once, then holds its last frame.")
+                    }
+                    .disabled(endsWithVideo)
+                }
             }
             if overlay.variants > 1 {
                 LabeledContent("Preview") {
@@ -1020,7 +1067,7 @@ private struct ImagesEditor: View {
                     Text("\(seconds.formatted(.number.precision(.fractionLength(0...1)))) s")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
-                        .help("A video, looping. To play it once, turn the effect off on its own after this long.")
+                        .help("How long it plays")
                 }
                 Spacer(minLength: 8)
                 Button {

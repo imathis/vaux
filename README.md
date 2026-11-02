@@ -115,7 +115,8 @@ An effect is anything you name and turn on, made of any of these:
 - **Text and graphics:** text in a pill, a lower-third bar or plain, each line
   with its own icon (or just an icon: a coffee cup for a break), or graphics
   (PNG, PDF, SVG, even full frame), or videos (MOV, MP4, animated GIF),
-  playing from the start each time and looping, transparency kept. Seven
+  playing from the start each time, looping or once (holding the last
+  frame), transparency kept. Seven
   spots, kept inside the middle that apps keep when they crop. They fade in
   and out.
 - **Push in:** zoom on top of each camera's own zoom, up to 2×. It moves
@@ -144,8 +145,9 @@ An effect is anything you name and turn on, made of any of these:
 - **Other effects to build on:** "Dictating, ferociously" can be Dictating
   plus a shake; edit Dictating and it follows.
 
-An effect can also turn itself off after a few seconds, and mute your mic
-while it's on (unmuting as it goes, unless you were muted already).
+An effect can also turn itself off after a few seconds, or, with a video,
+once the video has played through, and mute your mic while it's on
+(unmuting as it goes, unless you were muted already).
 
 **Ready-made.** Vaux starts with a few, a taste of what effects can do:
 Privacy (frosted, mic muted), Hand Raised, Suspicious (pushed in,

@@ -232,6 +232,12 @@ final class EffectLibrary {
     /// once, so one that would include itself stops there.
     func parts(of effect: Effect) -> [Effect] { Self.parts(of: effect, finding: self.effect) }
 
+    /// The videos and GIFs it can show, its own and those of what it builds
+    /// on.
+    func videos(in effect: Effect) -> [String] {
+        parts(of: effect).flatMap(\.overlays).filter { $0.kind == .graphic }.flatMap(\.images).filter(OverlayVideo.isVideo)
+    }
+
     /// The same, finding what it includes by ID among a given set.
     static func parts(of effect: Effect, finding: (UUID) -> Effect?) -> [Effect] {
         var seen: Set<UUID> = []

@@ -62,6 +62,12 @@ enum Snapshot {
             if let dictating = library.dictationEffect ?? library.effects.first?.id {
                 pages.append(("effect-shake", form(Effect(name: "Dictating Ferociously", includes: [dictating], shake: Effect.Shake(amount: 0.8, builds: true), duration: 2.4), height: 1300)))
             }
+            // A video: once, holding its last frame; then one that goes as
+            // its video ends.
+            var clip = Overlay(kind: .graphic, images: ["clip.mp4"], spot: .fullFrame)
+            clip.loops = false
+            pages.append(("effect-video", form(Effect(name: "Clip", overlays: [clip]), height: 1300)))
+            pages.append(("effect-video-ends", form(Effect(name: "Clip", overlays: [clip], duration: 4, untilVideoEnds: true), height: 1300)))
             // Stepping away: text over frosted glass, the look whole.
             if let frosted = Look.presets.first(where: { $0.preset == "frosted" }) {
                 let back = Overlay(lines: [Overlay.Line(text: "Back in 5", icon: "cup.and.saucer.fill")], spot: .bottom)
