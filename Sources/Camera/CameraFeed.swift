@@ -241,17 +241,27 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     /// largest mode is being scaled up.
     static func sharpZoom(cameraID: String, for format: FrameFormat) -> Double {
         guard let device = AVCaptureDevice(uniqueID: cameraID) else { return 1 }
-        let largest = usableModes(of: device).map { mode in
-            let size = mode.formatDescription.dimensions
-            return min(Double(size.width) / Double(format.width), Double(size.height) / Double(format.height))
-        }.max() ?? 1
-        return max(largest, 1)
+        return max(usableModes(of: device).map { reach(of: $0, into: format) }.max() ?? 1, 1)
     }
 
-    /// Modes that run at 30 fps or better (29.97 included).
+    /// Modes that run at 30 fps or better (29.97 included), landscape or
+    /// square as Vaux Camera's frames are, unless the camera has none: a
+    /// portrait mode sees a narrower slice across (the MacBook Pro
+    /// camera's), so it would zoom the picture in.
     private static func usableModes(of device: AVCaptureDevice) -> [AVCaptureDevice.Format] {
         let slowest = 1 / CameraSpec.slowestFrameDuration.seconds
-        return device.formats.filter { fastest(of: $0) * nearly >= slowest }
+        let usable = device.formats.filter { fastest(of: $0) * nearly >= slowest }
+        let wide = usable.filter { $0.formatDescription.dimensions.width >= $0.formatDescription.dimensions.height }
+        return wide.isEmpty ? usable : wide
+    }
+
+    /// How far a mode can zoom into `format` and stay sharp: the frame's
+    /// shape is cut from its middle, so a square mode's top and bottom
+    /// don't count (the MacBook Pro camera's 1552×1552 gives a 16:9 frame
+    /// less than its 1920×1080 does).
+    private static func reach(of mode: AVCaptureDevice.Format, into format: FrameFormat) -> Double {
+        let size = mode.formatDescription.dimensions
+        return min(Double(size.width) / Double(format.width), Double(size.height) / Double(format.height))
     }
 
     private static func fastest(of mode: AVCaptureDevice.Format) -> Double {
@@ -260,27 +270,26 @@ final class CameraFeed: NSObject, @unchecked Sendable {
 
     /// Runs the camera in the mode closest to what's being sent, zoomed:
     /// that exact size if it has it (a straight copy, no scaling), else its
-    /// smallest mode that still fills it, else its largest; of those, the
-    /// fastest, up to Vaux Camera's 60 fps. The slowest rate is left alone,
-    /// since cameras slow down in low light to keep exposure.
+    /// smallest mode that still fills it, else the one that reaches
+    /// furthest; of those, the fastest, up to Vaux Camera's 60 fps. The
+    /// slowest rate is left alone, since cameras slow down in low light to
+    /// keep exposure.
     private func configure(_ device: AVCaptureDevice, for format: FrameFormat, zoom: Double) {
         let usable = Self.usableModes(of: device)
-        let filling = usable.filter { mode in
-            let size = mode.formatDescription.dimensions
-            return Double(size.width) >= Double(format.width) * zoom && Double(size.height) >= Double(format.height) * zoom
-        }
-        // Among equal sizes, uncompressed YUV before anything that needs
+        let reach = { Self.reach(of: $0, into: format) }
+        let filling = usable.filter { reach($0) >= zoom }
+        // Reaching as far, uncompressed YUV before anything that needs
         // decoding (USB cameras often offer MJPEG too), even if slower;
         // then the faster.
         let better: (AVCaptureDevice.Format, AVCaptureDevice.Format) -> Bool = { a, b in
             Self.cost(a) != Self.cost(b) ? Self.cost(a) < Self.cost(b) : Self.rate(a) > Self.rate(b)
         }
         let best = filling.isEmpty
-            ? usable.max { a, b in Self.area(a) != Self.area(b) ? Self.area(a) < Self.area(b) : better(b, a) }
-            : filling.min { a, b in Self.area(a) != Self.area(b) ? Self.area(a) < Self.area(b) : better(a, b) }
+            ? usable.max { a, b in reach(a) != reach(b) ? reach(a) < reach(b) : better(b, a) }
+            : filling.min { a, b in reach(a) != reach(b) ? reach(a) < reach(b) : better(a, b) }
         guard let best, (try? device.lockForConfiguration()) != nil else { return }
         // Setting the mode directly also keeps the session from applying a
-        // preset over it.
+        // preset over it (macOS may still change it; see start).
         if best != device.activeFormat { device.activeFormat = best }
         // A duration the mode itself reports, never one worked out: one a
         // hair outside its range (60 against a 59.94 fps mode) throws, and
@@ -311,11 +320,6 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     /// Its fastest rate, up to Vaux Camera's.
     private static func rate(_ mode: AVCaptureDevice.Format) -> Double {
         min(fastest(of: mode), Double(CameraSpec.fps))
-    }
-
-    private static func area(_ mode: AVCaptureDevice.Format) -> Int {
-        let size = mode.formatDescription.dimensions
-        return Int(size.width) * Int(size.height)
     }
 
     /// Compressed modes rank last: decoding costs, and a frame damaged on
