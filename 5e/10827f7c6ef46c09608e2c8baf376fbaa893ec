@@ -1,0 +1,21 @@
+Sources/Camera/CameraFeed.swift
+  s_c9cb9133d40bef::t_1700b0e97a100e 83,196-203,206
+  s_c9cb9133d40bef::t_d636175e821ae1 108-115
+  s_c9cb9133d40bef::t_124312e0c1ca88 288
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5e10827f7c6ef46c09608e2c8baf376fbaa893ec",
+  "prompts": {},
+  "sessions": {
+    "s_c9cb9133d40bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46d79b12-ab26-4b09-8d76-66163839d16b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
