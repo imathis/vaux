@@ -154,8 +154,7 @@ Privacy (frosted, mic muted), Hand Raised, Suspicious (pushed in,
 captioned), Intensify (a wild shake, captioned), Noir, Teal & Orange,
 Dictating, and the AWAY group: BRB (frosted, with a sign) and full-frame
 cards for Lunch, Coffee, Intermission, Paused, Poopin and On a call, each
-muting the mic but Paused and On a call. Add Effect → Ready-Made adds any
-of them again.
+muting the mic. Add Effect → Ready-Made adds any of them again.
 
 **Groups.** Effects can go in groups, each with a name and, if you like,
 an icon and color: drag an effect under a group's name in the list. Groups

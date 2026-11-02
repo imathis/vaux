@@ -37,19 +37,19 @@ extension Effect {
 
 extension EffectGroup {
     /// The group Vaux comes with, and offers ready-made: ways to step away,
-    /// most muting the mic (not Paused, or On a call: you may be talking).
-    /// BRB, frosted with a sign; the rest full-frame cards, which come with
-    /// the app (see StarterGraphics). New IDs each time.
+    /// each muting the mic, since you're not talking to the call. BRB,
+    /// frosted with a sign; the rest full-frame cards, which come with the
+    /// app (see StarterGraphics). New IDs each time.
     static var away: (group: EffectGroup, effects: [Effect]) {
         let group = EffectGroup(name: "AWAY", icon: "clock.fill")
         // Frosted, but less: there behind the sign, not gone.
         var behind = Look.presets.first { $0.preset == "frosted" }?.copy
         behind?.blur = 0.54
-        func card(_ name: String, _ file: String, mutes: Bool = true, icon: String? = nil, color: Effect.Tint? = nil) -> Effect {
+        func card(_ name: String, _ file: String, icon: String? = nil, color: Effect.Tint? = nil) -> Effect {
             Effect(
                 name: name,
                 overlays: [Overlay(kind: .graphic, images: [StarterGraphics.name(of: file)], spot: .fullFrame)],
-                mutesMic: mutes, icon: icon, color: color, group: group.id
+                mutesMic: true, icon: icon, color: color, group: group.id
             )
         }
         return (group, [
@@ -65,10 +65,30 @@ extension EffectGroup {
             card("Lunch", "away-lunch.jpg", icon: "🍽️"),
             card("Coffee", "away-coffee.jpg", icon: "cup.and.saucer.fill", color: .purple),
             card("Intermission", "away-intermission.jpg"),
-            card("Paused", "away-paused.jpg", mutes: false),
+            card("Paused", "away-paused.jpg"),
             card("Poopin", "away-poopin.jpg", icon: "poop"),
-            card("On a call", "away-on-a-call.jpg", mutes: false, icon: "phone.fill"),
+            card("On a call", "away-on-a-call.jpg", icon: "phone.fill"),
         ])
+    }
+}
+
+extension EffectLibrary {
+    private static let awayCardsMutedKey = "awayCardsMuted"
+
+    /// Paused and On a call came not muting, through 1.0.0-alpha.10: a
+    /// miss, as on the phone or paused you're not talking to the call
+    /// either. Once, any showing those cards mutes; one unmuted after that
+    /// stays so. True if any changed.
+    static func muteAwayCards(_ effects: inout [Effect]) -> Bool {
+        guard !UserDefaults.standard.bool(forKey: awayCardsMutedKey) else { return false }
+        UserDefaults.standard.set(true, forKey: awayCardsMutedKey)
+        let cards = Set(["away-paused.jpg", "away-on-a-call.jpg"].map(StarterGraphics.name(of:)))
+        var changed = false
+        for index in effects.indices where !effects[index].mutesMic && effects[index].overlays.contains(where: { !cards.isDisjoint(with: $0.images) }) {
+            effects[index].mutesMic = true
+            changed = true
+        }
+        return changed
     }
 }
 
