@@ -7,7 +7,8 @@ import CoreAudio
 /// Hard rule for Vaux: we touch audio **only** through HAL property
 /// reads/writes/listeners. No streams, no I/O procs, no aggregate devices,
 /// no capture. Setting these properties does not trigger TCC, so the app
-/// needs no microphone permission.
+/// needs no microphone permission. (USBMuteWatcher also reads a USB mic's
+/// mute from the mic itself: a control request, not audio.)
 enum AudioController {
     static let system = AudioObjectID(kAudioObjectSystemObject)
 

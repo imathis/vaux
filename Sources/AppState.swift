@@ -22,6 +22,7 @@ final class AppState {
     @ObservationIgnored private var currentDevice: AudioDeviceID?
     @ObservationIgnored private var defaultDeviceListener: AudioPropertyListener?
     @ObservationIgnored private var muteListeners: [AudioPropertyListener] = []
+    @ObservationIgnored private var micMute: USBMuteWatcher?
 
     /// Unmute level for a device as a scalar 0.0...1.0: its own level if set
     /// in Settings, else the default. Read fresh from `UserDefaults`.
@@ -488,6 +489,7 @@ final class AppState {
         guard let dev else {
             deviceName = nil
             muteListeners = []
+            micMute = nil
             // Keep `muted` as the standing intent so it re-applies when a
             // device returns.
             notify()
@@ -568,6 +570,9 @@ final class AppState {
                 MainActor.assumeIsolated { self?.resyncMutedState() }
             }
         }
+        // A mic muted from its own button, which macOS isn't told of. Not
+        // in a snapshot, which only reads.
+        if micMute?.device != dev, !Snapshot.isRunning { micMute = USBMuteWatcher(device: dev) }
     }
 
     private func resyncMutedState() {

@@ -89,6 +89,9 @@ to be the visible tab in its window, since browsers only expose that one.
   inputs while muted.
 - The menu bar icon always shows the real state, even when mute is changed in
   System Settings or another app.
+- A USB mic's own mute button counts too, on mics that don't tell macOS (the
+  Elgato Wave:3): Vaux reads the mic's mute from the mic and sets macOS's to
+  match, once it's seen the mic follow a mute from the Mac.
 
 ### Preferred inputs
 
@@ -242,7 +245,7 @@ an idle Vaux Camera costs nothing. Effects are drawn only while they show.
 ## Permissions
 
 - **Mute and inputs:** none. Changing Core Audio properties doesn't trigger
-  the microphone permission prompt.
+  the microphone permission prompt, nor does reading a USB mic's mute.
 - **Solo mode:** Accessibility, to press mute in your call apps, and to notice
   the 🎤 Dictation key. Vaux reacts only to that key and Escape, and ignores
   every other key. While a Chromium browser is using the mic, Vaux turns on
@@ -351,6 +354,7 @@ Sources/
   SettingsView.swift         # Settings pages: Microphone, Camera, Effects, Shortcuts
   AppState.swift             # mute intent, device tracking, solo mode
   AudioController.swift      # Core Audio HAL: devices, mute, volume, processes
+  USBMuteWatcher.swift       # a USB mic's own mute button, which macOS misses
   CallMuter.swift            # presses call apps' mute via Accessibility
   CaptureWatcher.swift       # which apps are using the mic
   MediaPauser.swift          # pauses playing media during solo
