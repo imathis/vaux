@@ -3,7 +3,9 @@ import os
 
 /// Runs a camera and feeds its frames, fitted to the format Vaux Camera is
 /// sending, into Vaux Camera's sink; and, while the preview's open, into its
-/// screen too, with the preview's effects.
+/// screen too, with the preview's effects. A virtual camera's frames go only
+/// once its picture moves, so its still card never shows; one that stays
+/// still is reported (see StillCheck).
 final class CameraFeed: NSObject, @unchecked Sendable {
     /// Where frames go: the call (through Vaux Camera), or the preview.
     enum Output {
@@ -26,6 +28,8 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     private let sessionQueue = DispatchQueue(label: "dev.imathis.vaux.session")
     private let videoQueue = DispatchQueue(label: "dev.imathis.vaux.video", qos: .userInteractive)
     private let onStats: @MainActor @Sendable (Stats) -> Void
+    /// A virtual camera showing a still card, by unique ID.
+    private let onStill: @MainActor @Sendable (String) -> Void
     private let log = Logger(subsystem: "dev.imathis.vaux", category: "feed")
 
     // Session queue only.
@@ -58,9 +62,14 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     /// The last frame taken: ones closer together than Vaux Camera's
     /// fastest rate are skipped, should a camera run faster than asked.
     private var lastTaken = CMTime.invalid
+    /// A virtual camera's, checked for a still card since it started.
+    private var still: (cameraID: String, check: StillCheck, reported: Bool)?
+    /// Counts starts, so a check for frames that never came is for this one.
+    private var starts = 0
 
-    init(onStats: @escaping @MainActor @Sendable (Stats) -> Void) {
+    init(onStats: @escaping @MainActor @Sendable (Stats) -> Void, onStill: @escaping @MainActor @Sendable (String) -> Void) {
         self.onStats = onStats
+        self.onStill = onStill
         compositor = Compositor()
         super.init()
         // Cameras' own format; the compositor converts if it must.
@@ -80,6 +89,8 @@ final class CameraFeed: NSObject, @unchecked Sendable {
     /// effects may push further. No sink: the preview's alone.
     func start(cameraID: String, format: FrameFormat, zoom: Double, modeZoom: Double, sink: SinkConnection?) {
         sessionQueue.async { [self] in
+            // Checked from scratch with each camera, and each run.
+            if openCamera != cameraID || !session.isRunning { checkStill(cameraID) }
             if openCamera != cameraID || configuredFor != format || configuredZoom != modeZoom {
                 use(cameraID, for: format, zoom: modeZoom)
             } else if !session.isRunning, let device = input?.device {
@@ -172,6 +183,30 @@ final class CameraFeed: NSObject, @unchecked Sendable {
         case .call: change(&call)
         case .preview: change(&preview)
         }
+    }
+
+    /// A virtual camera's picture is checked for a card; nothing at all for
+    /// `StillCheck.limit` seconds counts too.
+    private func checkStill(_ cameraID: String) {
+        let now = CMClockGetTime(CMClockGetHostTimeClock()).seconds
+        let start = videoQueue.sync {
+            starts += 1
+            still = StillCheck.applies(to: cameraID) ? (cameraID, StillCheck(at: now), false) : nil
+            return starts
+        }
+        videoQueue.asyncAfter(deadline: .now() + StillCheck.limit + 0.25) { [self] in
+            guard start == starts else { return }
+            reportStill(at: CMClockGetTime(CMClockGetHostTimeClock()).seconds)
+        }
+    }
+
+    /// Reports the camera once, if it's still. Video queue only.
+    private func reportStill(at now: Double) {
+        guard let still, !still.reported, still.check.isStill(at: now) else { return }
+        self.still?.reported = true
+        log.notice("\(AVCaptureDevice(uniqueID: still.cameraID)?.localizedName ?? still.cameraID, privacy: .public) shows a still card, not a picture")
+        let (onStill, cameraID) = (onStill, still.cameraID)
+        Task { @MainActor in onStill(cameraID) }
     }
 
     /// Skips frames that arrive from the camera broken, or doesn't.
@@ -386,6 +421,14 @@ extension CameraFeed: AVCaptureVideoDataOutputSampleBufferDelegate {
         guard let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             if sink != nil { count(sent: false) }
             return
+        }
+        if still != nil {
+            let now = CMClockGetTime(CMClockGetHostTimeClock()).seconds
+            still?.check.take(pixels, at: now)
+            reportStill(at: now)
+            // Not until its picture moves, and not once it's stopped: never
+            // its card.
+            guard let check = still?.check, check.live, !check.isStill(at: now) else { return }
         }
         let drawing = call.advance(to: captured)
         // The preview's alone: nothing's sent, so nothing's counted.

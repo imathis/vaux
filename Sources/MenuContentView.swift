@@ -158,6 +158,9 @@ struct MenuContentView: View {
                     badge("Live", fill: .red, text: .white)
                 } else if sent {
                     preferredBadge
+                } else if side.priority.isStill(entry) {
+                    badge("No picture", fill: Color(nsColor: .quaternaryLabelColor), text: .secondary)
+                        .help("It's showing a still card (its app isn't open?), so the next camera is sent until its picture moves.")
                 }
             }
         }

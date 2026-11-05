@@ -52,6 +52,8 @@ final class Feeder {
     @ObservationIgnored private let device: CameraDevice
     @ObservationIgnored private let library: EffectLibrary
     @ObservationIgnored private var feed: CameraFeed!
+    /// Virtual cameras passed over for a still card, while another's sent.
+    @ObservationIgnored private var stillWatch: StillCameraWatch!
     /// What the feed is running now.
     @ObservationIgnored private var feeding: Feeding?
 
@@ -78,6 +80,8 @@ final class Feeder {
         let status: Status
         /// The camera to run: the call's, else the preview's.
         let camera: CameraEntry?
+        /// Cameras passed over for a still card.
+        let stills: Set<String>
         /// The furthest effects can push this camera; its mode keeps that
         /// sharp.
         let modeZoom: Double
@@ -114,6 +118,11 @@ final class Feeder {
         feed = CameraFeed { [weak self] stats in
             self?.stats = stats
             self?.readSystemEffects()
+        } onStill: { [weak self] cameraID in
+            self?.cameras.markStill(cameraID)
+        }
+        stillWatch = StillCameraWatch { [weak self] cameraID in
+            self?.cameras.markLive(cameraID)
         }
         feed.hideBrokenFrames(hidesBrokenFrames)
         observe()
@@ -153,6 +162,7 @@ final class Feeder {
         return Wanted(
             status: status,
             camera: camera,
+            stills: cameras.stills,
             modeZoom: min(max(base * library.furthest, library.furthestShake), most),
             call: shown(library.call),
             preview: preview.map(shown),
@@ -169,6 +179,9 @@ final class Feeder {
     }
 
     private func apply(_ wanted: Wanted) {
+        // Only while a camera runs: then one passed over comes back as soon
+        // as its picture moves.
+        defer { stillWatch.watch(feeding == nil ? [] : wanted.stills) }
         status = wanted.status
         zoom = wanted.call.zoom
         previewing = wanted.preview == nil ? nil : wanted.camera

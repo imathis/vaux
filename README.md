@@ -219,6 +219,9 @@ watching. Your call stays as it was until you close it.
   sharp.
 - An iPhone set up as a camera (propped up in landscape and locked) can go
   ahead of the list, and back when you pick it up.
+- A virtual camera whose app isn't open sends a still card instead of a
+  picture (Elgato's: "Please run Camera Hub"). Vaux passes over it, marked
+  **No picture**, and sends the next camera until its picture moves.
 - Up to 60 fps, in 720p or 1080p, as the video app asks, from the camera's
   uncompressed modes where it has them.
 - Frames that arrive broken are hidden: through a dock or hub, some cameras

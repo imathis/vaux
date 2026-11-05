@@ -4,7 +4,9 @@ import os
 
 /// The camera priority list: the stored order merged with the cameras
 /// connected now, kept live. Vaux sends the highest-ranked connected one,
-/// or a docked iPhone ahead of them if the user wants that.
+/// or a docked iPhone ahead of them if the user wants that. A virtual camera
+/// showing a still card instead of a picture (its app isn't running) is
+/// passed over until its picture moves.
 @MainActor @Observable
 final class CameraPriorityModel {
     private(set) var entries: [CameraEntry] = []
@@ -16,6 +18,8 @@ final class CameraPriorityModel {
     private(set) var dockedCamera: CameraEntry?
     /// Per-camera zoom (see `CameraZoom`).
     private(set) var zooms = CameraZoom.levels
+    /// Virtual cameras showing a still card, by unique ID (see StillCheck).
+    private(set) var stills: Set<String> = []
     /// Send a docked iPhone ahead of the ranking, as apps' Automatic Camera
     /// Selection would, but inside Vaux Camera, so apps never switch.
     var followsDocking = UserDefaults.standard.object(forKey: CameraPriorityModel.followsDockingKey) as? Bool ?? true {
@@ -46,10 +50,30 @@ final class CameraPriorityModel {
     }
 
     /// The camera to send: a docked iPhone if following docking, else the
-    /// highest-ranked camera that's connected.
+    /// highest-ranked camera that's connected and showing a picture (all
+    /// still, the highest-ranked anyway).
     var preferred: CameraEntry? {
         if followsDocking, let dockedCamera, connected.contains(dockedCamera.uid) { return dockedCamera }
-        return entries.first { connected.contains($0.uid) }
+        let present = entries.filter { connected.contains($0.uid) }
+        return present.first { !stills.contains($0.uid) } ?? present.first
+    }
+
+    func isStill(_ entry: CameraEntry) -> Bool { stills.contains(entry.uid) }
+
+    /// Showing a still card: passed over.
+    func markStill(_ uid: String) {
+        guard connected.contains(uid), stills.insert(uid).inserted else { return }
+        log.notice("Passing over \(self.name(of: uid), privacy: .public): a still card, not a picture")
+    }
+
+    /// Its picture moved: back in its place.
+    func markLive(_ uid: String) {
+        guard stills.remove(uid) != nil else { return }
+        log.notice("\(self.name(of: uid), privacy: .public) shows a picture again")
+    }
+
+    private func name(of uid: String) -> String {
+        entries.first { $0.uid == uid }?.name ?? uid
     }
 
     /// Vaux never sets its own preferred camera, so macOS's pick for it is
@@ -112,6 +136,7 @@ final class CameraPriorityModel {
         }
         entries = stored
         connected = Set(present.map(\.uid))
+        if !stills.isSubset(of: connected) { stills.formIntersection(connected) }
         if stored != PreferredCamera.order { PreferredCamera.order = stored }
         readDocked()
     }

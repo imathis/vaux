@@ -350,6 +350,7 @@ private struct CameraList: View {
                         connected: cameras.isConnected(entry),
                         docked: cameras.dockedCamera?.uid == entry.uid,
                         live: isLive(entry),
+                        still: cameras.isStill(entry),
                         zoom: cameras.zoom(for: entry.uid)
                     ) { cameras.setZoom($0, for: entry) }
                         .frame(height: 22)
@@ -399,6 +400,7 @@ private struct CameraRow: View {
     let connected: Bool
     let docked: Bool
     let live: Bool
+    let still: Bool
     let zoom: Double
     let setZoom: @MainActor @Sendable (Double) -> Void
 
@@ -432,6 +434,12 @@ private struct CameraRow: View {
                 Text("docked")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            if still, connected, !live {
+                Text("no picture")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help("It's showing a still card (its app isn't open?), so the next camera is sent until its picture moves.")
             }
             Spacer(minLength: 8)
             Button { editing = true } label: {
