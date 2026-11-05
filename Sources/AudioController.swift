@@ -90,6 +90,14 @@ enum AudioController {
         supportsMute(id) && write(id, muteAddress, UInt32(muted ? 1 : 0))
     }
 
+    /// Whether its mute silences it for every app recording it. The Mac's
+    /// own mic's doesn't: its mute (and its volume) reach only apps using
+    /// macOS's voice processing (FaceTime), not ones recording it plainly
+    /// (Discord, Chrome), which hear it as before.
+    static func muteReachesEveryApp(_ id: AudioDeviceID) -> Bool {
+        transportType(id) != kAudioDeviceTransportTypeBuiltIn
+    }
+
     // MARK: Input volume (0.0...1.0)
     //
     // Used for the unmute level and as the mute fallback on devices that
@@ -137,13 +145,27 @@ enum AudioController {
         }
     }
 
-    // MARK: Output volume (solo-mode ducking)
+    // MARK: Output volume (solo-mode ducking) and mute (Deafen)
     //
     // Virtual main volume is the same control as the menu bar Sound slider; it
     // works on devices that only expose per-channel volume (e.g. AirPods).
+    // Mute is the one the mute key sets.
 
     static func defaultOutputDevice() -> AudioDeviceID? {
         device(kAudioHardwarePropertyDefaultOutputDevice)
+    }
+
+    private static let outputMuteAddress = address(kAudioDevicePropertyMute, scope: kAudioObjectPropertyScopeOutput)
+
+    static func isOutputMuted(_ id: AudioDeviceID) -> Bool {
+        read(id, outputMuteAddress, as: UInt32(0)) == 1
+    }
+
+    /// False on one with no mute: a screen's speakers over HDMI or
+    /// DisplayPort, which macOS can't mute either.
+    @discardableResult
+    static func setOutputMuted(_ muted: Bool, on id: AudioDeviceID) -> Bool {
+        has(id, outputMuteAddress) && write(id, outputMuteAddress, UInt32(muted ? 1 : 0))
     }
 
     private static let outputVolumeAddress = address(

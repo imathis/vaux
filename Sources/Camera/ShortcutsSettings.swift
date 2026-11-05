@@ -16,8 +16,9 @@ struct ShortcutsSettings: View {
                 Form {
                     Section {
                         KeyboardShortcuts.Recorder("Mute", name: .toggleMicMute)
+                        KeyboardShortcuts.Recorder("Deafen", name: .toggleDeafen)
                     } header: {
-                        SettingsHeader("Microphone")
+                        SettingsHeader("Mute and Deafen", Self.deafenNote)
                     } footer: {
                         Text("Keys for effects and the Quick Menu are here once the camera is on.")
                             .foregroundStyle(.secondary)
@@ -30,6 +31,8 @@ struct ShortcutsSettings: View {
         }
         .frame(width: SettingsHeader.pageWidth)
     }
+
+    static let deafenNote = "Deafen mutes what you hear: the Mac's sound, wherever it plays."
 }
 
 struct EffectShortcuts: View {
@@ -46,11 +49,11 @@ struct EffectShortcuts: View {
         Form {
             Section {
                 ColumnTitles()
-                ForEach(items.filter { $0.action == .mute }) { item in
+                ForEach(items.filter { $0.action == .mute || $0.action == .deafen }) { item in
                     TriggerRow(item: item, key: keys[item.id] ?? "", triggers: triggers)
                 }
             } header: {
-                SettingsHeader("Microphone")
+                SettingsHeader("Mute and Deafen", ShortcutsSettings.deafenNote)
             }
             Section {
                 LabeledContent("Open the Quick Menu") {
@@ -146,7 +149,7 @@ private struct StreamDeckSection: View {
                     }
                 }
             } header: {
-                SettingsHeader("Stream Deck", "Mute, Live, effect and group keys, lit while on, and a Vaux page.")
+                SettingsHeader("Stream Deck", "Mute, Deafen, Live, effect and group keys, lit while on, and a Vaux page.")
             }
             .onAppear { streamDeck = Self.streamDeckApp }
         }

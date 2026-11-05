@@ -2,19 +2,21 @@ import Foundation
 import KeyboardShortcuts
 import Observation
 
-/// Everything that can be triggered (Mute, Live, each effect, and Clear All)
+/// Everything that can be triggered (Mute, Deafen, Live, each effect, and
+/// Clear All)
 /// and the keys for it: a global shortcut each, and a one-key code in the
 /// Quick Menu. One list behind the Quick Menu, the Shortcuts tab and Stream
 /// Deck alike.
 ///
 /// A key tapped toggles its effect. Held, the effect lasts only while it's
-/// held, then whatever it covered shows again. Mute just toggles, as its
-/// shortcut always has (AppState listens for that).
+/// held, then whatever it covered shows again. Mute and Deafen just toggle,
+/// as Mute's shortcut always has (AppState listens for theirs).
 @MainActor @Observable
 final class Triggers {
     struct Item: Identifiable, Equatable {
         enum Action: Equatable {
             case mute
+            case deafen
             /// Opens the Live panel.
             case live
             case effect(UUID)
@@ -87,6 +89,7 @@ final class Triggers {
     var items: [Item] {
         [
             Item(id: Self.id(of: .mute), action: .mute, title: "Mute", isOn: appState.muted),
+            Item(id: Self.id(of: .deafen), action: .deafen, title: "Deafen", isOn: appState.deafened),
             Item(id: Self.id(of: .live), action: .live, title: "Live…", isOn: library.liveOn),
         ]
         + library.ordered.map { effect in
@@ -97,7 +100,7 @@ final class Triggers {
     }
 
     /// Each item's Quick Menu key: set by hand, or given in order. Mute gets
-    /// M, Live L, effects 1–9 then letters, Clear All 0.
+    /// M, Deafen D, Live L, effects 1–9 then letters, Clear All 0.
     var keys: [String: String] {
         var keys: [String: String] = [:]
         let items = items
@@ -115,6 +118,7 @@ final class Triggers {
         for item in items where keys[item.id] == nil {
             keys[item.id] = switch item.action {
             case .mute: next(from: ["M"] + letters)
+            case .deafen: next(from: ["D"] + letters)
             case .live: next(from: ["L"] + letters)
             case .effect: next(from: digits + letters)
             case .clearAll: next(from: ["0"] + letters)
@@ -156,6 +160,7 @@ final class Triggers {
         guard presses[id] == nil else { return }
         switch action {
         case .mute: appState.toggle()
+        case .deafen: appState.toggleDeafen()
         case .live: openLive?()
         case .clearAll: library.clearAll()
         case .effect(let effect):
@@ -183,6 +188,7 @@ final class Triggers {
     static func id(of action: Item.Action) -> String {
         switch action {
         case .mute: KeyboardShortcuts.Name.toggleMicMute.rawValue
+        case .deafen: KeyboardShortcuts.Name.toggleDeafen.rawValue
         case .live: Item.liveName.rawValue
         case .effect(let id): "effect-\(id)"
         case .clearAll: Item.clearAllName.rawValue

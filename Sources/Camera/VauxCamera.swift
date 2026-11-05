@@ -136,10 +136,38 @@ final class Effects {
     let preview: EffectsPreview
     private let appState: AppState
     private var dictating = false
-    /// An effect that mutes is on.
-    private var muting = false
-    /// It muted the mic, and you haven't unmuted it since.
-    private var mutedByEffect = false
+    private var muting = Hold()
+    private var deafening = Hold()
+
+    /// Mute or Deafen, held by effects that want it while they're on.
+    private struct Hold {
+        /// An effect that wants it is on.
+        var wanted = false
+        /// It was turned on for the effect, and you haven't turned it off
+        /// since.
+        var byEffect = false
+
+        /// On as the first such effect comes on, unless it's on already
+        /// (then it's yours); off as the last goes, only if it was turned
+        /// on for them and you haven't turned it off since (then it's yours
+        /// again).
+        mutating func follow(wanted: Bool, on: Bool, set: (Bool) -> Void) {
+            if wanted, !self.wanted {
+                self.wanted = true
+                if !on {
+                    byEffect = true
+                    set(true)
+                }
+            } else if !wanted, self.wanted {
+                self.wanted = false
+                if byEffect, on { set(false) }
+                byEffect = false
+            } else if byEffect, !on {
+                // You turned it off while it was on.
+                byEffect = false
+            }
+        }
+    }
 
     init(appState: AppState) {
         self.appState = appState
@@ -176,31 +204,18 @@ final class Effects {
         undo?.setActionName("Delete \(effect.name)")
     }
 
-    /// Solo mode is dictating: the dictation effect is on while it's on.
-    /// An effect that mutes while it's on mutes the mic as it comes on, and
-    /// unmutes it as it goes: only if it did the muting, and you haven't
-    /// unmuted since (then the mic's yours again).
+    /// An effect that mutes, or deafens, while it's on (see `Hold`).
     private func followMuting() {
-        let (wanted, muted) = withObservationTracking { (library.call.mutesMic, appState.muted) } onChange: { [weak self] in
+        let (mutes, muted, deafens, deafened) = withObservationTracking {
+            (library.call.mutesMic, appState.muted, library.call.deafens, appState.deafened)
+        } onChange: { [weak self] in
             Task { @MainActor in self?.followMuting() }
         }
-        if wanted, !muting {
-            // Coming on: muted already stays yours.
-            muting = true
-            if !muted {
-                mutedByEffect = true
-                appState.setMuted(true)
-            }
-        } else if !wanted, muting {
-            muting = false
-            if mutedByEffect, muted { appState.setMuted(false) }
-            mutedByEffect = false
-        } else if mutedByEffect, !muted {
-            // You unmuted while it was on.
-            mutedByEffect = false
-        }
+        muting.follow(wanted: mutes, on: muted, set: appState.setMuted)
+        deafening.follow(wanted: deafens, on: deafened, set: appState.setDeafened)
     }
 
+    /// Solo mode is dictating: the dictation effect is on while it's on.
     private func followSolo() {
         let active = withObservationTracking { appState.soloActive } onChange: { [weak self] in
             Task { @MainActor in self?.followSolo() }

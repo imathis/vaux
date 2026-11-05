@@ -93,6 +93,7 @@ final class EffectLibrary {
             ?? Self.migrated()
         var effects = stored.effects
         let mutedCards = Self.muteAwayCards(&effects)
+        let deafenedCard = Self.deafenOnACall(&effects)
         self.effects = effects
         defaultEffect = stored.defaultEffect
         dictationEffect = stored.dictationEffect
@@ -101,7 +102,7 @@ final class EffectLibrary {
         outline = stored.outline ?? []
         // The Live panel edits its one text overlay.
         if live.overlays.first?.kind != .text { live.overlays.insert(.live, at: 0) }
-        if mutedCards || !FileManager.default.fileExists(atPath: Self.file.path) { save() }
+        if mutedCards || deafenedCard || !FileManager.default.fileExists(atPath: Self.file.path) { save() }
         pruneGraphics(keeping: Set((effects + [live]).flatMap(\.overlays).flatMap(\.images)))
         call = EffectStage(library: self)
     }

@@ -55,6 +55,8 @@ final class EffectStage {
     /// One you turned on mutes the mic while it's on (or builds on one that
     /// does). The default and dictation effects never do.
     private(set) var mutesMic = false
+    /// Deafens, likewise.
+    private(set) var deafens = false
 
     @ObservationIgnored private unowned let library: EffectLibrary
     /// Effects, Live and the default as they were when frozen: edits wait
@@ -264,6 +266,8 @@ final class EffectStage {
         zoomMove = moving
         let muting = stack.contains { $0.source == .user && parts(of: $0).contains(where: \.mutesMic) }
         if muting != mutesMic { mutesMic = muting }
+        let deafening = stack.contains { $0.source == .user && parts(of: $0).contains(where: \.deafens) }
+        if deafening != deafens { deafens = deafening }
         let zoomSources = [pushIn?.source, shaking?.source].compactMap { $0 }
         zoomSource = zoomSources.isEmpty ? nil : UUID.combining(zoomSources)
         look = Look.merged(looks.map(\.look), id: UUID.combining(looks.map(\.source)))

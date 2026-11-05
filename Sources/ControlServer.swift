@@ -3,17 +3,17 @@ import Observation
 import os
 
 /// Lets your other apps drive Vaux: Vaux's Stream Deck plugin presses and
-/// lets go of Vaux's keys here (Mute; with the camera on, Live, each effect
-/// but the dictation one, and Clear All), and hears what's on, to light its
-/// keys. A Unix socket in Vaux's Application Support folder, open to you
+/// lets go of Vaux's keys here (Mute and Deafen; with the camera on, Live,
+/// each effect but the dictation one, and Clear All), and hears what's on,
+/// to light its keys. A Unix socket in Vaux's Application Support folder, open to you
 /// alone: the file is yours only, and each connection's user is checked.
 ///
 /// One JSON message a line, each way. Vaux sends what there is, on
 /// connecting and whenever it changes:
 /// `{"version": 1, "items": [{"id", "title", "kind", "on", "image", "group"}, …]}`,
-/// kind being mute, live, effect, group or clearAll; an effect's or group's
-/// image is its key, `{"off", "on"}`, PNG data URLs; an effect in a group
-/// names it, by its item ID. A client sends `{"press": id}` and
+/// kind being mute, deafen, live, effect, group or clearAll; an effect's or
+/// group's image is its key, `{"off", "on"}`, PNG data URLs; an effect in a
+/// group names it, by its item ID. A client sends `{"press": id}` and
 /// `{"release": id}` as its key goes down and up, so a hold works as it does
 /// on a shortcut.
 @MainActor
@@ -187,8 +187,10 @@ final class ControlServer {
         if let triggers = camera.effects?.triggers {
             if let item = triggers.items.first(where: { $0.id == id }) { triggers.press(item.action) }
         } else if id == Triggers.id(of: .mute) {
-            // The camera's off: Mute is all there is.
+            // The camera's off: Mute and Deafen are all there is.
             appState.toggle()
+        } else if id == Triggers.id(of: .deafen) {
+            appState.toggleDeafen()
         }
     }
 
@@ -211,7 +213,10 @@ final class ControlServer {
 
     private var current: [Item] {
         guard let triggers = camera.effects?.triggers else {
-            return [Item(id: Triggers.id(of: .mute), title: "Mute", kind: "mute", on: appState.muted)]
+            return [
+                Item(id: Triggers.id(of: .mute), title: "Mute", kind: "mute", on: appState.muted),
+                Item(id: Triggers.id(of: .deafen), title: "Deafen", kind: "deafen", on: appState.deafened),
+            ]
         }
         let library = camera.effects?.library
         // The dictation effect follows your dictation app, not a key.
@@ -219,6 +224,7 @@ final class ControlServer {
         let items = triggers.items.filter { $0.id != dictation }.map { item in
             let kind = switch item.action {
             case .mute: "mute"
+            case .deafen: "deafen"
             case .live: "live"
             case .effect: "effect"
             case .clearAll: "clearAll"
@@ -234,7 +240,7 @@ final class ControlServer {
         // them is on.
         let effects = Dictionary(uniqueKeysWithValues: items.filter { $0.kind == "effect" }.map { ($0.id, $0) })
         func item(_ effect: Effect) -> Item? { effects[Triggers.id(of: .effect(effect.id))] }
-        var listed = items.filter { $0.kind == "mute" || $0.kind == "live" }
+        var listed = items.filter { ["mute", "deafen", "live"].contains($0.kind) }
         for entry in library.listing {
             switch entry {
             case .effect(let effect):

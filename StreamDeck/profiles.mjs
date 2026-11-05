@@ -1,6 +1,6 @@
 // Writes Vaux's page for each kind of Stream Deck: profiles the plugin comes
-// with (see Profiles in the manifest). Back, Mute, Live and Clear All along
-// the top, as many as fit; your effects below, by place in Vaux's list, so
+// with (see Profiles in the manifest). Back, Mute, Live, Clear All and
+// Deafen along the top, as many as fit; your effects below, by place in Vaux's list, so
 // the page fills itself.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -43,6 +43,7 @@ const top = [
 	key("mute", "Mute", [state(), state()]),
 	key("live", "Live", [state("Live", "bottom"), state("Live", "bottom")]),
 	key("clear", "Clear All", [state("Clear", "bottom")]),
+	key("deafen", "Deafen", [state(), state()]),
 ];
 
 const folder = resolve("dev.imathis.vaux.sdPlugin/profiles");

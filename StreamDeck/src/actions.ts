@@ -114,6 +114,14 @@ export class Mute extends VauxKey {
 	}
 }
 
+/** Deafens and undeafens: mutes what you hear. Red while deafened. */
+@action({ UUID: "dev.imathis.vaux.deafen" })
+export class Deafen extends VauxKey {
+	protected item(): Item | undefined {
+		return vaux.items.find((item) => item.kind === "deafen");
+	}
+}
+
 /** Opens the Live panel. Blank inside a group on Vaux's page: no use there. */
 @action({ UUID: "dev.imathis.vaux.live" })
 export class Live extends VauxKey {
@@ -363,7 +371,7 @@ async function openPage(action: Action<JsonObject>): Promise<void> {
 }
 
 /**
- * Opens Vaux's page: Mute, Live, Clear All, then your effects and groups.
+ * Opens Vaux's page: Mute, Live, Clear All, Deafen, then your effects and groups.
  * Like a folder, its first key comes back. Switches as the key comes up, so
  * letting go doesn't land on the page's key there.
  */

@@ -37,19 +37,20 @@ extension Effect {
 
 extension EffectGroup {
     /// The group Vaux comes with, and offers ready-made: ways to step away,
-    /// each muting the mic, since you're not talking to the call. BRB,
-    /// frosted with a sign; the rest full-frame cards, which come with the
-    /// app (see StarterGraphics). New IDs each time.
+    /// each muting the mic, since you're not talking to the call; On a call
+    /// deafening too, so the call's voices don't talk over the other one.
+    /// BRB, frosted with a sign; the rest full-frame cards, which come with
+    /// the app (see StarterGraphics). New IDs each time.
     static var away: (group: EffectGroup, effects: [Effect]) {
         let group = EffectGroup(name: "AWAY", icon: "clock.fill")
         // Frosted, but less: there behind the sign, not gone.
         var behind = Look.presets.first { $0.preset == "frosted" }?.copy
         behind?.blur = 0.54
-        func card(_ name: String, _ file: String, icon: String? = nil, color: Effect.Tint? = nil) -> Effect {
+        func card(_ name: String, _ file: String, icon: String? = nil, color: Effect.Tint? = nil, deafens: Bool = false) -> Effect {
             Effect(
                 name: name,
                 overlays: [Overlay(kind: .graphic, images: [StarterGraphics.name(of: file)], spot: .fullFrame)],
-                mutesMic: true, icon: icon, color: color, group: group.id
+                mutesMic: true, deafens: deafens, icon: icon, color: color, group: group.id
             )
         }
         return (group, [
@@ -67,25 +68,35 @@ extension EffectGroup {
             card("Intermission", "away-intermission.jpg"),
             card("Paused", "away-paused.jpg"),
             card("Poopin", "away-poopin.jpg", icon: "poop"),
-            card("On a call", "away-on-a-call.jpg", icon: "phone.fill"),
+            card("On a call", "away-on-a-call.jpg", icon: "phone.fill", deafens: true),
         ])
     }
 }
 
 extension EffectLibrary {
-    private static let awayCardsMutedKey = "awayCardsMuted"
-
     /// Paused and On a call came not muting, through 1.0.0-alpha.10: a
     /// miss, as on the phone or paused you're not talking to the call
-    /// either. Once, any showing those cards mutes; one unmuted after that
-    /// stays so. True if any changed.
+    /// either. True if any changed.
     static func muteAwayCards(_ effects: inout [Effect]) -> Bool {
-        guard !UserDefaults.standard.bool(forKey: awayCardsMutedKey) else { return false }
-        UserDefaults.standard.set(true, forKey: awayCardsMutedKey)
-        let cards = Set(["away-paused.jpg", "away-on-a-call.jpg"].map(StarterGraphics.name(of:)))
+        give(\.mutesMic, toShowing: ["away-paused.jpg", "away-on-a-call.jpg"], once: "awayCardsMuted", in: &effects)
+    }
+
+    /// On a call came not deafening, through 1.0.0-alpha.12, there being no
+    /// Deafen: on the phone, the call's voices only talk over it. True if
+    /// any changed.
+    static func deafenOnACall(_ effects: inout [Effect]) -> Bool {
+        give(\.deafens, toShowing: ["away-on-a-call.jpg"], once: "onACallDeafens", in: &effects)
+    }
+
+    /// Once, any effect showing one of these cards gets what the starter
+    /// came without; one with it turned off after that stays so.
+    private static func give(_ part: WritableKeyPath<Effect, Bool>, toShowing files: [String], once key: String, in effects: inout [Effect]) -> Bool {
+        guard !UserDefaults.standard.bool(forKey: key) else { return false }
+        UserDefaults.standard.set(true, forKey: key)
+        let cards = Set(files.map(StarterGraphics.name(of:)))
         var changed = false
-        for index in effects.indices where !effects[index].mutesMic && effects[index].overlays.contains(where: { !cards.isDisjoint(with: $0.images) }) {
-            effects[index].mutesMic = true
+        for index in effects.indices where !effects[index][keyPath: part] && effects[index].overlays.contains(where: { !cards.isDisjoint(with: $0.images) }) {
+            effects[index][keyPath: part] = true
             changed = true
         }
         return changed

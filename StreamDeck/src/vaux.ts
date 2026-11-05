@@ -3,11 +3,11 @@ import { createConnection, type Socket } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-/** Something on a key: Mute, Live, an effect, a group, or Clear All, and whether it's on. */
+/** Something on a key: Mute, Deafen, Live, an effect, a group, or Clear All, and whether it's on. */
 export type Item = {
 	id: string;
 	title: string;
-	kind: "mute" | "live" | "effect" | "group" | "clearAll";
+	kind: "mute" | "deafen" | "live" | "effect" | "group" | "clearAll";
 	on: boolean;
 	/** An effect's or group's key, off and on, in its icon and color: PNG data URLs. */
 	image?: { off: string; on: string };

@@ -57,10 +57,14 @@ final class AppState {
         // call apps' mute buttons, switching inputs).
         guard !Snapshot.isRunning else {
             refreshDevice()
+            refreshOutput()
             return
         }
         KeyboardShortcuts.onKeyDown(for: .toggleMicMute) { [weak self] in
             self?.toggle()
+        }
+        KeyboardShortcuts.onKeyDown(for: .toggleDeafen) { [weak self] in
+            self?.toggleDeafen()
         }
         keyMonitor = SoloKeyMonitor(
             onKey: { [weak self] in self?.toggleSolo(byKey: true) },
@@ -80,6 +84,8 @@ final class AppState {
         lastInputUIDs = Set(AudioController.inputDevices().map(\.uid))
         startDeviceListListener()
         refreshDevice()
+        startOutputListener()
+        refreshOutput()
         // Inputs may have come and gone while Vaux wasn't running (or was
         // relaunching, as camera setup does): rank them once now.
         if enforcePreferred { scheduleEnforce() }
@@ -138,6 +144,181 @@ final class AppState {
             muted = currentMutedState(dev)
         }
         notify()
+    }
+
+    // MARK: Deafen
+    //
+    // Mute's other half: nothing heard. Mutes the output macOS plays through,
+    // all of it (the call, music, alerts), by the mute the mute key sets, so
+    // its volume stays as it was. Follows the output as it changes, as Mute
+    // follows the mic, and follows the mute key: muted there is deafened.
+
+    private(set) var deafened = false
+    /// Why Deafen couldn't, for the menu.
+    private(set) var deafenProblem: String?
+    @ObservationIgnored private var currentOutput: AudioDeviceID?
+    @ObservationIgnored private var outputInitialized = false
+    /// The output Deafen is on, to take it off as the output changes.
+    @ObservationIgnored private var deafenedOutput: AudioDeviceID?
+    @ObservationIgnored private var outputListener: AudioPropertyListener?
+    @ObservationIgnored private var outputMuteListener: AudioPropertyListener?
+
+    func toggleDeafen() {
+        setDeafened(!deafened)
+    }
+
+    /// Also for an effect that deafens while it's on.
+    func setDeafened(_ next: Bool) {
+        deafened = next
+        applyDeafen()
+        notify()
+    }
+
+    /// Puts Deafen on the current output, or takes it off; and off the one
+    /// it was on before the output changed.
+    private func applyDeafen() {
+        let output = currentOutput
+        if let was = deafenedOutput, was != output { AudioController.setOutputMuted(false, on: was) }
+        deafenedOutput = deafened ? output : nil
+        deafenProblem = nil
+        guard let output, AudioController.isOutputMuted(output) != deafened else { return }
+        if !AudioController.setOutputMuted(deafened, on: output), deafened {
+            deafened = false
+            deafenedOutput = nil
+            deafenProblem = "macOS can't mute \(AudioController.deviceName(output))"
+        }
+    }
+
+    private func startOutputListener() {
+        outputListener = AudioPropertyListener(
+            objectID: AudioController.system,
+            selector: kAudioHardwarePropertyDefaultOutputDevice,
+            scope: kAudioObjectPropertyScopeGlobal
+        ) { [weak self] in
+            MainActor.assumeIsolated { self?.refreshOutput() }
+        }
+    }
+
+    /// The output changed: Deafen moves to it.
+    private func refreshOutput() {
+        let output = AudioController.defaultOutputDevice()
+        guard output != currentOutput || !outputInitialized else { return }
+        currentOutput = output
+        if outputInitialized {
+            applyDeafen()
+        } else {
+            // At launch: its mute is Deafen's state.
+            outputInitialized = true
+            deafened = output.map(AudioController.isOutputMuted) ?? false
+            deafenedOutput = deafened ? output : nil
+        }
+        outputMuteListener = output.flatMap { output in
+            AudioPropertyListener(objectID: output, selector: kAudioDevicePropertyMute, scope: kAudioObjectPropertyScopeOutput) { [weak self] in
+                MainActor.assumeIsolated { self?.outputMuteChanged() }
+            }
+        }
+        notify()
+    }
+
+    /// Muted or unmuted elsewhere: the mute key, a volume key, Sound
+    /// settings.
+    private func outputMuteChanged() {
+        guard let output = currentOutput else { return }
+        let muted = AudioController.isOutputMuted(output)
+        guard muted != deafened else { return }
+        deafened = muted
+        deafenedOutput = muted ? output : nil
+        deafenProblem = nil
+        notify()
+    }
+
+    // MARK: Mute, on a mic some apps hear through it
+    //
+    // The Mac's own mic: its mute silences it only for some apps (see
+    // AudioController.muteReachesEveryApp), so a call recording it plainly
+    // still hears you. Muting it mutes the call apps too, through their own
+    // UI as solo does, and unmuting unmutes the ones it muted. Held until
+    // you unmute, whatever mic you switch to, so calls don't flip back and
+    // forth; left to solo while it's on.
+
+    /// Calls Mute muted, for the menu.
+    private(set) var mutedCalls: [String] = AppState.mutedByMute.map(\.name)
+    /// Calls it couldn't mute or unmute, for the menu.
+    private(set) var callMuteProblems: [String] = []
+    /// Mute is muting the calls.
+    @ObservationIgnored private var mutingCalls = !AppState.mutedByMute.isEmpty
+
+    /// The apps Mute muted, to unmute: not ones muted already, which are
+    /// yours. Kept across launches (an update relaunches Vaux). On
+    /// `CallMuter.queue`.
+    private nonisolated static var mutedByMute: [CallApp] {
+        get {
+            (UserDefaults.standard.stringArray(forKey: "callsMutedByMute") ?? [])
+                .map { id in CallApp.all.first { $0.bundleID == id } ?? .meet(in: id) }
+        }
+        set { UserDefaults.standard.set(newValue.map(\.bundleID), forKey: "callsMutedByMute") }
+    }
+
+    /// With every change (see `notify`).
+    private func followMuteIntoCalls() {
+        guard !soloActive, !soloBusy, !Snapshot.isRunning else { return }
+        let needed = currentDevice.map { !AudioController.muteReachesEveryApp($0) } ?? false
+        let wanted = muted && (mutingCalls || needed)
+        guard wanted != mutingCalls else { return }
+        mutingCalls = wanted
+        if wanted {
+            mutedCalls = []
+            callMuteProblems = []
+            muteCalls(callsOnMic().apps)
+        } else {
+            unmuteCalls()
+        }
+    }
+
+    /// A call started while Mute is muting them.
+    private func callJoined(_ app: CallApp) {
+        guard mutingCalls, !soloActive, !soloBusy else { return }
+        muteCalls([app])
+    }
+
+    private func muteCalls(_ apps: [CallApp]) {
+        guard CallMuter.isTrusted else {
+            CallMuter.requestTrust()
+            callMuteProblems = ["Allow Vaux in Privacy & Security → Accessibility to mute calls"]
+            return
+        }
+        CallMuter.queue.async { [weak self] in
+            let outcomes = CallMuter.set(apps, muted: true)
+            let muted = outcomes.filter { $0.outcome == .muted }.map(\.app)
+            if !muted.isEmpty { Self.mutedByMute += muted }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    for (app, outcome) in outcomes {
+                        if outcome == .muted || outcome == .alreadyMuted, !self.mutedCalls.contains(app.name) {
+                            self.mutedCalls.append(app.name)
+                        } else if outcome == .failed {
+                            self.callMuteProblems.append("Couldn't mute \(app.name)")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func unmuteCalls() {
+        CallMuter.queue.async { [weak self] in
+            let apps = Self.mutedByMute
+            Self.mutedByMute = []
+            let failures = CallMuter.set(apps, muted: false).filter { $0.outcome == .failed }
+                .map { "Couldn't unmute \($0.app.name) — unmute it there" }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self?.mutedCalls = []
+                    self?.callMuteProblems = failures
+                }
+            }
+        }
     }
 
     // MARK: Solo mode
@@ -267,6 +448,17 @@ final class AppState {
         let mutedBySolo = soloSnapshot?.mutedApps.contains(app) ?? false
         guard inCall || !mutedBySolo else { return }
         CallMuter.queue.async { CallMuter.setTreeEnabled(inCall, for: app) }
+        if inCall { callJoined(app) }
+    }
+
+    /// The call apps, and browsers on the mic, maybe in a web call; and every
+    /// app on the mic Vaux doesn't know. Read fresh: a call the watcher lost
+    /// track of would go unmuted.
+    private func callsOnMic() -> (apps: [CallApp], others: [MicUser]) {
+        micWatcher.refresh()
+        let others = CaptureWatcher.current.filter { !AudioController.bundle($0.bundleID, belongsToAnyOf: Self.knownApps) }
+        let browsers = others.filter { CallApp.isBrowser($0.bundleID) }
+        return (CallApp.all + browsers.map { CallApp.meet(in: $0.bundleID) }, others)
     }
 
     /// Apps solo knows already (or is): never warned about or searched for
@@ -287,7 +479,11 @@ final class AppState {
             // A browser, maybe joining a web call: get its tree ready, or let it go.
             let app = CallApp.meet(in: id)
             if !capturing { CallMuter.queue.async { CallMuter.forget(app) } }
-            CallMuter.webQueue.async { CallMuter.setWebTreeEnabled(capturing, for: app) }
+            CallMuter.webQueue.async { [weak self] in
+                CallMuter.setWebTreeEnabled(capturing, for: app)
+                guard capturing else { return }
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.callJoined(app) } }
+            }
         }
     }
 
@@ -302,16 +498,11 @@ final class AppState {
         soloBusy = true
         soloProblems = []
         notify()
-        // Who's on the mic, read fresh: a call the watcher lost track of
-        // would go unmuted.
-        micWatcher.refresh()
+        // Read now, before a dictation app sharing the trigger starts
+        // listening too. Others on the mic are browsers maybe in a web call,
+        // or apps solo can't mute.
+        let (targets, others) = callsOnMic()
         Self.log.notice("solo: on the mic: \(CaptureWatcher.current.map(\.name).joined(separator: ", "), privacy: .public)")
-        // Other apps on the mic: browsers maybe in a web call, or apps solo
-        // can't mute. Read now, before a dictation app sharing the trigger
-        // starts listening too.
-        let others = CaptureWatcher.current.filter { !AudioController.bundle($0.bundleID, belongsToAnyOf: Self.knownApps) }
-        let browsers = others.filter { CallApp.isBrowser($0.bundleID) }
-        let targets = CallApp.all + browsers.map { CallApp.meet(in: $0.bundleID) }
         CallMuter.queue.async { [weak self] in
             let outcomes = CallMuter.set(targets, muted: true)
             DispatchQueue.main.async {
@@ -594,6 +785,7 @@ final class AppState {
 
     private func notify() {
         keyMonitor?.watchesEscape = soloStartedByKey && (soloActive || soloBusy)
+        followMuteIntoCalls()
         onStateChange?()
     }
 }

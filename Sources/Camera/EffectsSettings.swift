@@ -706,6 +706,10 @@ struct EffectForm: View {
                     Text("Mute while on")
                     Text("Unmutes as it goes, unless you were muted already.")
                 }
+                Toggle(isOn: $effect.deafens) {
+                    Text("Deafen while on")
+                    Text("Mutes what you hear, the call included, until it goes, unless you were deafened already.")
+                }
             }
             Section {
                 Picker("Group", selection: $effect.group) {

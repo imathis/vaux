@@ -1,6 +1,6 @@
 {
   "name": "vaux-stream-deck",
-  "description": "Vaux's Stream Deck plugin: Mute, effects, Live and Clear All on your keys.",
+  "description": "Vaux's Stream Deck plugin: Mute, Deafen, effects, Live and Clear All on your keys.",
   "private": true,
   "type": "module",
   "scripts": {

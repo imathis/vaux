@@ -2,7 +2,7 @@
 	"Name": "Vaux",
 	"Version": "1.0.0.0",
 	"Author": "Brandon Mathis",
-	"Description": "Your Vaux keys on Stream Deck: Mute, effects, groups, Live and Clear All, lit while they're on, and a ready-made Vaux page. Hold an effect's key to show it only while held.",
+	"Description": "Your Vaux keys on Stream Deck: Mute, Deafen, effects, groups, Live and Clear All, lit while they're on, and a ready-made Vaux page. Hold an effect's key to show it only while held.",
 	"URL": "https://github.com/imathis/vaux",
 	"UUID": "dev.imathis.vaux",
 	"Icon": "imgs/plugin/icon",
@@ -40,6 +40,26 @@
 				{
 					"Image": "imgs/keys/mute-muted",
 					"Name": "Muted"
+				}
+			]
+		},
+		{
+			"Name": "Deafen",
+			"UUID": "dev.imathis.vaux.deafen",
+			"Icon": "imgs/actions/deafen",
+			"Tooltip": "Mutes what you hear, the call included, and back. Red while deafened.",
+			"Controllers": [
+				"Keypad"
+			],
+			"DisableAutomaticStates": true,
+			"States": [
+				{
+					"Image": "imgs/keys/deafen-live",
+					"Name": "Hearing"
+				},
+				{
+					"Image": "imgs/keys/deafen-deafened",
+					"Name": "Deafened"
 				}
 			]
 		},
@@ -133,7 +153,7 @@
 			"Name": "Vaux Page",
 			"UUID": "dev.imathis.vaux.page",
 			"Icon": "imgs/actions/page",
-			"Tooltip": "Opens Vaux's page: Mute, Live, Clear All, then your effects and groups, as they are in Vaux. Its first key comes back.",
+			"Tooltip": "Opens Vaux's page: Mute, Live, Clear All, Deafen, then your effects and groups, as they are in Vaux. Its first key comes back.",
 			"Controllers": [
 				"Keypad"
 			],

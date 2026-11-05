@@ -6,4 +6,6 @@ extension KeyboardShortcuts.Name {
     /// registers it via the Carbon hotkey API — no Accessibility permission,
     /// no permission dialog.
     static let toggleMicMute = Self("toggleMicMute")
+    /// Mutes what you hear (see AppState's Deafen).
+    static let toggleDeafen = Self("toggleDeafen")
 }

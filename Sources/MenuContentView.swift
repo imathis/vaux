@@ -80,10 +80,13 @@ struct MenuContentView: View {
             // Vaux's own actions, whichever tab is showing.
             divider()
             textRow(appState.muted ? "Unmute" : "Mute", trailing: muteShortcut) { appState.toggle() }
+            status(muteStatusLines)
+            textRow(appState.deafened ? "Undeafen" : "Deafen", trailing: deafenShortcut) { appState.toggleDeafen() }
+            status(appState.deafenProblem.map { [($0, true)] } ?? [])
             textRow(appState.soloActive ? "End Solo Mode" : "Solo Mode", trailing: nil, trailingSymbol: soloKeySymbol) {
                 appState.toggleSolo()
             }
-            soloStatus
+            status(soloStatusLines)
             divider()
             launchAtLoginRow
             textRow("About Vaux", trailing: nil) { openAbout(); dismiss() }
@@ -367,8 +370,7 @@ struct MenuContentView: View {
     }
 
     /// What solo is doing (or what went wrong), under the Solo row.
-    @ViewBuilder private var soloStatus: some View {
-        let lines = soloStatusLines
+    @ViewBuilder private func status(_ lines: [(text: String, warning: Bool)]) -> some View {
         if !lines.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(lines.indices, id: \.self) { i in
@@ -381,6 +383,13 @@ struct MenuContentView: View {
             .padding(.horizontal, contentInset)
             .padding(.bottom, 3)
         }
+    }
+
+    /// Muted on a mic some apps hear through, the calls muted too.
+    private var muteStatusLines: [(text: String, warning: Bool)] {
+        let calls = appState.muted && !appState.soloActive && !appState.mutedCalls.isEmpty
+            ? [("Muted in " + appState.mutedCalls.joined(separator: ", "), false)] : []
+        return calls + appState.callMuteProblems.map { ($0, true) }
     }
 
     private var soloStatusLines: [(text: String, warning: Bool)] {
@@ -434,6 +443,10 @@ struct MenuContentView: View {
 
     private var muteShortcut: String {
         KeyboardShortcuts.getShortcut(for: .toggleMicMute)?.description ?? ""
+    }
+
+    private var deafenShortcut: String {
+        KeyboardShortcuts.getShortcut(for: .toggleDeafen)?.description ?? ""
     }
 
     /// The 🎤 key starts solo when you dictate with macOS Dictation.

@@ -1,9 +1,10 @@
 import streamDeck from "@elgato/streamdeck";
 
-import { Back, ClearAll, Effect, Group, Live, Mute, Page } from "./actions.js";
+import { Back, ClearAll, Deafen, Effect, Group, Live, Mute, Page } from "./actions.js";
 import { vaux } from "./vaux.js";
 
 streamDeck.actions.registerAction(new Mute());
+streamDeck.actions.registerAction(new Deafen());
 streamDeck.actions.registerAction(new Effect());
 streamDeck.actions.registerAction(new Live());
 streamDeck.actions.registerAction(new ClearAll());

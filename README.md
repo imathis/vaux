@@ -92,6 +92,25 @@ to be the visible tab in its window, since browsers only expose that one.
 - A USB mic's own mute button counts too, on mics that don't tell macOS (the
   Elgato Wave:3): Vaux reads the mic's mute from the mic and sets macOS's to
   match, once it's seen the mic follow a mute from the Mac.
+- The Mac's own mic is muted for every app only in calls: its mute reaches
+  apps using macOS's voice processing (FaceTime), but not ones that record it
+  plainly (Discord, Chrome). So muting it also mutes your calls, by pressing
+  each call's own mute button as solo does (Accessibility), and unmuting
+  unmutes the ones it muted. The menu says which.
+
+### Deafen
+
+Mute's other half: nothing heard. Deafen mutes the Mac's sound, wherever it
+plays (the call, music, alerts), and leaves its volume as it was.
+
+- From the menu, its own shortcut, the Quick Menu (D) or Stream Deck; or an
+  effect deafens while it's on.
+- Vaux follows the output as it changes, keeping it deafened if you switch
+  while deafened.
+- It's the same mute as the keyboard's mute key, so that key deafens and
+  undeafens too, and a volume key undeafens.
+- macOS can't mute a screen's speakers over HDMI or DisplayPort, so neither
+  can Vaux; the menu says so.
 
 ### Preferred inputs
 
@@ -149,15 +168,16 @@ An effect is anything you name and turn on, made of any of these:
   plus a shake; edit Dictating and it follows.
 
 An effect can also turn itself off after a few seconds, or, with a video,
-once the video has played through, and mute your mic while it's on
-(unmuting as it goes, unless you were muted already).
+once the video has played through, and mute your mic or deafen you while it's
+on (undone as it goes, unless you were muted or deafened already).
 
 **Ready-made.** Vaux starts with a few, a taste of what effects can do:
 Privacy (frosted, mic muted), Hand Raised, Suspicious (pushed in,
 captioned), Intensify (a wild shake, captioned), Noir, Teal & Orange,
 Dictating, and the AWAY group: BRB (frosted, with a sign) and full-frame
 cards for Lunch, Coffee, Intermission, Paused, Poopin and On a call, each
-muting the mic. Add Effect → Ready-Made adds any of them again.
+muting the mic, and On a call deafening you too. Add Effect → Ready-Made
+adds any of them again.
 
 **Groups.** Effects can go in groups, each with a name and, if you like,
 an icon and color: drag an effect under a group's name in the list. Groups
@@ -193,18 +213,19 @@ watching. Your call stays as it was until you close it.
 
 - **Shortcuts:** each effect can have a global shortcut.
 - **Stream Deck:** Vaux comes with a plugin (Settings → Shortcuts →
-  Install): keys for Mute and, while the camera is on, an effect (any but
-  the dictation one, which follows your dictation app), Live and Clear All,
-  lit while they're on. An effect's key taps and holds like any other. A
-  **Vaux Group** key opens one of your groups: its effects, always as they
-  are in Vaux. It comes with a Vaux page for each Stream Deck: Mute, Live
-  and Clear All, then your effects and groups in Vaux's order (More turns
-  the page when they don't all fit). The Vaux Page key opens it from
-  anywhere, and its first key comes back.
+  Install): keys for Mute, Deafen and, while the camera is on, an effect
+  (any but the dictation one, which follows your dictation app), Live and
+  Clear All, lit while they're on. An effect's key taps and holds like any
+  other. A **Vaux Group** key opens one of your groups: its effects, always
+  as they are in Vaux. It comes with a Vaux page for each Stream Deck: Mute,
+  Live, Clear All and Deafen (as many as fit), then your effects and groups
+  in Vaux's order (More turns the page when they don't all fit). The Vaux
+  Page key opens it from anywhere, and its first key comes back.
 - **The Quick Menu:** one key (⌥. by default), or a right-side modifier
   tapped on its own (right ⇧, say, the way FluidVoice takes right ⌥), opens a
   small menu over everything, and a second key picks: numbers, then letters,
-  for effects, L for Live, M for Mute. Your call app keeps focus.
+  for effects, L for Live, M for Mute, D for Deafen. Your call app keeps
+  focus.
 - **Tap or hold:** tap a key to turn its effect on or off; hold it to show the
   effect only while it's held, then whatever it covered shows again.
 - **The menu bar:** while the camera is on, the menu has an **Effects** tab
@@ -247,8 +268,10 @@ an idle Vaux Camera costs nothing. Effects are drawn only while they show.
 
 ## Permissions
 
-- **Mute and inputs:** none. Changing Core Audio properties doesn't trigger
-  the microphone permission prompt, nor does reading a USB mic's mute.
+- **Mute, Deafen and inputs:** none. Changing Core Audio properties doesn't
+  trigger the microphone permission prompt, nor does reading a USB mic's mute.
+  Muting the Mac's own mic mutes your calls through Accessibility, as solo
+  does.
 - **Solo mode:** Accessibility, to press mute in your call apps, and to notice
   the 🎤 Dictation key. Vaux reacts only to that key and Escape, and ignores
   every other key. While a Chromium browser is using the mic, Vaux turns on

@@ -24,6 +24,8 @@ struct Effect: Codable, Identifiable, Hashable, Sendable {
     var untilVideoEnds = false
     /// Mutes the mic while it's on (see Effects.followMuting).
     var mutesMic = false
+    /// Deafens while it's on: mutes what you hear (see AppState's Deafen).
+    var deafens = false
     /// On its keys and in lists: an SF Symbol or an emoji. None picks one
     /// from what's in it (see EffectIcon.swift).
     var icon: String?
@@ -157,6 +159,7 @@ extension Effect {
         duration = try values.decodeIfPresent(Double.self, forKey: .duration)
         untilVideoEnds = try values.decodeIfPresent(Bool.self, forKey: .untilVideoEnds) ?? untilVideoEnds
         mutesMic = try values.decodeIfPresent(Bool.self, forKey: .mutesMic) ?? mutesMic
+        deafens = try values.decodeIfPresent(Bool.self, forKey: .deafens) ?? deafens
         icon = try values.decodeIfPresent(String.self, forKey: .icon)
         color = try values.decodeIfPresent(Tint.self, forKey: .color)
         group = try values.decodeIfPresent(UUID.self, forKey: .group)
