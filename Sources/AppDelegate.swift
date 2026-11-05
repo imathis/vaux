@@ -132,7 +132,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settingsWindow == nil {
             let tabs = SettingsTabController(camera: camera)
             let window = NSWindow(contentViewController: tabs)
-            window.styleMask = [.titled, .closable, .miniaturizable]
+            // Taller or shorter (see SettingsTabController), not full screen.
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            window.collectionBehavior.insert(.fullScreenNone)
             window.toolbarStyle = .preference
             window.isReleasedWhenClosed = false
             window.delegate = self
