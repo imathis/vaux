@@ -225,10 +225,12 @@ enum AudioController {
 
     /// All devices that expose at least one input channel, in HAL order.
     /// `uid` is the stable identifier (empty string if the device has none).
+    /// Not one that can't be named: it's going (mid-unplug), and its name
+    /// would be saved as "Unknown input".
     static func inputDevices() -> [(id: AudioDeviceID, uid: String, name: String)] {
         readIDs(system, kAudioHardwarePropertyDevices)
             .filter { hasInput($0) }
-            .map { (id: $0, uid: deviceUID($0) ?? "", name: deviceName($0)) }
+            .compactMap { id in readString(id, kAudioObjectPropertyName).map { (id: id, uid: deviceUID(id) ?? "", name: $0) } }
     }
 
     /// True if the device has any input channels. Reads the stream
