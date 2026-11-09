@@ -114,8 +114,12 @@ plays (the call, music, alerts), and leaves its volume as it was.
 
 ### Preferred inputs
 
-- Turn on auto switch and rank your mics in Settings. Vaux switches to the
-  highest-ranked one that's connected as devices come and go.
+- Turn on auto switch and rank your mics in Settings. Vaux keeps the
+  highest-ranked one that's connected as your input, whatever macOS does:
+  devices coming and going, AirPods routed over from your phone or put in
+  your ear, an app switching it.
+- To use another, pick it in Vaux's menu: it stays until the next plug or
+  unplug. One picked anywhere else (System Settings) gives way to the ranking.
 - The menu lists every input, marks the preferred one, and has an input volume
   slider and an auto switch toggle.
 

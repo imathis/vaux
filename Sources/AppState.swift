@@ -38,13 +38,14 @@ final class AppState {
 
     @ObservationIgnored private var deviceListListener: AudioPropertyListener?
     @ObservationIgnored private var enforceScheduled = false
-    /// UIDs of the currently-connected input devices, to detect plug/unplug
-    /// (the only event that triggers an automatic input switch).
+    /// UIDs of the currently-connected input devices, to detect plug/unplug.
     @ObservationIgnored private var lastInputUIDs: Set<String> = []
-    /// Just after a plug or unplug, macOS may still be picking an input
-    /// (AirPods take a second or two): an input change before this is its
-    /// pick, not yours, so the ranking applies again.
-    @ObservationIgnored private var systemPickUntil = Date.distantPast
+    /// The input you picked in Vaux's menu (its UID): auto switch keeps it
+    /// instead of the ranking until the next plug or unplug. Any other input
+    /// change is macOS's, not yours, whenever it comes: AirPods routed over
+    /// from your phone or put in your ear, a late pick after a plug, an app.
+    /// The ranking (or your pick) goes straight back.
+    @ObservationIgnored private var pickedInput: String?
     private static let inputLog = Logger(subsystem: "dev.imathis.vaux", category: "inputs")
 
     private var enforcePreferred: Bool {
@@ -98,7 +99,10 @@ final class AppState {
         // Auto switch turned on: switch now, not at the next plug-in.
         if enforcePreferred != lastEnforcePreferred {
             lastEnforcePreferred = enforcePreferred
-            if enforcePreferred { applyPreferredInput() }
+            if enforcePreferred {
+                pickedInput = nil
+                applyPreferredInput()
+            }
         }
         // A new app to follow: the old one's solo ends; the new one's starts
         // if it's listening already.
@@ -110,20 +114,23 @@ final class AppState {
         }
     }
 
-    /// Switch the system default input to the highest-priority connected device
-    /// in the preferred order. No-op if none are present or it's already current.
+    /// Switch the system default input to the one picked in Vaux's menu, if
+    /// it's connected, or else the highest-priority connected device in the
+    /// preferred order. No-op if none are present or it's already current.
     func applyPreferredInput() {
-        guard let match = PreferredInput.preferred(among: AudioController.inputDevices(), uid: \.uid),
+        let inputs = AudioController.inputDevices()
+        guard let match = inputs.first(where: { $0.uid == pickedInput }) ?? PreferredInput.preferred(among: inputs, uid: \.uid),
               match.id != AudioController.defaultInputDevice() else { return }
         Self.inputLog.notice("Auto switch: \(match.name, privacy: .public)")
         // The default-input listener will enforce mute intent onto it.
         AudioController.setDefaultInputDevice(match.id)
     }
 
-    /// An input picked in Vaux's menu: yours, so auto switch leaves it until
-    /// the next plug or unplug.
+    /// An input picked in Vaux's menu: yours, so auto switch keeps it until
+    /// the next plug or unplug (see pickedInput).
     func selectInput(_ dev: AudioDeviceID) {
-        systemPickUntil = .distantPast
+        pickedInput = AudioController.deviceUID(dev)
+        Self.inputLog.notice("Picked in the menu: \(AudioController.deviceName(dev), privacy: .public)")
         AudioController.setDefaultInputDevice(dev)
     }
 
@@ -645,15 +652,16 @@ final class AppState {
         }
     }
 
-    /// Enforce only when the set of *input* devices changes — i.e. a plug or
-    /// unplug, which is the only thing that makes macOS auto-select an input. A
-    /// manual pick in System Settings doesn't change the device set, so it's
-    /// left untouched.
+    /// A plug or unplug (the set of *input* devices changed): a pick in
+    /// Vaux's menu gives way to the ranking again.
     private func handleDeviceListChanged() {
-        let uids = Set(AudioController.inputDevices().map(\.uid))
+        let inputs = AudioController.inputDevices()
+        let uids = Set(inputs.map(\.uid))
         guard uids != lastInputUIDs else { return }
+        let added = inputs.filter { !lastInputUIDs.contains($0.uid) }.map(\.name)
+        Self.inputLog.notice("\(added.isEmpty ? "Unplugged an input" : "Plugged in: " + added.joined(separator: ", "), privacy: .public)")
         lastInputUIDs = uids
-        systemPickUntil = Date().addingTimeInterval(5)
+        pickedInput = nil
         if enforcePreferred { scheduleEnforce() }
     }
 
@@ -699,8 +707,9 @@ final class AppState {
             // input): enforce our mute intent onto the new device so muting
             // persists across input changes.
             applyMuteIntent(to: dev)
-            // macOS picking late after a plug or unplug.
-            if enforcePreferred, Date() < systemPickUntil { scheduleEnforce() }
+            // Whoever switched it, the ranking (or your pick) holds: see
+            // pickedInput.
+            if enforcePreferred { scheduleEnforce() }
         } else {
             // Same device, refreshed for another reason: reflect actual state.
             muted = currentMutedState(dev)

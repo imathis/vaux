@@ -240,7 +240,7 @@ struct MenuContentView: View {
         .frame(height: 26)
     }
 
-    /// Switch to the preferred input as devices come and go (Settings ranks them).
+    /// Keep the preferred input, whatever macOS picks (Settings ranks them).
     private var autoSwitchRow: some View {
         HStack {
             Text("Auto Switch").font(.system(size: 13))

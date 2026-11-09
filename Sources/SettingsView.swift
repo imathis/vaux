@@ -93,7 +93,7 @@ struct MicrophoneSettings: View {
                     }
                 }
             } header: {
-                SettingsHeader("Preferred Inputs", "Switches to the highest-ranked mic that's connected.")
+                SettingsHeader("Preferred Inputs", "Keeps the highest-ranked mic that's connected, whatever macOS picks. One you pick in Vaux's menu stays until a mic comes or goes.")
             }
         }
         .formStyle(.grouped)
