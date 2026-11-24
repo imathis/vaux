@@ -1,0 +1,19 @@
+project.yml
+  s_a6dea296309c8f::t_cef0c1366d385a 18-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9f3777b23344227a78a87662a337b4051c8be1fb",
+  "prompts": {},
+  "sessions": {
+    "s_a6dea296309c8f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "150a4c36-23c8-4b02-9201-338521310186",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Brandon Mathis <brandon@imathis.com>"
+    }
+  }
+}
