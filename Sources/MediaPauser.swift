@@ -8,7 +8,8 @@ import os
 ///
 /// What's playing comes from power assertions: apps hold one while media
 /// actually plays ("com.apple.Music.playback", WebKit's "HTMLMediaElement
-/// playback", Chromium's "Playing audio") and drop it the moment it pauses.
+/// playback", Chromium's "Playing audio", CoreMedia's video queue for TV and
+/// QuickTime) and drop it the moment it pauses.
 /// Audio output can't tell: Safari keeps its output running with nothing
 /// playing. Commands go through MediaRemote, the system's Now Playing
 /// controls: explicit pause and play, which don't toggle as the Play/Pause
@@ -130,9 +131,13 @@ final class MediaPauser {
         }
     }
 
-    /// "…playback" or "Playing …" as a word ("displaying" doesn't count).
+    /// "…playback" or "Playing …" as a word ("displaying" doesn't count), or
+    /// CoreMedia's video image queue ("com.apple.coremedia.iq.ca.client-1"):
+    /// AVFoundation players (TV, QuickTime) hold nothing named for playback,
+    /// only this, from the first frame until they pause.
     private static func isPlayback(_ name: String) -> Bool {
-        name.range(of: #"\bplay(back|ing)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
+        name.hasPrefix("com.apple.coremedia.iq.")
+            || name.range(of: #"\bplay(back|ing)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     // MARK: MediaRemote
